@@ -1,0 +1,62 @@
+# GitHub Labels Configuration
+# This file defines labels for the repository
+
+- name: bug
+  description: Something isn't working
+  color: d73a4a
+
+- name: enhancement
+  description: New feature or request
+  color: a2eeef
+
+- name: research
+  description: Research or investigation task
+  color: 0e8a16
+
+- name: documentation
+  description: Improvements or additions to documentation
+  color: 0075ca
+
+- name: question
+  description: Further information is requested
+  color: d876e3
+
+- name: good first issue
+  description: Good for newcomers
+  color: 7057ff
+
+- name: help wanted
+  description: Extra attention is needed
+  color: 008672
+
+- name: wontfix
+  description: This will not be worked on
+  color: ffffff
+
+- name: duplicate
+  description: This issue or pull request already exists
+  color: cfd3d7
+
+- name: invalid
+  description: This doesn't seem right
+  color: e4e669
+
+- name: priority:high
+  description: High priority issue
+  color: b60205
+
+- name: priority:medium
+  description: Medium priority issue
+  color: fbca04
+
+- name: priority:low
+  description: Low priority issue
+  color: 0e8a16
+
+- name: in progress
+  description: Currently being worked on
+  color: c5def5
+
+- name: blocked
+  description: Blocked by external dependencies
+  color: b60205
