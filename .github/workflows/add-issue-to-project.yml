@@ -1,28 +1,26 @@
-name: Add Issue to Project
+name: Add new issues to project board
 
 on:
   issues:
-    types:
-      - opened
-      - reopened
+    types: [opened]
 
 jobs:
   add-to-project:
-    name: Add issue to project
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
     steps:
-      - name: Add issue to project
-        uses: actions/add-to-project@v0.5.0
-        with:
-          # You can find your project URL in the "..." menu of your GitHub project
-          # Example: https://github.com/users/<username>/projects/<project-number>
-          # or: https://github.com/orgs/<org-name>/projects/<project-number>
-          project-url: ${{ secrets.PROJECT_URL }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # Optional: Set the label filter
-          # labeled: bug, enhancement, research
-          # Optional: Set the assignee filter
-          # assigned: username
+      - name: Add issue to project column
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROJECT_COLUMN_ID: ${{ secrets.PROJECT_COLUMN_ID }}
+        run: |
+          if [ -z "$PROJECT_COLUMN_ID" ]; then
+            echo "Set PROJECT_COLUMN_ID as a secret in repo settings."
+            exit 0
+          fi
+
+          ISSUE_ID=${{ github.event.issue.id }}
+          curl -s -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/projects/columns/$PROJECT_COLUMN_ID/cards \
+            -d "{\"content_id\": $ISSUE_ID, \"content_type\": \"Issue\"}"
