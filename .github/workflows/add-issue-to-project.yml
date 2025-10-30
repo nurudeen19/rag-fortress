@@ -1,0 +1,28 @@
+name: Add Issue to Project
+
+on:
+  issues:
+    types:
+      - opened
+      - reopened
+
+jobs:
+  add-to-project:
+    name: Add issue to project
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+    steps:
+      - name: Add issue to project
+        uses: actions/add-to-project@v0.5.0
+        with:
+          # You can find your project URL in the "..." menu of your GitHub project
+          # Example: https://github.com/users/<username>/projects/<project-number>
+          # or: https://github.com/orgs/<org-name>/projects/<project-number>
+          project-url: ${{ secrets.PROJECT_URL }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Optional: Set the label filter
+          # labeled: bug, enhancement, research
+          # Optional: Set the assignee filter
+          # assigned: username
