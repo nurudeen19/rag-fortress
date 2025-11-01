@@ -5,8 +5,6 @@ Tests for exception handling system.
 import pytest
 from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
-
 from app.core.exceptions import (
     # Base
     RAGFortressException,
