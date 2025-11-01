@@ -1,7 +1,6 @@
 """
 Main settings module that composes all configuration modules.
 """
-from pydantic_settings import BaseSettings
 
 from .app_settings import AppSettings
 from .llm_settings import LLMSettings
