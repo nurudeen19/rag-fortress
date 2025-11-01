@@ -7,6 +7,7 @@ for different aspects of the application:
 - LLMSettings: LLM provider configuration
 - EmbeddingSettings: Embedding provider configuration  
 - VectorDBSettings: Vector database configuration
+- DatabaseSettings: SQL database configuration (PostgreSQL, MySQL, SQLite)
 - Settings: Main settings class that combines all modules
 """
 
@@ -15,6 +16,7 @@ from .app_settings import AppSettings
 from .llm_settings import LLMSettings
 from .embedding_settings import EmbeddingSettings
 from .vectordb_settings import VectorDBSettings
+from .database_settings import DatabaseSettings
 
 __all__ = [
     "Settings",
@@ -23,4 +25,5 @@ __all__ = [
     "LLMSettings",
     "EmbeddingSettings",
     "VectorDBSettings",
+    "DatabaseSettings",
 ]

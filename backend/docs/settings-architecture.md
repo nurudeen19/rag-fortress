@@ -13,7 +13,8 @@ backend/app/config/
 ├── app_settings.py          # General app configuration
 ├── llm_settings.py          # LLM provider configuration
 ├── embedding_settings.py    # Embedding provider configuration
-└── vectordb_settings.py     # Vector database configuration
+├── vectordb_settings.py     # Vector database configuration
+└── database_settings.py     # SQL database configuration
 ```
 
 ## Modules
@@ -23,7 +24,6 @@ backend/app/config/
 General application configuration including:
 - Application metadata (name, version, environment)
 - Server settings (host, port)
-- Database configuration
 - RAG parameters (chunk size, overlap, top-k, similarity threshold)
 - Security settings (secret key, JWT algorithm, token expiration)
 - CORS configuration
@@ -74,7 +74,22 @@ Vector database configuration for:
 - `get_vector_db_config()`: Returns configuration dict for active provider
 - `validate_config()`: Validates provider configuration and enforces production restrictions
 
-### 5. Settings (`settings.py`)
+### 5. DatabaseSettings (`database_settings.py`)
+
+SQL database configuration for user data and application metadata:
+- **PostgreSQL**: Recommended for production (robust, ACID-compliant)
+- **MySQL**: Alternative for production (widely supported)
+- **SQLite**: Development/testing only (simple, file-based)
+
+**Key Methods:**
+- `get_database_url()`: Returns SQLAlchemy database URL for sync operations
+- `get_async_database_url()`: Returns async SQLAlchemy database URL
+- `get_database_config()`: Returns complete database configuration including pool settings
+- `validate_config()`: Validates provider configuration and enforces production restrictions
+
+📚 **Detailed Guide**: See `docs/database-configuration.md` for comprehensive database setup
+
+### 6. Settings (`settings.py`)
 
 Main settings class that composes all specialized modules using multiple inheritance.
 
@@ -93,6 +108,7 @@ print(settings.APP_NAME)
 print(settings.LLM_PROVIDER)
 print(settings.EMBEDDING_PROVIDER)
 print(settings.VECTOR_DB_PROVIDER)
+print(settings.DATABASE_PROVIDER)
 ```
 
 ### Get Provider Configurations
@@ -112,6 +128,19 @@ embedding_config = settings.get_embedding_config()
 
 # Get vector database configuration
 vectordb_config = settings.get_vector_db_config()
+
+# Get SQL database configuration
+database_url = settings.get_database_url()
+# Returns: postgresql://user:pass@localhost:5432/rag_fortress
+#      or: mysql+pymysql://user:pass@localhost:3306/rag_fortress
+#      or: sqlite:///./rag_fortress.db
+
+# Get async database URL
+async_database_url = settings.get_async_database_url()
+# Returns: postgresql+asyncpg://... or mysql+aiomysql://... or sqlite+aiosqlite://...
+
+# Get complete database config with pool settings
+database_config = settings.get_database_config()
 ```
 
 ### Validate All Settings

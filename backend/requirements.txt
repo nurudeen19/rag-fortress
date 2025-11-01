@@ -11,6 +11,19 @@ httpx==0.25.1
 sqlalchemy==2.0.23
 alembic==1.12.1
 
+# Database Drivers
+# PostgreSQL (recommended for production)
+psycopg2-binary==2.9.9  # Sync PostgreSQL driver
+asyncpg==0.29.0  # Async PostgreSQL driver
+
+# MySQL
+pymysql==1.1.0  # Sync MySQL driver
+aiomysql==0.2.0  # Async MySQL driver
+cryptography==41.0.7  # Required for MySQL SSL
+
+# SQLite (included in Python, but async driver needed)
+aiosqlite==0.19.0  # Async SQLite driver
+
 # Vector Database / Embeddings
 chromadb==0.4.18
 sentence-transformers==2.2.2

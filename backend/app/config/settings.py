@@ -7,9 +7,10 @@ from .app_settings import AppSettings
 from .llm_settings import LLMSettings
 from .embedding_settings import EmbeddingSettings
 from .vectordb_settings import VectorDBSettings
+from .database_settings import DatabaseSettings
 
 
-class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings):
+class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings):
     """
     Main settings class that inherits from all specialized settings modules.
     
@@ -29,10 +30,13 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings):
         self.validate_fallback_config()
         
         # Validate embedding configuration
-        self.validate_config()
+        EmbeddingSettings.validate_config(self)
         
         # Validate vector database configuration
         VectorDBSettings.validate_config(self, self.ENVIRONMENT)
+        
+        # Validate database configuration
+        DatabaseSettings.validate_config(self, self.ENVIRONMENT)
     
     class Config:
         env_file = ".env"
