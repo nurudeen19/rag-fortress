@@ -1,0 +1,142 @@
+"""
+General application configuration settings.
+"""
+from typing import List, Optional
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings
+
+
+class AppSettings(BaseSettings):
+    """General application configuration."""
+    
+    # Application Info
+    APP_NAME: str = Field("RAG Fortress", env="APP_NAME")
+    APP_VERSION: str = Field("0.1.0", env="APP_VERSION")
+    DEBUG: bool = Field(False, env="DEBUG")
+    ENVIRONMENT: str = Field("development", env="ENVIRONMENT")
+    
+    # Server Configuration
+    HOST: str = Field("0.0.0.0", env="HOST")
+    PORT: int = Field(8000, env="PORT")
+    
+    # Database Configuration
+    DATABASE_URL: str = Field(
+        "sqlite:///./rag_fortress.db",
+        env="DATABASE_URL"
+    )
+    
+    # RAG Configuration
+    CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
+    CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")
+    TOP_K_RESULTS: int = Field(5, env="TOP_K_RESULTS")
+    SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
+    
+    # Security
+    SECRET_KEY: str = Field(..., env="SECRET_KEY")
+    ALGORITHM: str = Field("HS256", env="ALGORITHM")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    
+    # CORS Configuration
+    CORS_ORIGINS: List[str] = Field(
+        default_factory=lambda: ["http://localhost:5173"],
+        env="CORS_ORIGINS"
+    )
+    CORS_CREDENTIALS: bool = Field(True, env="CORS_CREDENTIALS")
+    CORS_METHODS: List[str] = Field(
+        default_factory=lambda: ["*"],
+        env="CORS_METHODS"
+    )
+    CORS_HEADERS: List[str] = Field(
+        default_factory=lambda: ["*"],
+        env="CORS_HEADERS"
+    )
+    
+    # Logging Configuration
+    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
+    LOG_FORMAT: str = Field(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        env="LOG_FORMAT"
+    )
+    LOG_FILE: Optional[str] = Field("logs/rag_fortress.log", env="LOG_FILE")
+    LOG_MAX_BYTES: int = Field(10485760, env="LOG_MAX_BYTES")  # 10MB
+    LOG_BACKUP_COUNT: int = Field(5, env="LOG_BACKUP_COUNT")
+
+    @field_validator("ENVIRONMENT")
+    @classmethod
+    def validate_environment(cls, v: str) -> str:
+        """Validate environment value."""
+        allowed = {"development", "staging", "production"}
+        if v.lower() not in allowed:
+            raise ValueError(
+                f"ENVIRONMENT must be one of {allowed}, got '{v}'"
+            )
+        return v.lower()
+
+    @field_validator("LOG_LEVEL")
+    @classmethod
+    def validate_log_level(cls, v: str) -> str:
+        """Validate log level."""
+        allowed = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+        v_upper = v.upper()
+        if v_upper not in allowed:
+            raise ValueError(
+                f"LOG_LEVEL must be one of {allowed}, got '{v}'"
+            )
+        return v_upper
+
+    @field_validator("CHUNK_OVERLAP")
+    @classmethod
+    def validate_chunk_overlap(cls, v: int, info) -> int:
+        """Ensure chunk overlap is less than chunk size."""
+        # Note: In Pydantic v2, we can't access other fields in field_validator
+        # This will be validated in the Settings class after composition
+        if v < 0:
+            raise ValueError("CHUNK_OVERLAP must be non-negative")
+        return v
+
+    @field_validator("SIMILARITY_THRESHOLD")
+    @classmethod
+    def validate_similarity_threshold(cls, v: float) -> float:
+        """Ensure similarity threshold is between 0 and 1."""
+        if not 0 <= v <= 1:
+            raise ValueError("SIMILARITY_THRESHOLD must be between 0 and 1")
+        return v
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from string or list."""
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+
+    @field_validator("CORS_METHODS", mode="before")
+    @classmethod
+    def parse_cors_methods(cls, v):
+        """Parse CORS methods from string or list."""
+        if isinstance(v, str):
+            return [method.strip() for method in v.split(",")]
+        return v
+
+    @field_validator("CORS_HEADERS", mode="before")
+    @classmethod
+    def parse_cors_headers(cls, v):
+        """Parse CORS headers from string or list."""
+        if isinstance(v, str):
+            return [header.strip() for header in v.split(",")]
+        return v
+
+    def validate_rag_config(self):
+        """Validate RAG-specific configuration."""
+        if self.CHUNK_OVERLAP >= self.CHUNK_SIZE:
+            raise ValueError(
+                f"CHUNK_OVERLAP ({self.CHUNK_OVERLAP}) must be less than "
+                f"CHUNK_SIZE ({self.CHUNK_SIZE})"
+            )
+        
+        if self.TOP_K_RESULTS < 1:
+            raise ValueError("TOP_K_RESULTS must be at least 1")
+
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
