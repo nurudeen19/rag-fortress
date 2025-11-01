@@ -14,7 +14,11 @@ def clean_env():
     
     # Clear relevant env vars
     keys_to_clear = [key for key in os.environ.keys() if any(
-        prefix in key for prefix in ['LLM_', 'OPENAI_', 'GOOGLE_', 'HF_', 'FALLBACK_']
+        prefix in key for prefix in [
+            'LLM_', 'OPENAI_', 'GOOGLE_', 'HF_', 'FALLBACK_',
+            'EMBEDDING_', 'COHERE_', 'VOYAGE_',
+            'VECTOR_DB_', 'QDRANT_', 'CHROMA_', 'PINECONE_', 'WEAVIATE_', 'MILVUS_'
+        ]
     )]
     for key in keys_to_clear:
         os.environ.pop(key, None)
@@ -336,3 +340,387 @@ class TestCORSConfiguration:
             # Note: Pydantic may parse this as a string or list depending on configuration
             # This test may need adjustment based on actual parsing behavior
             assert settings.ALLOWED_ORIGINS is not None
+
+
+class TestEmbeddingProviderConfiguration:
+    """Test embedding provider configuration"""
+    
+    def test_default_embedding_provider(self, clean_env, base_env):
+        """Test default embedding provider is HuggingFace"""
+        with patch.dict(os.environ, base_env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            
+            assert settings.EMBEDDING_PROVIDER == "huggingface"
+            config = settings.get_embedding_config()
+            assert config["provider"] == "huggingface"
+            assert config["model"] == "sentence-transformers/all-MiniLM-L6-v2"
+            assert config["device"] == "cpu"
+    
+    def test_openai_embedding_config(self, clean_env, base_env):
+        """Test OpenAI embedding configuration"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "openai",
+            "OPENAI_API_KEY": "test_openai_key",
+            "OPENAI_EMBEDDING_MODEL": "text-embedding-3-large",
+            "OPENAI_EMBEDDING_DIMENSIONS": "1024",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_embedding_config()
+            
+            assert config["provider"] == "openai"
+            assert config["api_key"] == "test_openai_key"
+            assert config["model"] == "text-embedding-3-large"
+            assert config["dimensions"] == 1024
+    
+    def test_google_embedding_config(self, clean_env, base_env):
+        """Test Google embedding configuration"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "google",
+            "GOOGLE_API_KEY": "test_google_key",
+            "GOOGLE_EMBEDDING_MODEL": "gemini-embedding-001",
+            "GOOGLE_EMBEDDING_DIMENSIONS": "1536",
+            "GOOGLE_EMBEDDING_TASK_TYPE": "RETRIEVAL_QUERY",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_embedding_config()
+            
+            assert config["provider"] == "google"
+            assert config["api_key"] == "test_google_key"
+            assert config["model"] == "gemini-embedding-001"
+            assert config["dimensions"] == 1536
+            assert config["task_type"] == "RETRIEVAL_QUERY"
+    
+    def test_cohere_embedding_config(self, clean_env, base_env):
+        """Test Cohere embedding configuration"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "cohere",
+            "COHERE_API_KEY": "test_cohere_key",
+            "COHERE_EMBEDDING_MODEL": "embed-english-v3.0",
+            "COHERE_INPUT_TYPE": "search_query",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_embedding_config()
+            
+            assert config["provider"] == "cohere"
+            assert config["api_key"] == "test_cohere_key"
+            assert config["model"] == "embed-english-v3.0"
+            assert config["input_type"] == "search_query"
+    
+    def test_voyage_embedding_config(self, clean_env, base_env):
+        """Test Voyage AI embedding configuration"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "voyage",
+            "VOYAGE_API_KEY": "test_voyage_key",
+            "VOYAGE_EMBEDDING_MODEL": "voyage-2",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_embedding_config()
+            
+            assert config["provider"] == "voyage"
+            assert config["api_key"] == "test_voyage_key"
+            assert config["model"] == "voyage-2"
+    
+    def test_invalid_embedding_provider(self, clean_env, base_env):
+        """Test invalid embedding provider raises error"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "invalid_provider",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="Unsupported EMBEDDING_PROVIDER"):
+                Settings()
+    
+    def test_openai_embedding_missing_api_key(self, clean_env, base_env):
+        """Test OpenAI embeddings require API key"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "openai",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
+                Settings()
+    
+    def test_google_embedding_missing_api_key(self, clean_env, base_env):
+        """Test Google embeddings require API key"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "google",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="GOOGLE_API_KEY is required"):
+                Settings()
+    
+    def test_cohere_embedding_missing_api_key(self, clean_env, base_env):
+        """Test Cohere embeddings require API key"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "cohere",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="COHERE_API_KEY is required"):
+                Settings()
+    
+    def test_voyage_embedding_missing_api_key(self, clean_env, base_env):
+        """Test Voyage AI embeddings require API key"""
+        env = {
+            **base_env,
+            "EMBEDDING_PROVIDER": "voyage",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="VOYAGE_API_KEY is required"):
+                Settings()
+
+
+class TestVectorDBConfiguration:
+    """Test vector database configuration"""
+    
+    def test_default_vector_db_chroma(self, clean_env, base_env):
+        """Test default vector DB is Chroma"""
+        with patch.dict(os.environ, base_env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            
+            assert settings.VECTOR_DB_PROVIDER == "chroma"
+            config = settings.get_vector_db_config()
+            assert config["provider"] == "chroma"
+            assert config["persist_directory"] == "./chroma_db"
+            assert config["collection_name"] == "rag_documents"
+    
+    def test_chroma_not_allowed_in_production(self, clean_env, base_env):
+        """Test Chroma is not allowed in production"""
+        env = {
+            **base_env,
+            "ENVIRONMENT": "production",
+            "VECTOR_DB_PROVIDER": "chroma",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="Chroma is not recommended for production"):
+                Settings()
+    
+    def test_qdrant_local_config(self, clean_env, base_env):
+        """Test Qdrant local configuration"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "qdrant",
+            "QDRANT_HOST": "localhost",
+            "QDRANT_PORT": "6333",
+            "QDRANT_COLLECTION_NAME": "my_docs",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["provider"] == "qdrant"
+            assert config["host"] == "localhost"
+            assert config["port"] == 6333
+            assert config["collection_name"] == "my_docs"
+            assert "url" not in config
+    
+    def test_qdrant_cloud_config(self, clean_env, base_env):
+        """Test Qdrant Cloud configuration"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "qdrant",
+            "QDRANT_URL": "https://my-cluster.qdrant.io",
+            "QDRANT_API_KEY": "test_qdrant_key",
+            "QDRANT_COLLECTION_NAME": "my_docs",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["provider"] == "qdrant"
+            assert config["url"] == "https://my-cluster.qdrant.io"
+            assert config["api_key"] == "test_qdrant_key"
+            assert config["collection_name"] == "my_docs"
+            assert "host" not in config
+    
+    def test_qdrant_cloud_missing_api_key(self, clean_env, base_env):
+        """Test Qdrant Cloud requires API key"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "qdrant",
+            "QDRANT_URL": "https://my-cluster.qdrant.io",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="QDRANT_API_KEY is required"):
+                Settings()
+    
+    def test_qdrant_allowed_in_production(self, clean_env, base_env):
+        """Test Qdrant is allowed in production"""
+        env = {
+            **base_env,
+            "ENVIRONMENT": "production",
+            "VECTOR_DB_PROVIDER": "qdrant",
+            "QDRANT_HOST": "localhost",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()  # Should not raise
+            assert settings.VECTOR_DB_PROVIDER == "qdrant"
+    
+    def test_pinecone_config(self, clean_env, base_env):
+        """Test Pinecone configuration"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "pinecone",
+            "PINECONE_API_KEY": "test_pinecone_key",
+            "PINECONE_ENVIRONMENT": "us-west1-gcp",
+            "PINECONE_INDEX_NAME": "my-index",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["provider"] == "pinecone"
+            assert config["api_key"] == "test_pinecone_key"
+            assert config["environment"] == "us-west1-gcp"
+            assert config["index_name"] == "my-index"
+    
+    def test_pinecone_missing_api_key(self, clean_env, base_env):
+        """Test Pinecone requires API key"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "pinecone",
+            "PINECONE_ENVIRONMENT": "us-west1-gcp",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="PINECONE_API_KEY is required"):
+                Settings()
+    
+    def test_pinecone_missing_environment(self, clean_env, base_env):
+        """Test Pinecone requires environment"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "pinecone",
+            "PINECONE_API_KEY": "test_key",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="PINECONE_ENVIRONMENT is required"):
+                Settings()
+    
+    def test_weaviate_config(self, clean_env, base_env):
+        """Test Weaviate configuration"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "weaviate",
+            "WEAVIATE_URL": "http://localhost:8080",
+            "WEAVIATE_CLASS_NAME": "MyDocument",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["provider"] == "weaviate"
+            assert config["url"] == "http://localhost:8080"
+            assert config["class_name"] == "MyDocument"
+    
+    def test_weaviate_with_api_key(self, clean_env, base_env):
+        """Test Weaviate with API key (cloud)"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "weaviate",
+            "WEAVIATE_URL": "https://my-cluster.weaviate.network",
+            "WEAVIATE_API_KEY": "test_weaviate_key",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["api_key"] == "test_weaviate_key"
+    
+    def test_milvus_config(self, clean_env, base_env):
+        """Test Milvus configuration"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "milvus",
+            "MILVUS_HOST": "localhost",
+            "MILVUS_PORT": "19530",
+            "MILVUS_COLLECTION_NAME": "my_collection",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["provider"] == "milvus"
+            assert config["host"] == "localhost"
+            assert config["port"] == 19530
+            assert config["collection_name"] == "my_collection"
+    
+    def test_milvus_with_auth(self, clean_env, base_env):
+        """Test Milvus with authentication"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "milvus",
+            "MILVUS_USER": "admin",
+            "MILVUS_PASSWORD": "password123",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_vector_db_config()
+            
+            assert config["user"] == "admin"
+            assert config["password"] == "password123"
+    
+    def test_invalid_vector_db_provider(self, clean_env, base_env):
+        """Test invalid vector DB provider raises error"""
+        env = {
+            **base_env,
+            "VECTOR_DB_PROVIDER": "invalid_db",
+        }
+        
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            with pytest.raises(ValueError, match="Unsupported VECTOR_DB_PROVIDER"):
+                Settings()
+

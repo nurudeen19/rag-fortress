@@ -45,12 +45,68 @@ class Settings(BaseSettings):
     FALLBACK_HF_TEMPERATURE: float = Field(0.7, env="FALLBACK_HF_TEMPERATURE")
     FALLBACK_HF_MAX_TOKENS: int = Field(512, env="FALLBACK_HF_MAX_TOKENS")
 
+    # Embedding Provider selection (defaults to huggingface sentence-transformers)
+    EMBEDDING_PROVIDER: str = Field("huggingface", env="EMBEDDING_PROVIDER")
+    
+    # OpenAI Embeddings
+    OPENAI_EMBEDDING_MODEL: str = Field("text-embedding-3-small", env="OPENAI_EMBEDDING_MODEL")
+    OPENAI_EMBEDDING_DIMENSIONS: Optional[int] = Field(None, env="OPENAI_EMBEDDING_DIMENSIONS")
+    
+    # Google Embeddings (Gemini API)
+    GOOGLE_EMBEDDING_MODEL: str = Field("gemini-embedding-001", env="GOOGLE_EMBEDDING_MODEL")
+    GOOGLE_EMBEDDING_DIMENSIONS: Optional[int] = Field(None, env="GOOGLE_EMBEDDING_DIMENSIONS")  # 768, 1536, or 3072
+    GOOGLE_EMBEDDING_TASK_TYPE: str = Field("RETRIEVAL_DOCUMENT", env="GOOGLE_EMBEDDING_TASK_TYPE")  # RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY, etc.
+    
+    # HuggingFace Embeddings (Sentence Transformers)
+    HF_EMBEDDING_MODEL: str = Field("sentence-transformers/all-MiniLM-L6-v2", env="HF_EMBEDDING_MODEL")
+    HF_EMBEDDING_DEVICE: str = Field("cpu", env="HF_EMBEDDING_DEVICE")  # cpu or cuda
+    
+    # Cohere Embeddings
+    COHERE_API_KEY: Optional[str] = Field(None, env="COHERE_API_KEY")
+    COHERE_EMBEDDING_MODEL: str = Field("embed-english-v3.0", env="COHERE_EMBEDDING_MODEL")
+    COHERE_INPUT_TYPE: str = Field("search_document", env="COHERE_INPUT_TYPE")  # search_document, search_query, classification, clustering
+    
+    # Voyage AI Embeddings
+    VOYAGE_API_KEY: Optional[str] = Field(None, env="VOYAGE_API_KEY")
+    VOYAGE_EMBEDDING_MODEL: str = Field("voyage-2", env="VOYAGE_EMBEDDING_MODEL")
+    
+    # Vector Database selection
+    VECTOR_DB_PROVIDER: str = Field("chroma", env="VECTOR_DB_PROVIDER")
+    
+    # Qdrant Configuration
+    QDRANT_HOST: str = Field("localhost", env="QDRANT_HOST")
+    QDRANT_PORT: int = Field(6333, env="QDRANT_PORT")
+    QDRANT_GRPC_PORT: int = Field(6334, env="QDRANT_GRPC_PORT")
+    QDRANT_API_KEY: Optional[str] = Field(None, env="QDRANT_API_KEY")  # For Qdrant Cloud
+    QDRANT_URL: Optional[str] = Field(None, env="QDRANT_URL")  # For Qdrant Cloud
+    QDRANT_COLLECTION_NAME: str = Field("rag_documents", env="QDRANT_COLLECTION_NAME")
+    QDRANT_PREFER_GRPC: bool = Field(False, env="QDRANT_PREFER_GRPC")
+    
+    # Chroma Configuration
+    CHROMA_HOST: str = Field("localhost", env="CHROMA_HOST")
+    CHROMA_PORT: int = Field(8000, env="CHROMA_PORT")
+    CHROMA_PERSIST_DIRECTORY: str = Field("./chroma_db", env="CHROMA_PERSIST_DIRECTORY")
+    CHROMA_COLLECTION_NAME: str = Field("rag_documents", env="CHROMA_COLLECTION_NAME")
+    
+    # Pinecone Configuration
+    PINECONE_API_KEY: Optional[str] = Field(None, env="PINECONE_API_KEY")
+    PINECONE_ENVIRONMENT: Optional[str] = Field(None, env="PINECONE_ENVIRONMENT")
+    PINECONE_INDEX_NAME: str = Field("rag-documents", env="PINECONE_INDEX_NAME")
+    
+    # Weaviate Configuration
+    WEAVIATE_URL: str = Field("http://localhost:8080", env="WEAVIATE_URL")
+    WEAVIATE_API_KEY: Optional[str] = Field(None, env="WEAVIATE_API_KEY")
+    WEAVIATE_CLASS_NAME: str = Field("Document", env="WEAVIATE_CLASS_NAME")
+    
+    # Milvus Configuration
+    MILVUS_HOST: str = Field("localhost", env="MILVUS_HOST")
+    MILVUS_PORT: int = Field(19530, env="MILVUS_PORT")
+    MILVUS_COLLECTION_NAME: str = Field("rag_documents", env="MILVUS_COLLECTION_NAME")
+    MILVUS_USER: Optional[str] = Field(None, env="MILVUS_USER")
+    MILVUS_PASSWORD: Optional[str] = Field(None, env="MILVUS_PASSWORD")
+
     # Database
     DATABASE_URL: str = Field("sqlite:///./rag_fortress.db", env="DATABASE_URL")
-
-    # Vector DB
-    CHROMA_PERSIST_DIRECTORY: str = Field("./chroma_db", env="CHROMA_PERSIST_DIRECTORY")
-    EMBEDDING_MODEL: str = Field("all-MiniLM-L6-v2", env="EMBEDDING_MODEL")
 
     # RAG
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
@@ -87,6 +143,12 @@ class Settings(BaseSettings):
         # Validate fallback provider is different from primary
         if self.FALLBACK_LLM_PROVIDER:
             self._validate_fallback_config()
+        
+        # Validate vector database configuration
+        self._validate_vector_db_config()
+        
+        # Validate embedding provider configuration
+        self._validate_embedding_config()
 
     def get_llm_config(self):
         """Get LLM configuration for the selected provider"""
@@ -226,5 +288,193 @@ class Settings(BaseSettings):
                 f"Primary: {primary_config['provider']}/{primary_config['model']}, "
                 f"Fallback: {fallback_config['provider']}/{fallback_config['model']}"
             )
+    
+    def _validate_vector_db_config(self):
+        """Validate vector database configuration based on environment"""
+        vector_db = self.VECTOR_DB_PROVIDER.lower()
+        
+        # Validate provider is supported
+        supported_dbs = {"chroma", "qdrant", "pinecone", "weaviate", "milvus"}
+        if vector_db not in supported_dbs:
+            raise ValueError(
+                f"Unsupported VECTOR_DB_PROVIDER: {vector_db}. "
+                f"Supported: {', '.join(supported_dbs)}"
+            )
+        
+        # Production validation: Don't allow Chroma in production
+        if self.ENVIRONMENT == "production" and vector_db == "chroma":
+            raise ValueError(
+                "Chroma is not recommended for production. "
+                "Please use Qdrant, Pinecone, Weaviate, or Milvus instead."
+            )
+        
+        # Validate required fields for each provider
+        if vector_db == "qdrant":
+            # If using Qdrant Cloud, URL and API key are required
+            if self.QDRANT_URL:
+                if not self.QDRANT_API_KEY:
+                    raise ValueError("QDRANT_API_KEY is required when using Qdrant Cloud (QDRANT_URL is set)")
+        
+        elif vector_db == "pinecone":
+            if not self.PINECONE_API_KEY:
+                raise ValueError("PINECONE_API_KEY is required for Pinecone provider")
+            if not self.PINECONE_ENVIRONMENT:
+                raise ValueError("PINECONE_ENVIRONMENT is required for Pinecone provider")
+        
+        elif vector_db == "weaviate":
+            # Weaviate can work with just URL in local mode
+            pass
+        
+        elif vector_db == "milvus":
+            # Milvus can work with defaults
+            pass
+    
+    def _validate_embedding_config(self):
+        """Validate embedding provider configuration"""
+        embedding_provider = self.EMBEDDING_PROVIDER.lower()
+        
+        # Validate provider is supported
+        supported_providers = {"openai", "google", "huggingface", "cohere", "voyage"}
+        if embedding_provider not in supported_providers:
+            raise ValueError(
+                f"Unsupported EMBEDDING_PROVIDER: {embedding_provider}. "
+                f"Supported: {', '.join(supported_providers)}"
+            )
+        
+        # Validate required API keys for each provider
+        if embedding_provider == "openai":
+            if not self.OPENAI_API_KEY:
+                raise ValueError("OPENAI_API_KEY is required for OpenAI embeddings")
+        
+        elif embedding_provider == "google":
+            if not self.GOOGLE_API_KEY:
+                raise ValueError("GOOGLE_API_KEY is required for Google embeddings")
+        
+        elif embedding_provider == "cohere":
+            if not self.COHERE_API_KEY:
+                raise ValueError("COHERE_API_KEY is required for Cohere embeddings")
+        
+        elif embedding_provider == "voyage":
+            if not self.VOYAGE_API_KEY:
+                raise ValueError("VOYAGE_API_KEY is required for Voyage AI embeddings")
+        
+        # HuggingFace doesn't require API key for local models
+    
+    def get_embedding_config(self):
+        """Get embedding configuration for the selected provider"""
+        provider = self.EMBEDDING_PROVIDER.lower()
+        
+        if provider == "openai":
+            config = {
+                "provider": "openai",
+                "api_key": self.OPENAI_API_KEY,
+                "model": self.OPENAI_EMBEDDING_MODEL,
+            }
+            if self.OPENAI_EMBEDDING_DIMENSIONS:
+                config["dimensions"] = self.OPENAI_EMBEDDING_DIMENSIONS
+            return config
+        
+        elif provider == "google":
+            config = {
+                "provider": "google",
+                "api_key": self.GOOGLE_API_KEY,
+                "model": self.GOOGLE_EMBEDDING_MODEL,
+                "task_type": self.GOOGLE_EMBEDDING_TASK_TYPE,
+            }
+            if self.GOOGLE_EMBEDDING_DIMENSIONS:
+                config["dimensions"] = self.GOOGLE_EMBEDDING_DIMENSIONS
+            return config
+        
+        elif provider == "huggingface":
+            return {
+                "provider": "huggingface",
+                "model": self.HF_EMBEDDING_MODEL,
+                "device": self.HF_EMBEDDING_DEVICE,
+                "api_token": self.HF_API_TOKEN,  # Optional for public models
+            }
+        
+        elif provider == "cohere":
+            return {
+                "provider": "cohere",
+                "api_key": self.COHERE_API_KEY,
+                "model": self.COHERE_EMBEDDING_MODEL,
+                "input_type": self.COHERE_INPUT_TYPE,
+            }
+        
+        elif provider == "voyage":
+            return {
+                "provider": "voyage",
+                "api_key": self.VOYAGE_API_KEY,
+                "model": self.VOYAGE_EMBEDDING_MODEL,
+            }
+        
+        else:
+            raise ValueError(f"Unsupported embedding provider: {provider}")
+    
+    def get_vector_db_config(self):
+        """Get vector database configuration for the selected provider"""
+        provider = self.VECTOR_DB_PROVIDER.lower()
+        
+        if provider == "qdrant":
+            config = {
+                "provider": "qdrant",
+                "collection_name": self.QDRANT_COLLECTION_NAME,
+            }
+            
+            # Qdrant Cloud configuration
+            if self.QDRANT_URL:
+                config["url"] = self.QDRANT_URL
+                config["api_key"] = self.QDRANT_API_KEY
+            else:
+                # Local Qdrant configuration
+                config["host"] = self.QDRANT_HOST
+                config["port"] = self.QDRANT_PORT
+                config["grpc_port"] = self.QDRANT_GRPC_PORT
+                config["prefer_grpc"] = self.QDRANT_PREFER_GRPC
+            
+            return config
+        
+        elif provider == "chroma":
+            return {
+                "provider": "chroma",
+                "host": self.CHROMA_HOST,
+                "port": self.CHROMA_PORT,
+                "persist_directory": self.CHROMA_PERSIST_DIRECTORY,
+                "collection_name": self.CHROMA_COLLECTION_NAME,
+            }
+        
+        elif provider == "pinecone":
+            return {
+                "provider": "pinecone",
+                "api_key": self.PINECONE_API_KEY,
+                "environment": self.PINECONE_ENVIRONMENT,
+                "index_name": self.PINECONE_INDEX_NAME,
+            }
+        
+        elif provider == "weaviate":
+            config = {
+                "provider": "weaviate",
+                "url": self.WEAVIATE_URL,
+                "class_name": self.WEAVIATE_CLASS_NAME,
+            }
+            if self.WEAVIATE_API_KEY:
+                config["api_key"] = self.WEAVIATE_API_KEY
+            return config
+        
+        elif provider == "milvus":
+            config = {
+                "provider": "milvus",
+                "host": self.MILVUS_HOST,
+                "port": self.MILVUS_PORT,
+                "collection_name": self.MILVUS_COLLECTION_NAME,
+            }
+            if self.MILVUS_USER:
+                config["user"] = self.MILVUS_USER
+            if self.MILVUS_PASSWORD:
+                config["password"] = self.MILVUS_PASSWORD
+            return config
+        
+        else:
+            raise ValueError(f"Unsupported vector database provider: {provider}")
 
 settings = Settings()
