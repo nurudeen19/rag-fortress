@@ -43,7 +43,7 @@ def example_configuration_errors():
     
     # Missing environment variable
     try:
-        api_key = get_required_env_var("API_KEY")
+        _ = get_required_env_var("API_KEY")
     except MissingEnvironmentVariableError as e:
         logger.error(f"Configuration error: {e.message}")
         # Details: {'variable': 'API_KEY'}
@@ -65,6 +65,7 @@ async def example_llm_errors():
     
     try:
         response = await call_primary_llm("What is AI?")
+        print(f"Primary LLM response: {response}")
     except LLMRateLimitError as e:
         logger.warning(f"Rate limit hit: {e.message}")
         retry_after = e.details.get("retry_after", 60)
@@ -73,6 +74,7 @@ async def example_llm_errors():
         # Try fallback
         try:
             response = await call_fallback_llm("What is AI?")
+            print(f"Fallback LLM response: {response}")
         except LLMProviderError as e:
             logger.error("Fallback also failed", exc_info=True)
             raise
@@ -114,6 +116,13 @@ async def example_document_errors(file_path: str, file_size: int):
     # Parse document
     try:
         content = parse_document(file_path)
+        if content is None:
+            raise DocumentParsingError(
+                message="Parsed document content is None.",
+                file_path=file_path,
+                details={"error": "No content returned from parse_document"}
+            )
+        logger.info(f"Document parsed successfully, length: {len(content)}")
     except Exception as e:
         raise DocumentParsingError(
             message=f"Failed to parse document: {str(e)}",
@@ -124,6 +133,7 @@ async def example_document_errors(file_path: str, file_size: int):
     # Retrieve document
     try:
         doc = get_document("doc_123")
+        logger.info(f"Document retrieved: {doc.id if hasattr(doc, 'id') else doc}")
     except DocumentNotFoundError as e:
         logger.warning(f"Document not found: {e.details['document_id']}")
         # Return None or default
@@ -153,6 +163,7 @@ async def example_vector_store_errors():
     # Embedding error
     try:
         embeddings = await generate_embeddings(texts)
+        return embeddings
     except EmbeddingError as e:
         logger.error(f"Embedding generation failed: {e.message}")
         logger.debug(f"Details: {e.details}")
@@ -169,14 +180,14 @@ async def example_database_errors():
     
     # Record not found
     try:
-        user = db.get_user(user_id="user_123")
+        db.get_user(user_id="user_123")
     except RecordNotFoundError as e:
         logger.info(f"User not found: {e.details['id']}")
         return None
     
     # Duplicate record
     try:
-        user = db.create_user(email="test@example.com")
+        db.create_user(email="test@example.com")
     except DuplicateRecordError as e:
         logger.warning(f"Duplicate {e.details['field']}: {e.details['value']}")
         # Return existing user
@@ -192,7 +203,7 @@ async def example_auth_errors(token: str, user_id: str, resource_id: str):
     
     # Authentication
     try:
-        user = authenticate_token(token)
+        authenticate_token(token)
     except AuthenticationError as e:
         logger.warning(f"Authentication failed: {e.message}")
         # Return 401 response
@@ -251,7 +262,7 @@ async def example_rate_limiting(user_id: str):
 # Example 9: FastAPI Route with Error Handling
 # ============================================================================
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, UploadFile, File
 
 router = APIRouter()
 
@@ -278,6 +289,12 @@ async def upload_document(file: UploadFile = File(...)):
         # Parse document
         try:
             content = parse_document(file_path)
+            if content is None:
+                raise DocumentParsingError(
+                    message="Parsed document content is None.",
+                    file_path=file_path,
+                    details={"error": "No content returned from parse_document"}
+                )
         except Exception as e:
             raise DocumentParsingError(
                 message="Failed to parse document",
