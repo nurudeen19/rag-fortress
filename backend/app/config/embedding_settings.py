@@ -33,16 +33,13 @@ class EmbeddingSettings(BaseSettings):
     COHERE_EMBEDDING_MODEL: str = Field("embed-english-v3.0", env="COHERE_EMBEDDING_MODEL")
     COHERE_INPUT_TYPE: str = Field("search_document", env="COHERE_INPUT_TYPE")
     
-    # Voyage AI Embeddings
-    VOYAGE_API_KEY: Optional[str] = Field(None, env="VOYAGE_API_KEY")
-    VOYAGE_EMBEDDING_MODEL: str = Field("voyage-2", env="VOYAGE_EMBEDDING_MODEL")
 
     def validate_config(self):
         """Validate embedding provider configuration."""
         embedding_provider = self.EMBEDDING_PROVIDER.lower()
         
         # Validate provider is supported
-        supported_providers = {"openai", "google", "huggingface", "cohere", "voyage"}
+        supported_providers = {"openai", "google", "huggingface", "cohere"}
         if embedding_provider not in supported_providers:
             raise ValueError(
                 f"Unsupported EMBEDDING_PROVIDER: {embedding_provider}. "
@@ -61,10 +58,6 @@ class EmbeddingSettings(BaseSettings):
         elif embedding_provider == "cohere":
             if not self.COHERE_API_KEY:
                 raise ValueError("COHERE_API_KEY is required for Cohere embeddings")
-        
-        elif embedding_provider == "voyage":
-            if not self.VOYAGE_API_KEY:
-                raise ValueError("VOYAGE_API_KEY is required for Voyage AI embeddings")
         
         # HuggingFace doesn't require API key for local models
 
@@ -108,14 +101,7 @@ class EmbeddingSettings(BaseSettings):
                 "model": self.COHERE_EMBEDDING_MODEL,
                 "input_type": self.COHERE_INPUT_TYPE,
             }
-        
-        elif provider == "voyage":
-            return {
-                "provider": "voyage",
-                "api_key": self.VOYAGE_API_KEY,
-                "model": self.VOYAGE_EMBEDDING_MODEL,
-            }
-        
+                
         else:
             raise ValueError(f"Unsupported embedding provider: {provider}")
 
