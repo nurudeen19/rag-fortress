@@ -41,30 +41,30 @@ class Document:
 
 class DocumentLoader:
     """
-    Loads documents from the knowledge base directory.
+    Loads documents from the pending directory.
     
-    Single Responsibility: Load documents from the centralized knowledge base.
-    All documents must be placed in the KNOWLEDGE_BASE_DIR for the loader to access them.
+    Single Responsibility: Load documents from the pending folder.
+    After successful processing, documents are moved to the processed folder.
     """
     
-    def __init__(self, knowledge_base_dir: Optional[str] = None):
+    def __init__(self, pending_dir: Optional[str] = None):
         """
         Initialize document loader.
         
         Args:
-            knowledge_base_dir: Override default knowledge base directory
+            pending_dir: Override default pending directory
         """
-        self.knowledge_base_dir = Path(knowledge_base_dir or settings.KNOWLEDGE_BASE_DIR)
+        self.pending_dir = Path(pending_dir or settings.PENDING_DIR)
         
-        # Create knowledge base directory if it doesn't exist
-        self.knowledge_base_dir.mkdir(parents=True, exist_ok=True)
+        # Create pending directory if it doesn't exist
+        self.pending_dir.mkdir(parents=True, exist_ok=True)
     
     def load(self, filename: str) -> Document:
         """
-        Load a document from the knowledge base directory.
+        Load a document from the pending directory.
         
         Args:
-            filename: Name of the file (can include subdirectories within knowledge base)
+            filename: Name of the file (can include subdirectories within pending)
             
         Returns:
             Document: Loaded document with content and metadata
@@ -72,26 +72,26 @@ class DocumentLoader:
         Raises:
             DocumentError: If file not found or unsupported type
         """
-        # Resolve path relative to knowledge base
-        file_path = self.knowledge_base_dir / filename
+        # Resolve path relative to pending directory
+        file_path = self.pending_dir / filename
         
         if not file_path.exists():
             raise DocumentError(
-                f"File not found in knowledge base: {filename}. "
-                f"Please place documents in: {self.knowledge_base_dir}"
+                f"File not found in pending directory: {filename}. "
+                f"Please place documents in: {self.pending_dir}"
             )
         
-        # Security: Ensure file is within knowledge base (prevent directory traversal)
+        # Security: Ensure file is within pending directory (prevent directory traversal)
         try:
-            file_path.resolve().relative_to(self.knowledge_base_dir.resolve())
+            file_path.resolve().relative_to(self.pending_dir.resolve())
         except ValueError:
-            raise DocumentError(f"Access denied: File must be within knowledge base directory")
+            raise DocumentError(f"Access denied: File must be within pending directory")
         
         return self._load_from_path(file_path)
     
     def load_all(self, recursive: bool = True, file_types: Optional[List[str]] = None) -> List[Document]:
         """
-        Load all documents from the knowledge base directory.
+        Load all documents from the pending directory.
         
         Args:
             recursive: Whether to search subdirectories
@@ -111,9 +111,9 @@ class DocumentLoader:
         # Find all matching files
         for extension in extensions:
             if recursive:
-                files = self.knowledge_base_dir.rglob(extension)
+                files = self.pending_dir.rglob(extension)
             else:
-                files = self.knowledge_base_dir.glob(extension)
+                files = self.pending_dir.glob(extension)
             
             for file_path in files:
                 try:
@@ -125,7 +125,7 @@ class DocumentLoader:
         
         return documents
     
-    def _load_from_path(self, path: Path) -> Document:
+    
     def _load_from_path(self, path: Path) -> Document:
         """
         Load document from a given path.
@@ -163,9 +163,9 @@ class DocumentLoader:
         else:
             raise DocumentError(f"No loader implemented for: {doc_type}")
         
-        # Get relative path from knowledge base
+        # Get relative path from pending directory
         try:
-            relative_path = path.relative_to(self.knowledge_base_dir)
+            relative_path = path.relative_to(self.pending_dir)
         except ValueError:
             relative_path = path
         

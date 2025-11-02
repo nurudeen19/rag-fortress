@@ -1,6 +1,6 @@
 """
 Simple Document Ingestion Example.
-Demonstrates: Load → Chunk → Embed → Store pipeline
+Demonstrates: Load → Chunk → Embed → Store → Move pipeline with folder-based tracking
 """
 
 import asyncio
@@ -10,35 +10,45 @@ from app.services.document_ingestion import DocumentIngestionService
 
 
 async def main():
-    """Demonstrate the ingestion pipeline."""
+    """Demonstrate the ingestion pipeline with folder-based tracking."""
     
     print("=" * 60)
-    print("Document Ingestion Pipeline Demo")
+    print("Document Ingestion Pipeline Demo (Folder-Based)")
     print("=" * 60)
     
     # Initialize ingestion service
     async with DocumentIngestionService() as ingestion:
         
-        # Example 1: Ingest a single document from knowledge base
-        print("\n[Example 1] Ingesting single document from knowledge base...")
-        print("Place your document in: ./data/knowledge_base/")
-        result = await ingestion.ingest_document(
-            file_path="sample.txt",  # Relative to knowledge_base directory
-            metadata={
-                "organization": "demo-org",
-                "category": "example"
-            }
-        )
-        print(f"Result: {result}")
+        # Show current status
+        print("\n[Current Status]")
+        pending_files = ingestion.get_pending_files()
+        processed_files = ingestion.get_processed_files()
+        print(f"Pending documents: {len(pending_files)}")
+        print(f"Processed documents: {len(processed_files)}")
         
-        # Example 2: Ingest ALL documents from knowledge base
-        print("\n[Example 2] Ingesting all documents from knowledge base...")
-        results = await ingestion.ingest_from_knowledge_base(
+        if pending_files:
+            print(f"\nPending files:")
+            for file in pending_files[:5]:  # Show first 5
+                print(f"  - {file}")
+            if len(pending_files) > 5:
+                print(f"  ... and {len(pending_files) - 5} more")
+        else:
+            print(f"\nNo documents in pending directory.")
+            print(f"Add documents to: ./data/knowledge_base/pending/")
+            print(f"\nExample:")
+            print(f"  cp my-document.pdf data/knowledge_base/pending/")
+            return
+        
+        # Example 1: Ingest ALL documents from pending directory
+        print("\n[Ingesting all documents from pending directory...]")
+        print("Note: Successfully processed documents will be moved to processed/")
+        
+        results = await ingestion.ingest_from_pending(
             recursive=True,  # Include subdirectories
-            file_types=None,  # All supported types (or specify: ['pdf', 'txt'])
+            file_types=None,  # All supported types
             metadata={
                 "organization": "demo-org",
-                "batch": "knowledge-base-sync"
+                "batch": "auto-sync"
             }
         )
         
@@ -49,11 +59,11 @@ async def main():
         
         total = len(results)
         successful = sum(1 for r in results if r.success)
-        failed = total - successful
+        failed = sum(1 for r in results if not r.success)
         total_chunks = sum(r.chunks_count for r in results if r.success)
         
-        print(f"Total documents: {total}")
-        print(f"Successful: {successful}")
+        print(f"Total documents found: {total}")
+        print(f"Successfully processed: {successful}")
         print(f"Failed: {failed}")
         print(f"Total chunks created: {total_chunks}")
         
@@ -61,10 +71,30 @@ async def main():
         if results:
             print(f"\nDetails:")
             for result in results:
-                print(f"  {result}")
-        else:
-            print(f"\nNo documents found in knowledge base.")
-            print(f"Place documents in: ./data/knowledge_base/")
+                status = "✓" if result.success else "✗"
+                msg = f"{result.chunks_count} chunks" if result.success else (result.error_message or "")
+                print(f"  {status} {result.document_path}: {msg}")
+        
+        # Show updated status
+        print(f"\n[Status After Ingestion]")
+        pending_files = ingestion.get_pending_files()
+        processed_files = ingestion.get_processed_files()
+        print(f"Pending documents: {len(pending_files)}")
+        print(f"Processed documents: {len(processed_files)}")
+        
+        if failed > 0:
+            print(f"\n⚠️  {failed} document(s) failed to process.")
+            print(f"Failed documents remain in pending/ for retry.")
+            print(f"Check the error messages above for details.")
+        
+        if successful > 0:
+            print(f"\n✓ {successful} document(s) successfully processed and moved to processed/")
+        
+        # Example 2: Reprocess a specific document
+        print(f"\n[Example: Reprocess a document]")
+        print("To reprocess a document that's already been processed:")
+        print("  ingestion.reprocess_document('my-document.pdf')")
+        print("  # This moves it from processed/ back to pending/")
 
 
 if __name__ == "__main__":

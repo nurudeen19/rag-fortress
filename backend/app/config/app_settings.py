@@ -22,6 +22,8 @@ class AppSettings(BaseSettings):
     # Data Directories
     DATA_DIR: str = Field("./data", env="DATA_DIR")
     KNOWLEDGE_BASE_DIR: str = Field("./data/knowledge_base", env="KNOWLEDGE_BASE_DIR")
+    PENDING_DIR: str = Field("./data/knowledge_base/pending", env="PENDING_DIR")
+    PROCESSED_DIR: str = Field("./data/knowledge_base/processed", env="PROCESSED_DIR")
     
     # RAG Configuration
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")

@@ -1,10 +1,12 @@
 """
 Document Ingestion Orchestrator.
-Coordinates: Load → Chunk → Embed → Store
+Coordinates: Load → Chunk → Embed → Store → Move to Processed
 """
 
+import shutil
 from typing import Dict, Any, List
 from pathlib import Path
+from datetime import datetime
 
 from app.services.document_loader import DocumentLoader
 from app.services.chunking import DocumentChunker
@@ -39,10 +41,16 @@ class DocumentIngestionService:
     Orchestrates the document ingestion pipeline.
     
     Pipeline:
-    1. Load document
+    1. Load document from pending directory
     2. Chunk document (type-aware)
     3. Generate embeddings
     4. Store in vector database
+    5. Move to processed directory (on success)
+    
+    Simple folder-based tracking:
+    - Documents placed in pending/ are processed
+    - Successfully processed documents moved to processed/
+    - Failed documents remain in pending/ for retry
     """
     
     def __init__(
@@ -60,6 +68,14 @@ class DocumentIngestionService:
         # Initialize components
         self.loader = DocumentLoader()
         self.chunker = DocumentChunker()
+        
+        # Directories
+        self.pending_dir = Path(settings.PENDING_DIR)
+        self.processed_dir = Path(settings.PROCESSED_DIR)
+        
+        # Ensure directories exist
+        self.pending_dir.mkdir(parents=True, exist_ok=True)
+        self.processed_dir.mkdir(parents=True, exist_ok=True)
         
         # Get vector store
         self.vector_store = get_vector_store(
@@ -79,6 +95,33 @@ class DocumentIngestionService:
         await self.vector_store.close()
         self._initialized = False
     
+    
+    def _move_to_processed(self, file_path: Path) -> None:
+        """
+        Move document from pending to processed directory.
+        
+        Args:
+            file_path: Full path to file in pending directory
+        """
+        # Get relative path from pending directory
+        relative_path = file_path.relative_to(self.pending_dir)
+        
+        # Destination path in processed directory
+        dest_path = self.processed_dir / relative_path
+        
+        # Create subdirectories if needed
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Handle name conflicts: append timestamp if file exists
+        if dest_path.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            stem = dest_path.stem
+            suffix = dest_path.suffix
+            dest_path = dest_path.parent / f"{stem}_{timestamp}{suffix}"
+        
+        # Move the file
+        shutil.move(str(file_path), str(dest_path))
+    
     async def ingest_document(
         self,
         file_path: str,
@@ -88,7 +131,7 @@ class DocumentIngestionService:
         Ingest a single document through the full pipeline.
         
         Args:
-            file_path: Path to document
+            file_path: Path to document (relative to pending directory)
             metadata: Additional metadata to attach to chunks
         
         Returns:
@@ -98,6 +141,16 @@ class DocumentIngestionService:
             await self.initialize()
         
         try:
+            # Get full path in pending directory
+            full_path = self.pending_dir / file_path
+            
+            if not full_path.exists():
+                return IngestionResult(
+                    success=False,
+                    document_path=file_path,
+                    error_message=f"File not found in pending directory: {file_path}"
+                )
+            
             # Step 1: Load document
             document = self.loader.load(file_path)
             
@@ -137,8 +190,18 @@ class DocumentIngestionService:
                 metadatas=metadatas
             )
             
+            if not success:
+                return IngestionResult(
+                    success=False,
+                    document_path=file_path,
+                    error_message="Failed to store chunks in vector database"
+                )
+            
+            # Step 6: Move to processed directory (only if successful)
+            self._move_to_processed(full_path)
+            
             return IngestionResult(
-                success=success,
+                success=True,
                 document_path=file_path,
                 chunks_count=len(chunks)
             )
@@ -150,14 +213,15 @@ class DocumentIngestionService:
                 error_message=str(e)
             )
     
-    async def ingest_from_knowledge_base(
+    
+    async def ingest_from_pending(
         self,
         recursive: bool = True,
         file_types: List[str] = None,
         metadata: Dict[str, Any] = None
     ) -> List[IngestionResult]:
         """
-        Ingest all documents from the knowledge base directory.
+        Ingest all documents from the pending directory.
         
         Args:
             recursive: Whether to search subdirectories
@@ -172,11 +236,20 @@ class DocumentIngestionService:
         
         results = []
         
-        # Load all documents from knowledge base
+        # Load all documents from pending directory
         documents = self.loader.load_all(recursive=recursive, file_types=file_types)
+        
+        if not documents:
+            print("No documents found in pending directory")
+            return results
+        
+        print(f"Found {len(documents)} documents in pending directory")
         
         for document in documents:
             try:
+                # Get full path in pending directory
+                full_path = self.pending_dir / document.source
+                
                 # Chunk document
                 chunks = self.chunker.chunk_document(document)
                 
@@ -214,11 +287,20 @@ class DocumentIngestionService:
                     metadatas=metadatas
                 )
                 
-                results.append(IngestionResult(
-                    success=success,
-                    document_path=document.source,
-                    chunks_count=len(chunks)
-                ))
+                if success:
+                    # Move to processed directory
+                    self._move_to_processed(full_path)
+                    results.append(IngestionResult(
+                        success=True,
+                        document_path=document.source,
+                        chunks_count=len(chunks)
+                    ))
+                else:
+                    results.append(IngestionResult(
+                        success=False,
+                        document_path=document.source,
+                        error_message="Failed to store in vector database"
+                    ))
                 
             except Exception as e:
                 results.append(IngestionResult(
@@ -229,44 +311,6 @@ class DocumentIngestionService:
         
         return results
     
-    async def ingest_directory(
-        self,
-        directory_path: str,
-        recursive: bool = True,
-        metadata: Dict[str, Any] = None
-    ) -> List[IngestionResult]:
-        """
-        Ingest all documents in a directory.
-        
-        Args:
-            directory_path: Path to directory
-            recursive: Whether to search subdirectories
-            metadata: Additional metadata for all documents
-        
-        Returns:
-            List[IngestionResult]: Results for each document
-        """
-        if not self._initialized:
-            await self.initialize()
-        
-        results = []
-        directory = Path(directory_path)
-        
-        # Supported extensions
-        extensions = ['.txt', '.pdf', '.docx', '.md', '.json', '.csv', '.xlsx', '.pptx']
-        
-        # Find all documents
-        if recursive:
-            files = [f for ext in extensions for f in directory.rglob(f'*{ext}')]
-        else:
-            files = [f for ext in extensions for f in directory.glob(f'*{ext}')]
-        
-        # Ingest each document
-        for file_path in files:
-            result = await self.ingest_document(str(file_path), metadata)
-            results.append(result)
-        
-        return results
     
     async def __aenter__(self):
         """Async context manager entry."""
@@ -276,3 +320,51 @@ class DocumentIngestionService:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
+    
+    # Utility methods
+    
+    def get_pending_files(self) -> List[Path]:
+        """Get list of files in pending directory."""
+        files = []
+        for path in self.pending_dir.rglob("*"):
+            if path.is_file():
+                files.append(path.relative_to(self.pending_dir))
+        return files
+    
+    def get_processed_files(self) -> List[Path]:
+        """Get list of files in processed directory."""
+        files = []
+        for path in self.processed_dir.rglob("*"):
+            if path.is_file():
+                files.append(path.relative_to(self.processed_dir))
+        return files
+    
+    def reprocess_document(self, filename: str) -> bool:
+        """
+        Move a document from processed back to pending for reprocessing.
+        
+        Args:
+            filename: Filename in processed directory (can include subdirectories)
+            
+        Returns:
+            bool: True if document was moved successfully
+        """
+        source_path = self.processed_dir / filename
+        
+        if not source_path.exists():
+            return False
+        
+        # Destination in pending directory
+        dest_path = self.pending_dir / filename
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Handle name conflicts
+        if dest_path.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            stem = dest_path.stem
+            suffix = dest_path.suffix
+            dest_path = dest_path.parent / f"{stem}_{timestamp}{suffix}"
+        
+        # Move back to pending
+        shutil.move(str(source_path), str(dest_path))
+        return True

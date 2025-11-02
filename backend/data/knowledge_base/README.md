@@ -1,78 +1,121 @@
 # Knowledge Base Directory
 
-This directory is the centralized location for all documents that will be ingested into the RAG system.
-
-## Purpose
-
-- **Single Source of Truth**: All knowledge base documents should be placed here
-- **Upload Destination**: API file uploads will save documents here
-- **Terminal Access**: Users can manually add documents by placing them in this folder
-- **Organized Storage**: Supports subdirectories for better organization
-
-## Supported File Types
-
-- **Text**: `.txt`, `.md` (Markdown)
-- **Documents**: `.pdf`, `.docx`, `.pptx`
-- **Data**: `.json`, `.csv`, `.xlsx`
+This directory manages document ingestion for the RAG system using a simple folder-based workflow.
 
 ## Directory Structure
 
 ```
 knowledge_base/
-├── docs/           # General documentation
-├── manuals/        # User manuals, guides
-├── policies/       # Company policies
-├── data/           # Datasets, exports
-└── ...             # Any custom organization
+├── pending/          # Documents waiting to be processed
+│   └── README.md     # Instructions for adding documents
+├── processed/        # Successfully processed documents
+│   └── README.md     # Archive of processed documents
+└── README.md         # This file
 ```
 
-## Usage
+## Simple Workflow
 
-### For API Users
+The system uses a straightforward folder-based approach:
 
-Files uploaded via the API will automatically be saved here.
-
-### For Terminal/CLI Users
-
-Simply place your documents in this directory:
+### 1. Add Documents (pending/)
+Place any documents you want to process in the `pending/` directory:
 
 ```bash
-# Copy documents to knowledge base
-cp /path/to/document.pdf data/knowledge_base/
-
-# Or organize in subdirectories
-cp /path/to/manual.pdf data/knowledge_base/manuals/
-
-# Run ingestion
-python scripts/ingest_documents.py
+cp my-document.pdf data/knowledge_base/pending/
 ```
 
-### For Developers
+### 2. Run Ingestion
+Process all pending documents:
 
 ```python
-from app.services.document_loader import DocumentLoader
+from app.services.document_ingestion import DocumentIngestionService
 
-loader = DocumentLoader()
-
-# Load specific file
-document = loader.load("manual.pdf")
-
-# Load all documents
-documents = loader.load_all(recursive=True)
-
-# Load only PDFs from a subdirectory
-documents = loader.load_all(recursive=False, file_types=['pdf'])
+async with DocumentIngestionService() as ingestion:
+    results = await ingestion.ingest_from_pending()
+    
+for result in results:
+    print(result)
 ```
 
-## Security
+### 3. Automatic Processing
+- ✅ **Success**: Document is moved to `processed/`
+- ❌ **Failure**: Document remains in `pending/` for retry
 
-- Documents must be within this directory (path traversal protection)
-- File type validation is enforced
-- Only supported file types will be processed
+### 4. Results
+Successfully processed documents are embedded in the vector database and moved to `processed/` as a record.
+
+## Supported File Types
+
+- **Text**: `.txt`, `.md` (Markdown)
+- **PDF**: `.pdf`
+- **Microsoft Office**: `.docx`, `.xlsx`, `.pptx`
+- **Data**: `.json`, `.csv`
+
+## Organizing Documents
+
+You can organize documents in subdirectories within `pending/`:
+
+```
+pending/
+├── research-papers/
+├── documentation/
+└── reports/
+```
+
+The directory structure is preserved when moved to `processed/`.
+
+## Reprocessing Documents
+
+If you need to reprocess a document:
+
+**Option 1: Using the API** (recommended)
+```python
+ingestion.reprocess_document("my-document.pdf")
+```
+
+**Option 2: Manual Move**
+```bash
+mv data/knowledge_base/processed/my-document.pdf data/knowledge_base/pending/
+```
+
+## Processing Pipeline
+
+Each document goes through:
+1. **Load**: Parse the document based on file type
+2. **Chunk**: Split into semantic chunks (type-aware)
+3. **Embed**: Generate embeddings using configured provider
+4. **Store**: Insert into vector database
+5. **Move**: Transfer to `processed/` folder
 
 ## Best Practices
 
-1. **Organize**: Use subdirectories to organize documents by category
-2. **Name Clearly**: Use descriptive filenames
-3. **Clean Up**: Remove outdated documents regularly
-4. **Backup**: Keep backups of important documents elsewhere
+- **Backup**: Keep original files backed up elsewhere
+- **Batch Processing**: Add multiple files at once for efficiency
+- **Check Logs**: Review ingestion results for any errors
+- **Clean Pending**: Remove files you don't want processed
+- **Monitor Processed**: Archive shows what's in your vector database
+
+## Configuration
+
+Set custom directories in your `.env`:
+
+```bash
+PENDING_DIR=./data/knowledge_base/pending
+PROCESSED_DIR=./data/knowledge_base/processed
+```
+
+## Troubleshooting
+
+### Document Won't Process
+- Check file format is supported
+- Verify file isn't corrupted
+- Check ingestion logs for specific error
+
+### Want to Reprocess Everything
+1. Move all files from `processed/` to `pending/`
+2. Optionally clear vector database
+3. Run ingestion again
+
+### Duplicate Documents
+- The system handles name conflicts by appending timestamps
+- Example: `document.pdf` becomes `document_20240115_143022.pdf`
