@@ -102,3 +102,4 @@ celerybeat.pid
 # Uploaded files
 uploads/
 documents/
+fortress/
