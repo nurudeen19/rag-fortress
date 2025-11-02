@@ -12,6 +12,10 @@ class VectorDBSettings(BaseSettings):
     # Provider selection
     VECTOR_DB_PROVIDER: str = Field("chroma", env="VECTOR_DB_PROVIDER")
     
+    # Common Vector Store Configuration
+    VECTOR_STORE_COLLECTION_NAME: str = Field("rag_documents", env="VECTOR_STORE_COLLECTION_NAME")
+    VECTOR_STORE_PERSIST_DIRECTORY: str = Field("./vector_store", env="VECTOR_STORE_PERSIST_DIRECTORY")
+    
     # Qdrant Configuration
     QDRANT_HOST: str = Field("localhost", env="QDRANT_HOST")
     QDRANT_PORT: int = Field(6333, env="QDRANT_PORT")
@@ -20,12 +24,6 @@ class VectorDBSettings(BaseSettings):
     QDRANT_URL: Optional[str] = Field(None, env="QDRANT_URL")
     QDRANT_COLLECTION_NAME: str = Field("rag_documents", env="QDRANT_COLLECTION_NAME")
     QDRANT_PREFER_GRPC: bool = Field(False, env="QDRANT_PREFER_GRPC")
-    
-    # Chroma Configuration
-    CHROMA_HOST: str = Field("localhost", env="CHROMA_HOST")
-    CHROMA_PORT: int = Field(8000, env="CHROMA_PORT")
-    CHROMA_PERSIST_DIRECTORY: str = Field("./chroma_db", env="CHROMA_PERSIST_DIRECTORY")
-    CHROMA_COLLECTION_NAME: str = Field("rag_documents", env="CHROMA_COLLECTION_NAME")
     
     # Pinecone Configuration
     PINECONE_API_KEY: Optional[str] = Field(None, env="PINECONE_API_KEY")
@@ -98,10 +96,8 @@ class VectorDBSettings(BaseSettings):
         elif provider == "chroma":
             return {
                 "provider": "chroma",
-                "host": self.CHROMA_HOST,
-                "port": self.CHROMA_PORT,
-                "persist_directory": self.CHROMA_PERSIST_DIRECTORY,
-                "collection_name": self.CHROMA_COLLECTION_NAME,
+                "persist_directory": self.VECTOR_STORE_PERSIST_DIRECTORY,
+                "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
             }
         
         elif provider == "pinecone":
