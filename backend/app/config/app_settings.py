@@ -19,6 +19,10 @@ class AppSettings(BaseSettings):
     HOST: str = Field("0.0.0.0", env="HOST")
     PORT: int = Field(8000, env="PORT")
     
+    # Data Directories
+    DATA_DIR: str = Field("./data", env="DATA_DIR")
+    KNOWLEDGE_BASE_DIR: str = Field("./data/knowledge_base", env="KNOWLEDGE_BASE_DIR")
+    
     # RAG Configuration
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
     CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")

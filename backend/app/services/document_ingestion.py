@@ -150,6 +150,85 @@ class DocumentIngestionService:
                 error_message=str(e)
             )
     
+    async def ingest_from_knowledge_base(
+        self,
+        recursive: bool = True,
+        file_types: List[str] = None,
+        metadata: Dict[str, Any] = None
+    ) -> List[IngestionResult]:
+        """
+        Ingest all documents from the knowledge base directory.
+        
+        Args:
+            recursive: Whether to search subdirectories
+            file_types: List of file extensions to ingest (e.g., ['pdf', 'txt']). None = all types.
+            metadata: Additional metadata for all documents
+        
+        Returns:
+            List[IngestionResult]: Results for each document
+        """
+        if not self._initialized:
+            await self.initialize()
+        
+        results = []
+        
+        # Load all documents from knowledge base
+        documents = self.loader.load_all(recursive=recursive, file_types=file_types)
+        
+        for document in documents:
+            try:
+                # Chunk document
+                chunks = self.chunker.chunk_document(document)
+                
+                if not chunks:
+                    results.append(IngestionResult(
+                        success=False,
+                        document_path=document.source,
+                        error_message="No chunks generated"
+                    ))
+                    continue
+                
+                # Generate embeddings
+                embedder = get_embedding_provider()
+                contents = [chunk.content for chunk in chunks]
+                embeddings = await embedder.aembed_documents(contents)
+                
+                # Prepare metadata
+                metadatas = []
+                for chunk in chunks:
+                    chunk_metadata = {
+                        "source": document.source,
+                        "document_type": document.doc_type.value,
+                        "chunk_index": chunk.chunk_index,
+                        **chunk.metadata,
+                        **document.metadata
+                    }
+                    if metadata:
+                        chunk_metadata.update(metadata)
+                    metadatas.append(chunk_metadata)
+                
+                # Store in vector database
+                success = await self.vector_store.insert_chunks(
+                    contents=contents,
+                    embeddings=embeddings,
+                    metadatas=metadatas
+                )
+                
+                results.append(IngestionResult(
+                    success=success,
+                    document_path=document.source,
+                    chunks_count=len(chunks)
+                ))
+                
+            except Exception as e:
+                results.append(IngestionResult(
+                    success=False,
+                    document_path=document.source,
+                    error_message=str(e)
+                ))
+        
+        return results
+    
     async def ingest_directory(
         self,
         directory_path: str,

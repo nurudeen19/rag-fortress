@@ -19,10 +19,11 @@ async def main():
     # Initialize ingestion service
     async with DocumentIngestionService() as ingestion:
         
-        # Example 1: Ingest a single document
-        print("\n[Example 1] Ingesting single document...")
+        # Example 1: Ingest a single document from knowledge base
+        print("\n[Example 1] Ingesting single document from knowledge base...")
+        print("Place your document in: ./data/knowledge_base/")
         result = await ingestion.ingest_document(
-            file_path="data/sample.txt",
+            file_path="sample.txt",  # Relative to knowledge_base directory
             metadata={
                 "organization": "demo-org",
                 "category": "example"
@@ -30,14 +31,14 @@ async def main():
         )
         print(f"Result: {result}")
         
-        # Example 2: Ingest multiple documents from a directory
-        print("\n[Example 2] Ingesting directory...")
-        results = await ingestion.ingest_directory(
-            directory_path="data/documents",
-            recursive=True,
+        # Example 2: Ingest ALL documents from knowledge base
+        print("\n[Example 2] Ingesting all documents from knowledge base...")
+        results = await ingestion.ingest_from_knowledge_base(
+            recursive=True,  # Include subdirectories
+            file_types=None,  # All supported types (or specify: ['pdf', 'txt'])
             metadata={
                 "organization": "demo-org",
-                "batch": "initial-load"
+                "batch": "knowledge-base-sync"
             }
         )
         
@@ -61,6 +62,9 @@ async def main():
             print(f"\nDetails:")
             for result in results:
                 print(f"  {result}")
+        else:
+            print(f"\nNo documents found in knowledge base.")
+            print(f"Place documents in: ./data/knowledge_base/")
 
 
 if __name__ == "__main__":

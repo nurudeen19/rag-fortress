@@ -1,12 +1,13 @@
 """
 Document loader service.
-Loads documents and determines appropriate processor based on file type.
+Loads documents from the knowledge base directory.
 """
 
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from enum import Enum
 
+from app.config.settings import settings
 from app.core.exceptions import DocumentError
 
 
@@ -40,26 +41,101 @@ class Document:
 
 class DocumentLoader:
     """
-    Loads documents from various file types.
-    Simple, focused on just loading the content.
+    Loads documents from the knowledge base directory.
+    
+    Single Responsibility: Load documents from the centralized knowledge base.
+    All documents must be placed in the KNOWLEDGE_BASE_DIR for the loader to access them.
     """
     
-    @staticmethod
-    def load(file_path: str) -> Document:
+    def __init__(self, knowledge_base_dir: Optional[str] = None):
         """
-        Load a document from file path.
+        Initialize document loader.
         
         Args:
-            file_path: Path to the document
+            knowledge_base_dir: Override default knowledge base directory
+        """
+        self.knowledge_base_dir = Path(knowledge_base_dir or settings.KNOWLEDGE_BASE_DIR)
+        
+        # Create knowledge base directory if it doesn't exist
+        self.knowledge_base_dir.mkdir(parents=True, exist_ok=True)
+    
+    def load(self, filename: str) -> Document:
+        """
+        Load a document from the knowledge base directory.
+        
+        Args:
+            filename: Name of the file (can include subdirectories within knowledge base)
             
         Returns:
             Document: Loaded document with content and metadata
+            
+        Raises:
+            DocumentError: If file not found or unsupported type
         """
-        path = Path(file_path)
+        # Resolve path relative to knowledge base
+        file_path = self.knowledge_base_dir / filename
         
-        if not path.exists():
-            raise DocumentError(f"File not found: {file_path}")
+        if not file_path.exists():
+            raise DocumentError(
+                f"File not found in knowledge base: {filename}. "
+                f"Please place documents in: {self.knowledge_base_dir}"
+            )
         
+        # Security: Ensure file is within knowledge base (prevent directory traversal)
+        try:
+            file_path.resolve().relative_to(self.knowledge_base_dir.resolve())
+        except ValueError:
+            raise DocumentError(f"Access denied: File must be within knowledge base directory")
+        
+        return self._load_from_path(file_path)
+    
+    def load_all(self, recursive: bool = True, file_types: Optional[List[str]] = None) -> List[Document]:
+        """
+        Load all documents from the knowledge base directory.
+        
+        Args:
+            recursive: Whether to search subdirectories
+            file_types: List of file extensions to load (e.g., ['pdf', 'txt']). If None, loads all supported types.
+            
+        Returns:
+            List[Document]: List of loaded documents
+        """
+        documents = []
+        
+        # Determine which file types to load
+        if file_types is None:
+            extensions = [f"*.{doc_type.value}" for doc_type in DocumentType]
+        else:
+            extensions = [f"*.{ext}" for ext in file_types]
+        
+        # Find all matching files
+        for extension in extensions:
+            if recursive:
+                files = self.knowledge_base_dir.rglob(extension)
+            else:
+                files = self.knowledge_base_dir.glob(extension)
+            
+            for file_path in files:
+                try:
+                    document = self._load_from_path(file_path)
+                    documents.append(document)
+                except DocumentError as e:
+                    # Log error but continue loading other documents
+                    print(f"Warning: Failed to load {file_path}: {e}")
+        
+        return documents
+    
+    def _load_from_path(self, path: Path) -> Document:
+    def _load_from_path(self, path: Path) -> Document:
+        """
+        Load document from a given path.
+        
+        Args:
+            path: Full path to the document
+            
+        Returns:
+            Document: Loaded document
+        """
         # Determine document type from extension
         extension = path.suffix.lower().lstrip('.')
         try:
@@ -69,27 +145,34 @@ class DocumentLoader:
         
         # Load content based on type
         if doc_type == DocumentType.TXT:
-            content = DocumentLoader._load_txt(path)
+            content = self._load_txt(path)
         elif doc_type == DocumentType.MARKDOWN:
-            content = DocumentLoader._load_txt(path)  # Same as txt
+            content = self._load_txt(path)  # Same as txt
         elif doc_type == DocumentType.PDF:
-            content = DocumentLoader._load_pdf(path)
+            content = self._load_pdf(path)
         elif doc_type == DocumentType.DOCX:
-            content = DocumentLoader._load_docx(path)
+            content = self._load_docx(path)
         elif doc_type == DocumentType.JSON:
-            content = DocumentLoader._load_json(path)
+            content = self._load_json(path)
         elif doc_type == DocumentType.CSV:
-            content = DocumentLoader._load_csv(path)
+            content = self._load_csv(path)
         elif doc_type == DocumentType.XLSX:
-            content = DocumentLoader._load_xlsx(path)
+            content = self._load_xlsx(path)
         elif doc_type == DocumentType.PPTX:
-            content = DocumentLoader._load_pptx(path)
+            content = self._load_pptx(path)
         else:
             raise DocumentError(f"No loader implemented for: {doc_type}")
+        
+        # Get relative path from knowledge base
+        try:
+            relative_path = path.relative_to(self.knowledge_base_dir)
+        except ValueError:
+            relative_path = path
         
         # Basic metadata
         metadata = {
             "filename": path.name,
+            "relative_path": str(relative_path),
             "file_size": path.stat().st_size,
             "file_type": doc_type.value,
         }
@@ -98,7 +181,7 @@ class DocumentLoader:
             content=content,
             doc_type=doc_type,
             metadata=metadata,
-            source=str(path)
+            source=str(relative_path)
         )
     
     @staticmethod
