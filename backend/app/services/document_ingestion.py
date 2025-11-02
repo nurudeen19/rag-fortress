@@ -8,9 +8,9 @@ from pathlib import Path
 
 from app.services.document_loader import DocumentLoader
 from app.services.chunking import DocumentChunker
-from app.services.embedding import get_embedding_provider
+from app.core.embedding_factory import get_embedding_provider
 from app.services.vector_store.factory import get_vector_store
-from app.config.settings import get_settings
+from app.config.settings import settings
 from app.core.exceptions import DocumentError
 
 
@@ -48,7 +48,6 @@ class DocumentIngestionService:
     def __init__(
         self,
         vector_store_provider: str = None,
-        embedding_provider: str = None,
         collection_name: str = None
     ):
         """
@@ -56,18 +55,11 @@ class DocumentIngestionService:
         
         Args:
             vector_store_provider: Override vector store provider
-            embedding_provider: Override embedding provider
             collection_name: Override collection name
         """
-        self.settings = get_settings()
-        
         # Initialize components
         self.loader = DocumentLoader()
         self.chunker = DocumentChunker()
-        
-        # Get embedding provider
-        provider_name = embedding_provider or self.settings.embedding.provider
-        self.embedding_provider = get_embedding_provider(provider_name)
         
         # Get vector store
         self.vector_store = get_vector_store(
@@ -119,9 +111,10 @@ class DocumentIngestionService:
                     error_message="No chunks generated from document"
                 )
             
-            # Step 3: Generate embeddings
+            # Step 3: Generate embeddings (batch operation - cost-effective!)
+            embedder = get_embedding_provider()
             contents = [chunk.content for chunk in chunks]
-            embeddings = await self.embedding_provider.embed_batch(contents)
+            embeddings = await embedder.aembed_documents(contents)
             
             # Step 4: Prepare metadata
             metadatas = []
