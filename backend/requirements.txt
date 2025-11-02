@@ -1,129 +1,129 @@
 # ============================================================================
 # FastAPI Core
 # ============================================================================
-fastapi==0.115.14
-uvicorn[standard]==0.32.1
-pydantic==2.10.6
-pydantic-settings==2.7.1
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
 
 # ============================================================================
 # HTTP Client & Async Operations
 # ============================================================================
-httpx==0.28.1
-aiofiles==24.1.0  # Async file operations
+httpx
+aiofiles  # Async file operations
 
 # ============================================================================
 # Database (SQL)
 # ============================================================================
-sqlalchemy==2.0.44
-alembic==1.17.1
+sqlalchemy
+alembic
 
 # Database Drivers
 # PostgreSQL (recommended for production)
-psycopg2-binary==2.9.11  # Sync PostgreSQL driver
-asyncpg==0.30.0  # Async PostgreSQL driver
+psycopg2-binary  # Sync PostgreSQL driver
+asyncpg  # Async PostgreSQL driver
 
 # MySQL
-pymysql==1.1.2  # Sync MySQL driver
-aiomysql==0.3.2  # Async MySQL driver
-cryptography==46.0.3  # Required for MySQL SSL
+pymysql  # Sync MySQL driver
+aiomysql  # Async MySQL driver
+cryptography  # Required for MySQL SSL
 
 # SQLite (included in Python, but async driver needed)
-aiosqlite==0.21.0  # Async SQLite driver
+aiosqlite  # Async SQLite driver
 
 # ============================================================================
 # LangChain Core
 # ============================================================================
-langchain==0.3.27
-langchain-core==0.3.79
-langchain-community==0.3.31
+langchain
+langchain-core
+langchain-community
 
 # ============================================================================
 # LangChain - LLM Providers
 # ============================================================================
 # OpenAI
-langchain-openai==0.3.35
-openai==1.57.4
+langchain-openai
+openai
 
 # Google (Gemini)
-langchain-google-genai==2.1.12
-google-generativeai==0.8.3
+langchain-google-genai
+google-generativeai
 
 # HuggingFace
-langchain-huggingface==0.3.1
-huggingface-hub==0.27.0
-transformers==4.47.1
-torch==2.5.1  # Required for local models
+langchain-huggingface
+huggingface-hub
+transformers
+torch  # Required for local models
 
 # ============================================================================
 # LangChain - Embedding Providers
 # ============================================================================
 # Sentence Transformers (HuggingFace)
-sentence-transformers==3.3.1
+sentence-transformers
 
 # Cohere
-langchain-cohere==0.3.5
-cohere==5.13.4
+langchain-cohere
+cohere
 
 # Voyage AI
-voyageai==0.3.1
+voyageai
 
 # ============================================================================
 # LangChain - Vector Databases
 # ============================================================================
 # Chroma
-langchain-chroma==0.1.4
-chromadb==0.5.23
+langchain-chroma
+chromadb
 
 # Qdrant
-langchain-qdrant==0.2.1
-qdrant-client==1.12.1
+langchain-qdrant
+qdrant-client
 
 # Pinecone
-langchain-pinecone==0.2.12
-pinecone-client==5.0.1
+langchain-pinecone
+pinecone-client
 
 # Weaviate
-langchain-weaviate==0.0.5
-weaviate-client==4.9.3
+langchain-weaviate
+weaviate-client
 
 # Milvus
-langchain-milvus==0.1.10
-pymilvus==2.4.9
+langchain-milvus
+pymilvus
 
 # ============================================================================
 # Document Processing & Text Splitting
 # ============================================================================
-pypdf2==3.0.1
-unstructured==0.18.15  # Advanced document parsing
-tiktoken==0.12.0  # Token counting for chunking
-python-docx==1.1.0  # Word document processing
-openpyxl==3.1.2  # Excel file processing
-python-pptx==0.6.23  # PowerPoint processing
-python-multipart==0.0.6  # Form data parsing
+pypdf2
+unstructured  # Advanced document parsing
+tiktoken  # Token counting for chunking
+python-docx  # Word document processing
+openpyxl  # Excel file processing
+python-pptx  # PowerPoint processing
+python-multipart  # Form data parsing
 
 # ============================================================================
 # Security & Authentication
 # ============================================================================
-python-jose[cryptography]==3.5.0
-passlib[bcrypt]==1.7.4  # Password hashing
+python-jose[cryptography]
+passlib[bcrypt]  # Password hashing
 
 # ============================================================================
 # Logging & Monitoring
 # ============================================================================
-python-json-logger==2.0.7
-colorlog==6.8.0  # Colored logging
+python-json-logger
+colorlog  # Colored logging
 
 # ============================================================================
 # Environment & Configuration
 # ============================================================================
-python-dotenv==1.2.1
+python-dotenv
 
 # ============================================================================
 # Testing
 # ============================================================================
-pytest==8.3.5
-pytest-asyncio==0.24.0
-pytest-cov==6.0.0
-pytest-mock==3.14.0
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
 
