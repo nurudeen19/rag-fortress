@@ -4,7 +4,7 @@ Coordinates: Load → Chunk → Embed → Store → Move to Processed
 """
 
 import shutil
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 from datetime import datetime
 
@@ -125,7 +125,9 @@ class DocumentIngestionService:
     async def ingest_document(
         self,
         file_path: str,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
+        fields_to_keep: Optional[List[str]] = None,
+        json_flatten: bool = True
     ) -> IngestionResult:
         """
         Ingest a single document through the full pipeline.
@@ -133,9 +135,28 @@ class DocumentIngestionService:
         Args:
             file_path: Path to document (relative to pending directory)
             metadata: Additional metadata to attach to chunks
+            fields_to_keep: For structured data (JSON, CSV, XLSX), list of fields/columns to keep.
+                           If None, keeps all fields.
+                           Examples:
+                           - JSON: ["name", "company", "address.city"]
+                           - CSV/XLSX: ["Name", "Email", "Department"]
+            json_flatten: For JSON files, whether to flatten nested objects
         
         Returns:
             IngestionResult: Result of ingestion
+            
+        Examples:
+            # Ingest JSON with field filtering
+            result = await ingestion.ingest_document(
+                "users.json",
+                fields_to_keep=["name", "email", "company"]
+            )
+            
+            # Ingest CSV with column filtering
+            result = await ingestion.ingest_document(
+                "employees.csv",
+                fields_to_keep=["Name", "Email", "Department"]
+            )
         """
         if not self._initialized:
             await self.initialize()
@@ -154,8 +175,12 @@ class DocumentIngestionService:
             # Step 1: Load document
             document = self.loader.load(file_path)
             
-            # Step 2: Chunk document (type-aware)
-            chunks = self.chunker.chunk_document(document)
+            # Step 2: Chunk document (type-aware with field filtering)
+            chunks = self.chunker.chunk_document(
+                document,
+                fields_to_keep=fields_to_keep,
+                json_flatten=json_flatten
+            )
             
             if not chunks:
                 return IngestionResult(
@@ -218,7 +243,9 @@ class DocumentIngestionService:
         self,
         recursive: bool = True,
         file_types: List[str] = None,
-        metadata: Dict[str, Any] = None
+        metadata: Dict[str, Any] = None,
+        fields_to_keep: Optional[List[str]] = None,
+        json_flatten: bool = True
     ) -> List[IngestionResult]:
         """
         Ingest all documents from the pending directory.
@@ -227,9 +254,28 @@ class DocumentIngestionService:
             recursive: Whether to search subdirectories
             file_types: List of file extensions to ingest (e.g., ['pdf', 'txt']). None = all types.
             metadata: Additional metadata for all documents
+            fields_to_keep: For structured data (JSON, CSV, XLSX), list of fields/columns to keep.
+                           If None, keeps all fields.
+                           Examples:
+                           - JSON: ["name", "company", "address.city"]
+                           - CSV/XLSX: ["Name", "Email", "Department"]
+            json_flatten: For JSON files, whether to flatten nested objects
         
         Returns:
             List[IngestionResult]: Results for each document
+            
+        Examples:
+            # Ingest all JSON files with field filtering
+            results = await ingestion.ingest_from_pending(
+                file_types=['json'],
+                fields_to_keep=["name", "email", "company", "role"]
+            )
+            
+            # Ingest all CSV files with column filtering
+            results = await ingestion.ingest_from_pending(
+                file_types=['csv'],
+                fields_to_keep=["Name", "Email", "Department", "Role"]
+            )
         """
         if not self._initialized:
             await self.initialize()
@@ -250,8 +296,12 @@ class DocumentIngestionService:
                 # Get full path in pending directory
                 full_path = self.pending_dir / document.source
                 
-                # Chunk document
-                chunks = self.chunker.chunk_document(document)
+                # Chunk document with field filtering
+                chunks = self.chunker.chunk_document(
+                    document,
+                    fields_to_keep=fields_to_keep,
+                    json_flatten=json_flatten
+                )
                 
                 if not chunks:
                     results.append(IngestionResult(

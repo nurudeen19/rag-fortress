@@ -32,15 +32,40 @@ class DocumentChunker:
         self.chunk_size = settings.chunking.chunk_size
         self.chunk_overlap = settings.chunking.chunk_overlap
     
-    def chunk_document(self, document: Document) -> List[Chunk]:
+    def chunk_document(
+        self, 
+        document: Document,
+        fields_to_keep: Optional[List[str]] = None,
+        json_flatten: bool = True
+    ) -> List[Chunk]:
         """
         Chunk a document based on its type.
         
         Args:
             document: Loaded document
+            fields_to_keep: For structured data (JSON, CSV, XLSX), list of fields/columns to keep.
+                           If None, keeps all fields.
+                           Examples:
+                           - JSON: ["name", "company", "address.city"]
+                           - CSV/XLSX: ["Name", "Email", "Department"]
+            json_flatten: For JSON documents, whether to flatten nested objects.
+                         Default: True
             
         Returns:
             List[Chunk]: List of chunks
+            
+        Example:
+            # Filter JSON fields
+            chunker.chunk_document(
+                json_doc, 
+                fields_to_keep=["name", "company", "city"]
+            )
+            
+            # Filter CSV columns
+            chunker.chunk_document(
+                csv_doc,
+                fields_to_keep=["Name", "Email", "Department"]
+            )
         """
         # Route to appropriate chunking strategy
         if document.doc_type in [DocumentType.TXT, DocumentType.MARKDOWN, 
@@ -48,13 +73,13 @@ class DocumentChunker:
             return self._chunk_text(document)
         
         elif document.doc_type == DocumentType.JSON:
-            return self._chunk_json(document)
+            return self._chunk_json(document, fields_to_keep, json_flatten)
         
         elif document.doc_type == DocumentType.CSV:
-            return self._chunk_csv(document)
+            return self._chunk_csv(document, fields_to_keep)
         
         elif document.doc_type == DocumentType.XLSX:
-            return self._chunk_xlsx(document)
+            return self._chunk_xlsx(document, fields_to_keep)
         
         else:
             # Fallback to text chunking
@@ -116,10 +141,35 @@ class DocumentChunker:
         
         return chunks
     
-    def _chunk_json(self, document: Document) -> List[Chunk]:
+    def _chunk_json(
+        self, 
+        document: Document, 
+        fields_to_keep: Optional[List[str]] = None,
+        flatten: bool = True
+    ) -> List[Chunk]:
         """
-        Chunk JSON documents by fields/objects.
-        Each object or significant field becomes a chunk.
+        Chunk JSON documents with optional field filtering and flattening.
+        
+        Args:
+            document: JSON document to chunk
+            fields_to_keep: List of fields to keep (e.g., ["name", "company", "city"]).
+                           If None, keeps all fields.
+            flatten: If True, flattens nested objects into key-value pairs.
+                    If False, keeps original JSON structure.
+        
+        Returns:
+            List of chunks with filtered and/or flattened content
+        
+        Examples:
+            # Filter and flatten
+            Input: {"name": "John", "age": 30, "address": {"city": "SF", "zip": "94102"}}
+            fields_to_keep: ["name", "address.city"]
+            Output: "name: John\naddress.city: SF"
+            
+            # Keep all, flatten
+            Input: {"name": "John", "address": {"city": "SF"}}
+            fields_to_keep: None
+            Output: "name: John\naddress.city: SF"
         """
         try:
             data = json.loads(document.content)
@@ -130,109 +180,304 @@ class DocumentChunker:
         chunks = []
         chunk_index = 0
         
-        def process_value(value: Any, path: str = "") -> None:
-            nonlocal chunk_index
-            
-            if isinstance(value, dict):
-                # Each dict object is a chunk
+        # Handle list of objects (common in JSON files)
+        if isinstance(data, list):
+            for i, item in enumerate(data):
+                if isinstance(item, dict):
+                    flattened = self._flatten_json_object(item, fields_to_keep, flatten)
+                    if flattened:  # Only add non-empty chunks
+                        chunks.append(Chunk(
+                            content=flattened,
+                            metadata={
+                                **document.metadata,
+                                "source": document.source,
+                                "chunk_index": chunk_index,
+                                "chunk_type": "json_object",
+                                "array_index": i,
+                            },
+                            chunk_index=chunk_index
+                        ))
+                        chunk_index += 1
+                else:
+                    # Primitive in array
+                    chunks.append(Chunk(
+                        content=str(item),
+                        metadata={
+                            **document.metadata,
+                            "source": document.source,
+                            "chunk_index": chunk_index,
+                            "chunk_type": "json_primitive",
+                            "array_index": i,
+                        },
+                        chunk_index=chunk_index
+                    ))
+                    chunk_index += 1
+        
+        # Handle single object
+        elif isinstance(data, dict):
+            flattened = self._flatten_json_object(data, fields_to_keep, flatten)
+            if flattened:
                 chunks.append(Chunk(
-                    content=json.dumps(value, indent=2),
+                    content=flattened,
                     metadata={
                         **document.metadata,
                         "source": document.source,
                         "chunk_index": chunk_index,
                         "chunk_type": "json_object",
-                        "json_path": path,
                     },
                     chunk_index=chunk_index
                 ))
-                chunk_index += 1
-            
-            elif isinstance(value, list):
-                # Process list items
-                for i, item in enumerate(value):
-                    process_value(item, f"{path}[{i}]")
-            
-            else:
-                # Primitive value - combine with path as context
-                chunks.append(Chunk(
-                    content=f"{path}: {value}",
-                    metadata={
-                        **document.metadata,
-                        "source": document.source,
-                        "chunk_index": chunk_index,
-                        "chunk_type": "json_field",
-                        "json_path": path,
-                    },
-                    chunk_index=chunk_index
-                ))
-                chunk_index += 1
         
-        if isinstance(data, dict):
-            for key, value in data.items():
-                process_value(value, key)
-        elif isinstance(data, list):
-            for i, item in enumerate(data):
-                process_value(item, f"[{i}]")
+        # Handle primitive value
         else:
-            process_value(data, "root")
+            chunks.append(Chunk(
+                content=str(data),
+                metadata={
+                    **document.metadata,
+                    "source": document.source,
+                    "chunk_index": 0,
+                    "chunk_type": "json_primitive",
+                },
+                chunk_index=0
+            ))
         
-        return chunks
+        return chunks if chunks else self._chunk_text(document)
     
-    def _chunk_csv(self, document: Document) -> List[Chunk]:
+    def _flatten_json_object(
+        self, 
+        obj: Dict[str, Any], 
+        fields_to_keep: Optional[List[str]] = None,
+        flatten: bool = True,
+        parent_key: str = ""
+    ) -> str:
         """
-        Chunk CSV documents by rows.
+        Flatten a JSON object into key-value pairs with optional field filtering.
+        
+        Args:
+            obj: Dictionary to flatten
+            fields_to_keep: List of field paths to keep (e.g., ["name", "address.city"])
+            flatten: Whether to flatten nested objects
+            parent_key: Current parent key for nested objects
+        
+        Returns:
+            Flattened string representation
+        """
+        items = []
+        
+        for key, value in obj.items():
+            # Build full key path
+            full_key = f"{parent_key}.{key}" if parent_key else key
+            
+            # Check if we should keep this field
+            if fields_to_keep is not None:
+                # Check exact match or prefix match (for nested fields)
+                should_keep = any(
+                    full_key == field or 
+                    full_key.startswith(field + ".") or
+                    field.startswith(full_key + ".")
+                    for field in fields_to_keep
+                )
+                if not should_keep:
+                    continue
+            
+            # Process the value
+            if isinstance(value, dict) and flatten:
+                # Recursively flatten nested objects
+                nested = self._flatten_json_object(value, fields_to_keep, flatten, full_key)
+                if nested:
+                    items.append(nested)
+            elif isinstance(value, list):
+                # Handle arrays
+                if all(isinstance(item, (str, int, float, bool, type(None))) for item in value):
+                    # Array of primitives - join them
+                    items.append(f"{full_key}: {', '.join(map(str, value))}")
+                else:
+                    # Array of objects - flatten each
+                    for i, item in enumerate(value):
+                        if isinstance(item, dict) and flatten:
+                            nested = self._flatten_json_object(item, fields_to_keep, flatten, f"{full_key}[{i}]")
+                            if nested:
+                                items.append(nested)
+                        else:
+                            items.append(f"{full_key}[{i}]: {item}")
+            elif isinstance(value, dict):
+                # Keep original JSON structure if not flattening
+                items.append(f"{full_key}: {json.dumps(value)}")
+            else:
+                # Primitive value
+                items.append(f"{full_key}: {value}")
+        
+        return "\n".join(items)
+    
+    
+    def _chunk_csv(
+        self, 
+        document: Document, 
+        fields_to_keep: Optional[List[str]] = None
+    ) -> List[Chunk]:
+        """
+        Chunk CSV documents by rows with optional column filtering.
         Each row (with header context) becomes a chunk.
+        
+        Args:
+            document: CSV document
+            fields_to_keep: List of column names to keep (case-sensitive).
+                           If None, keeps all columns.
+                           Example: ["Name", "Email", "Department"]
+        
+        Returns:
+            List of chunks with filtered columns
         """
         lines = document.content.split('\n')
         if not lines:
             return []
         
         chunks = []
-        header = lines[0] if lines else ""
+        header_line = lines[0] if lines else ""
         
+        # Parse header to get column names
+        header_columns = [col.strip() for col in header_line.split('|')]
+        header_columns = [col for col in header_columns if col]  # Remove empty
+        
+        # Determine which columns to keep
+        if fields_to_keep is not None:
+            # Find indices of columns to keep
+            indices_to_keep = []
+            filtered_headers = []
+            
+            for i, col in enumerate(header_columns):
+                if col in fields_to_keep:
+                    indices_to_keep.append(i)
+                    filtered_headers.append(col)
+            
+            if not indices_to_keep:
+                # No matching columns found, return empty
+                return []
+            
+            filtered_header = ' | '.join(filtered_headers)
+        else:
+            # Keep all columns
+            indices_to_keep = list(range(len(header_columns)))
+            filtered_header = header_line
+        
+        # Process rows
         for i, line in enumerate(lines[1:], start=1):  # Skip header
             if line.strip():
+                # Parse row
+                row_values = [val.strip() for val in line.split('|')]
+                row_values = [val for val in row_values if val]  # Remove empty
+                
+                # Filter columns
+                if fields_to_keep is not None:
+                    filtered_values = [
+                        row_values[idx] for idx in indices_to_keep 
+                        if idx < len(row_values)
+                    ]
+                    filtered_row = ' | '.join(filtered_values)
+                else:
+                    filtered_row = line
+                
+                # Create chunk with filtered content
                 chunks.append(Chunk(
-                    content=f"{header}\n{line}",
+                    content=f"{filtered_header}\n{filtered_row}",
                     metadata={
                         **document.metadata,
                         "source": document.source,
                         "chunk_index": i - 1,
                         "chunk_type": "csv_row",
                         "row_number": i,
+                        "columns_kept": filtered_headers if fields_to_keep else header_columns,
                     },
                     chunk_index=i - 1
                 ))
         
         return chunks
     
-    def _chunk_xlsx(self, document: Document) -> List[Chunk]:
+    
+    def _chunk_xlsx(
+        self, 
+        document: Document, 
+        fields_to_keep: Optional[List[str]] = None
+    ) -> List[Chunk]:
         """
-        Chunk Excel documents by sheets and rows.
+        Chunk Excel documents by sheets and rows with optional column filtering.
+        
+        Args:
+            document: XLSX document
+            fields_to_keep: List of column names to keep (case-sensitive).
+                           If None, keeps all columns.
+                           Example: ["Name", "Email", "Department"]
+        
+        Returns:
+            List of chunks with filtered columns
         """
         lines = document.content.split('\n')
         chunks = []
         chunk_index = 0
         current_sheet = None
         sheet_header = None
+        header_columns = []
+        indices_to_keep = []
+        filtered_headers = []
         
         for line in lines:
             if line.startswith('Sheet:'):
+                # New sheet
                 current_sheet = line.replace('Sheet:', '').strip()
                 sheet_header = None  # Reset header for new sheet
+                header_columns = []
+                indices_to_keep = []
+                filtered_headers = []
+                
             elif line.strip():
                 if sheet_header is None:
-                    sheet_header = line  # First row after sheet name is header
+                    # This is the header row
+                    sheet_header = line
+                    header_columns = [col.strip() for col in line.split('|')]
+                    header_columns = [col for col in header_columns if col]
+                    
+                    # Determine which columns to keep
+                    if fields_to_keep is not None:
+                        for i, col in enumerate(header_columns):
+                            if col in fields_to_keep:
+                                indices_to_keep.append(i)
+                                filtered_headers.append(col)
+                        
+                        if not indices_to_keep:
+                            # No matching columns in this sheet, skip to next sheet
+                            continue
+                    else:
+                        # Keep all columns
+                        indices_to_keep = list(range(len(header_columns)))
+                        filtered_headers = header_columns
+                        
                 else:
+                    # Data row
+                    row_values = [val.strip() for val in line.split('|')]
+                    row_values = [val for val in row_values if val]
+                    
+                    # Filter columns
+                    if fields_to_keep is not None and indices_to_keep:
+                        filtered_values = [
+                            row_values[idx] for idx in indices_to_keep 
+                            if idx < len(row_values)
+                        ]
+                        filtered_row = ' | '.join(filtered_values)
+                        filtered_header = ' | '.join(filtered_headers)
+                    else:
+                        filtered_row = line
+                        filtered_header = sheet_header
+                    
+                    # Create chunk
                     chunks.append(Chunk(
-                        content=f"Sheet: {current_sheet}\n{sheet_header}\n{line}",
+                        content=f"Sheet: {current_sheet}\n{filtered_header}\n{filtered_row}",
                         metadata={
                             **document.metadata,
                             "source": document.source,
                             "chunk_index": chunk_index,
                             "chunk_type": "xlsx_row",
                             "sheet_name": current_sheet,
+                            "columns_kept": filtered_headers if fields_to_keep else header_columns,
                         },
                         chunk_index=chunk_index
                     ))
