@@ -71,6 +71,13 @@ class AppSettings(BaseSettings):
     LOG_MAX_BYTES: int = Field(10485760, env="LOG_MAX_BYTES")  # 10MB
     LOG_BACKUP_COUNT: int = Field(5, env="LOG_BACKUP_COUNT")
 
+    # Startup Options
+    # If true, perform a very lightweight vector store initialization check
+    # during application startup (no document ingestion).
+    STARTUP_VECTOR_STORE_SMOKE_TEST: bool = Field(
+        False, env="STARTUP_VECTOR_STORE_SMOKE_TEST"
+    )
+
     @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
     @classmethod
     def parse_list_fields(cls, v):

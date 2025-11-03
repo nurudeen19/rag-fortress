@@ -53,8 +53,8 @@ def get_vector_store(
     """
     provider = (provider or settings.VECTOR_DB_PROVIDER).lower()
     
-    # Get config
-    config = settings.VectorDBSettings.get_vector_db_config()
+    # Get config from composed settings
+    config = settings.get_vector_db_config()
     if collection_name:
         config["collection_name"] = collection_name
     config.update(kwargs)

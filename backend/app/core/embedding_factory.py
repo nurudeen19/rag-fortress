@@ -59,9 +59,7 @@ def _create_embedding_provider() -> Embeddings:
             )
         
         return HuggingFaceEmbeddings(
-            model_name=config["model"],
-            model_kwargs={'device': config.get("device", "cpu")},
-            encode_kwargs={'normalize_embeddings': True}
+            model_name=config["model"]
         )
     
     elif provider == "openai":

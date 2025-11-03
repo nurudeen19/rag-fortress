@@ -1,57 +1,47 @@
-# Processed Documents
+# Pending Documents
 
-This directory contains documents that have been successfully processed and embedded into the vector database.
-
-## What This Means
-
-Documents in this folder have been:
-1. ✅ Loaded and parsed
-2. ✅ Split into chunks
-3. ✅ Embedded using the configured embedding model
-4. ✅ Stored in the vector database
+This directory contains documents waiting to be processed by the RAG ingestion pipeline.
 
 ## Workflow
 
-- **Automatic Movement**: Documents are moved here from `pending/` after successful processing
-- **Preservation**: The original directory structure from `pending/` is maintained
-- **Archive**: These files serve as a record of what's been processed
+1. **Add Documents**: Place any documents you want to process in this folder
+2. **Run Ingestion**: The system will automatically process all documents in this folder
+3. **Automatic Move**: Successfully processed documents are moved to the `processed/` folder
+4. **Retry**: Failed documents remain here for retry
 
-## If You Need to Reprocess
+## Supported File Types
 
-To reprocess a document that's already been processed:
+- Text files: `.txt`, `.md`
+- PDFs: `.pdf`
+- Microsoft Office: `.docx`, `.xlsx`, `.pptx`
+- Data files: `.json`, `.csv`
 
-1. **Option 1**: Use the `reprocess_document()` API method (recommended)
-2. **Option 2**: Manually move the file from `processed/` back to `pending/`
+## Organizing Documents
 
-## File Organization
-
-The directory structure matches what you had in `pending/`:
+You can organize documents in subdirectories:
 
 ```
-processed/
+pending/
 ├── research/
-│   ├── paper1.pdf (processed on 2024-01-15)
-│   └── paper2.pdf (processed on 2024-01-15)
+│   ├── paper1.pdf
+│   └── paper2.pdf
 ├── documentation/
-│   └── guide.md (processed on 2024-01-16)
+│   └── guide.md
 └── reports/
-    └── quarterly.docx (processed on 2024-01-17)
+    └── quarterly.docx
 ```
 
-## Name Conflicts
+The directory structure is preserved when documents are moved to `processed/`.
 
-If a file with the same name is processed multiple times, a timestamp is appended:
-- `document.pdf`
-- `document_20240115_143022.pdf` (reprocessed version)
+## Status
 
-## Safety
+- **Documents in this folder**: Waiting to be processed
+- **After successful processing**: Moved to `../processed/`
+- **After failure**: Remain here with error logged in ingestion results
 
-- **Backup**: Keep original files backed up in another location
-- **Don't Delete**: These files serve as the source of truth for what's in your vector database
-- **Version Control**: Consider using git or another VCS if you modify source documents
+## Tips
 
-## Database Synchronization
-
-Files in this folder correspond to embedded content in your vector database. If you:
-- Delete files from here: The embeddings remain in the database
-- Clear the database: Move files back to `pending/` to re-embed
+- Keep original files backed up elsewhere
+- Large batches may take time to process
+- Check ingestion logs for any errors
+- Remove or move files you don't want processed

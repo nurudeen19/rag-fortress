@@ -5,6 +5,8 @@ Initializes critical components on server start.
 
 from app.core import get_logger
 from app.core.embedding_factory import get_embedding_provider
+from app.config.settings import settings
+from app.services.vector_store.factory import get_vector_store
 
 
 logger = get_logger(__name__)
@@ -36,6 +38,12 @@ class StartupController:
         try:
             # Initialize embedding provider
             await self._initialize_embeddings()
+
+            # Optional: very light vector store smoke test (no ingestion)
+            # This is gated by env STARTUP_VECTOR_STORE_SMOKE_TEST to avoid
+            # heavy operations or side effects during startup.
+            if getattr(settings, "STARTUP_VECTOR_STORE_SMOKE_TEST", False):
+                self._smoke_test_vector_store()
             
             # Future initializations will be added here:
             # - Vector store connection pool
@@ -61,7 +69,7 @@ class StartupController:
             
             # Test embedding generation to ensure it's working
             test_text = "Application startup test"
-            test_embedding = await self.embedding_provider.aembed_query(test_text)
+            test_embedding = self.embedding_provider.embed_query(test_text)
             
             if test_embedding and len(test_embedding) > 0:
                 logger.info(
@@ -74,6 +82,26 @@ class StartupController:
         except Exception as e:
             logger.error(f"Failed to initialize embedding provider: {e}")
             raise
+
+    def _smoke_test_vector_store(self):
+        """Lightweight vector store initialization check without ingestion."""
+        try:
+            logger.info("Running vector store smoke test (no ingestion)...")
+
+            store = get_vector_store(
+                embeddings=self.embedding_provider,
+                provider=getattr(settings, "VECTOR_DB_PROVIDER", None),
+                collection_name=None,
+            )
+
+            # FAISS returns None until created from documents
+            if store is None:
+                logger.info("✓ Vector store (FAISS) ready for on-demand creation")
+            else:
+                logger.info("✓ Vector store initialized successfully")
+        except Exception as e:
+            logger.error(f"Vector store smoke test failed: {e}", exc_info=True)
+            # Do not block app startup for smoke test failures
     
     async def shutdown(self):
         """

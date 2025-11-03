@@ -91,10 +91,17 @@ class DocumentLoader:
         # Text files
         if suffix in ['.txt', '.md', '.markdown']:
             if suffix in ['.md', '.markdown']:
-                loader = UnstructuredMarkdownLoader(str(file_path))
+                # Prefer Markdown-aware loader; fallback to plain text if dependency missing
+                try:
+                    loader = UnstructuredMarkdownLoader(str(file_path))
+                    return loader.load()
+                except Exception as e:
+                    logger.warning(f"Markdown loader unavailable ({e}); falling back to TextLoader")
+                    loader = TextLoader(str(file_path))
+                    return loader.load()
             else:
                 loader = TextLoader(str(file_path))
-            return loader.load()
+                return loader.load()
         
         # PDF
         elif suffix == '.pdf':

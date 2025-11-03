@@ -45,6 +45,3 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         DatabaseSettings.validate_config(self, self.ENVIRONMENT)
 
 settings = Settings()
-
-
-settings = Settings()
