@@ -1,19 +1,24 @@
 """
-Embedding provider factory.
+Embedding provider factory with singleton pattern.
 Returns configured LangChain embedding provider based on settings.
+Reuses instance if already initialized (from startup).
 """
+
+from typing import Optional
+from langchain_core.embeddings import Embeddings
 
 from app.config.settings import settings
 from app.core.exceptions import ConfigurationError
 
 
-def get_embedding_provider():
+# Global instance (initialized in startup)
+_embedding_instance: Optional[Embeddings] = None
+
+
+def get_embedding_provider() -> Embeddings:
     """
-    Get LangChain embedding provider based on configuration.
-    Uses settings.get_embedding_config() to retrieve all configuration.
-    
-    Single Responsibility: Only responsible for creating and returning
-    the configured embedding provider instance.
+    Get LangChain embedding provider.
+    Returns existing instance if initialized, otherwise creates new one.
     
     Returns:
         Embeddings: LangChain Embeddings instance with:
@@ -21,6 +26,25 @@ def get_embedding_provider():
             - embed_query(text: str) -> List[float]
             - aembed_documents(texts: List[str]) -> List[List[float]] (async)
             - aembed_query(text: str) -> List[float] (async)
+    """
+    global _embedding_instance
+    
+    # Return existing instance if available
+    if _embedding_instance is not None:
+        return _embedding_instance
+    
+    # Create new instance
+    _embedding_instance = _create_embedding_provider()
+    return _embedding_instance
+
+
+def _create_embedding_provider() -> Embeddings:
+    """
+    Create LangChain embedding provider based on configuration.
+    Internal function - use get_embedding_provider() instead.
+    
+    Returns:
+        Embeddings: Configured LangChain Embeddings instance
     """
     config = settings.get_embedding_config()
     provider = config["provider"].lower()

@@ -1,5 +1,6 @@
 """
-Simple vector store factory.
+Vector store factory.
+Supports both custom and LangChain-native vector stores.
 """
 
 from typing import Optional
@@ -8,6 +9,10 @@ from app.services.vector_store.base import VectorStoreBase
 from app.services.vector_store.chroma_store import ChromaVectorStore
 from app.config.settings import settings
 from app.core.exceptions import VectorStoreError
+
+
+# Export LangChain factory
+from app.services.vector_store.langchain_factory import get_vector_store_langchain
 
 
 def get_vector_store(
