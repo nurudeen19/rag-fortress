@@ -1,6 +1,7 @@
 """
 Main settings module that composes all configuration modules.
 """
+from pydantic_settings import SettingsConfigDict
 
 from .app_settings import AppSettings
 from .llm_settings import LLMSettings
@@ -16,6 +17,12 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
     This provides a unified interface to all application configuration while
     keeping the implementation modular and maintainable.
     """
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
     
     def validate_all(self):
         """
@@ -36,10 +43,6 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         
         # Validate database configuration
         DatabaseSettings.validate_config(self, self.ENVIRONMENT)
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 settings = Settings()
 

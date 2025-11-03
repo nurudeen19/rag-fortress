@@ -61,7 +61,7 @@ class StartupController:
             
             # Test embedding generation to ensure it's working
             test_text = "Application startup test"
-            test_embedding = await self.embedding_provider.embed_text(test_text)
+            test_embedding = await self.embedding_provider.aembed_query(test_text)
             
             if test_embedding and len(test_embedding) > 0:
                 logger.info(

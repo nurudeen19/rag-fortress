@@ -9,9 +9,9 @@ from pathlib import Path
 from langchain_core.embeddings import Embeddings
 from langchain_core.documents import Document
 
-from app.services.vector_store_v2.loader import DocumentLoader
-from app.services.vector_store_v2.chunker import DocumentChunker
-from app.services.vector_store_v2.factory import get_vector_store
+from app.services.vector_store.loader import DocumentLoader
+from app.services.vector_store.chunker import DocumentChunker
+from app.services.vector_store.factory import get_vector_store
 from app.core.embedding_factory import get_embedding_provider
 from app.config.settings import settings
 from app.core import get_logger

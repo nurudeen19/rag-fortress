@@ -3,11 +3,21 @@ General application configuration settings.
 """
 from typing import List, Optional
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class AppSettings(BaseSettings):
     """General application configuration."""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        env_parse_none_str="",
+        # Disable JSON parsing for list fields - we'll handle it in validators
+        env_parse_enums=None,
+        # Allow extra fields from .env that aren't in the model
+        extra="ignore",
+    )
     
     # Application Info
     APP_NAME: str = Field("RAG Fortress", env="APP_NAME")
@@ -61,6 +71,14 @@ class AppSettings(BaseSettings):
     LOG_MAX_BYTES: int = Field(10485760, env="LOG_MAX_BYTES")  # 10MB
     LOG_BACKUP_COUNT: int = Field(5, env="LOG_BACKUP_COUNT")
 
+    @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
+    @classmethod
+    def parse_list_fields(cls, v):
+        """Parse list fields from comma-separated string or list."""
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
     @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: str) -> str:
@@ -102,30 +120,6 @@ class AppSettings(BaseSettings):
             raise ValueError("SIMILARITY_THRESHOLD must be between 0 and 1")
         return v
 
-    @field_validator("CORS_ORIGINS", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v):
-        """Parse CORS origins from string or list."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
-
-    @field_validator("CORS_METHODS", mode="before")
-    @classmethod
-    def parse_cors_methods(cls, v):
-        """Parse CORS methods from string or list."""
-        if isinstance(v, str):
-            return [method.strip() for method in v.split(",")]
-        return v
-
-    @field_validator("CORS_HEADERS", mode="before")
-    @classmethod
-    def parse_cors_headers(cls, v):
-        """Parse CORS headers from string or list."""
-        if isinstance(v, str):
-            return [header.strip() for header in v.split(",")]
-        return v
-
     def validate_rag_config(self):
         """Validate RAG-specific configuration."""
         if self.CHUNK_OVERLAP >= self.CHUNK_SIZE:
@@ -136,7 +130,3 @@ class AppSettings(BaseSettings):
         
         if self.TOP_K_RESULTS < 1:
             raise ValueError("TOP_K_RESULTS must be at least 1")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"

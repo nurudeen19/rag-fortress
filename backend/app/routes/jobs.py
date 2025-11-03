@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 from app.core import get_logger
 from app.jobs import IngestionStatus
 from app.jobs.tracker import get_task_tracker, IngestionTask
-from app.services.vector_store_v2 import DocumentStorageService
+from app.services.vector_store import DocumentStorageService
 
 
 logger = get_logger(__name__)

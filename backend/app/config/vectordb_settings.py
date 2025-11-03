@@ -3,11 +3,13 @@ Vector database configuration settings.
 """
 from typing import Optional
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class VectorDBSettings(BaseSettings):
     """Vector database configuration."""
+    
+    model_config = SettingsConfigDict(extra="ignore")
     
     # Provider selection
     VECTOR_DB_PROVIDER: str = Field("chroma", env="VECTOR_DB_PROVIDER")
@@ -133,7 +135,3 @@ class VectorDBSettings(BaseSettings):
         
         else:
             raise ValueError(f"Unsupported vector database provider: {provider}")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"

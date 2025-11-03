@@ -6,11 +6,13 @@ MySQL, and SQLite (development/testing).
 """
 from typing import Optional
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class DatabaseSettings(BaseSettings):
     """Database configuration for user data and application metadata."""
+    
+    model_config = SettingsConfigDict(extra="ignore")
     
     # Database Provider Selection
     DATABASE_PROVIDER: str = Field("sqlite", env="DATABASE_PROVIDER")
@@ -43,6 +45,14 @@ class DatabaseSettings(BaseSettings):
     # Migration Settings
     DB_AUTO_MIGRATE: bool = Field(False, env="DB_AUTO_MIGRATE")
     DB_DROP_ALL: bool = Field(False, env="DB_DROP_ALL")  # Dangerous! Only for development
+
+    @field_validator("DB_PORT", mode="before")
+    @classmethod
+    def parse_db_port(cls, v):
+        """Handle empty string for DB_PORT."""
+        if v == "" or v is None:
+            return None
+        return int(v)
 
     @field_validator("DATABASE_PROVIDER")
     @classmethod
@@ -254,7 +264,3 @@ class DatabaseSettings(BaseSettings):
         
         else:
             raise ValueError(f"Unsupported database provider: {provider}")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"

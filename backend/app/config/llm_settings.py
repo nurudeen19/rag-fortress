@@ -3,11 +3,13 @@ LLM provider configuration settings.
 """
 from typing import Optional
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class LLMSettings(BaseSettings):
     """LLM provider configuration."""
+    
+    model_config = SettingsConfigDict(extra="ignore")
     
     # Provider selection
     LLM_PROVIDER: str = Field("openai", env="LLM_PROVIDER")
@@ -175,7 +177,3 @@ class LLMSettings(BaseSettings):
                 f"Primary: {primary_config['provider']}/{primary_config['model']}, "
                 f"Fallback: {fallback_config['provider']}/{fallback_config['model']}"
             )
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"

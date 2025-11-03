@@ -3,11 +3,13 @@ Embedding provider configuration settings.
 """
 from typing import Optional
 from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class EmbeddingSettings(BaseSettings):
     """Embedding provider configuration."""
+    
+    model_config = SettingsConfigDict(extra="ignore")
     
     # Provider selection (defaults to huggingface sentence-transformers)
     EMBEDDING_PROVIDER: str = Field("huggingface", env="EMBEDDING_PROVIDER")
@@ -104,7 +106,3 @@ class EmbeddingSettings(BaseSettings):
                 
         else:
             raise ValueError(f"Unsupported embedding provider: {provider}")
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
