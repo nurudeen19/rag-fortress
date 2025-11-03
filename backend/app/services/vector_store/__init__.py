@@ -1,5 +1,5 @@
 """
-Clean vector store service with LangChain patterns.
+Vector store service with LangChain patterns.
 
 Architecture:
     loader.py   → Load documents from pending/
@@ -8,7 +8,7 @@ Architecture:
     storage.py  → Orchestrate: load → chunk → store
 
 Usage:
-    from app.services.vector_store_v2.storage import DocumentStorageService
+    from app.services.vector_store.storage import DocumentStorageService
     
     # Embeddings already initialized in startup
     storage = DocumentStorageService()
@@ -17,10 +17,10 @@ Usage:
     results = storage.ingest_from_pending()
 """
 
-from app.services.vector_store_v2.storage import DocumentStorageService, IngestionResult
-from app.services.vector_store_v2.factory import get_vector_store
-from app.services.vector_store_v2.loader import DocumentLoader
-from app.services.vector_store_v2.chunker import DocumentChunker
+from app.services.vector_store.storage import DocumentStorageService, IngestionResult
+from app.services.vector_store.factory import get_vector_store
+from app.services.vector_store.loader import DocumentLoader
+from app.services.vector_store.chunker import DocumentChunker
 
 
 __all__ = [
