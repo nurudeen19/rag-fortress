@@ -4,12 +4,12 @@ FastAPI Application Factory and Startup Configuration.
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import settings
 from app.core import get_logger
 from app.core.startup import get_startup_controller
 from app.core.exceptions import register_exception_handlers
+from app.middleware import setup_middlewares
 
 
 logger = get_logger(__name__)
@@ -60,14 +60,8 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
     
-    # CORS middleware
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # Setup all middlewares
+    setup_middlewares(app)
     
     # Register exception handlers
     register_exception_handlers(app)
