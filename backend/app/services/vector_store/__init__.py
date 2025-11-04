@@ -18,7 +18,7 @@ Usage:
 """
 
 from app.services.vector_store.storage import DocumentStorageService, IngestionResult
-from app.services.vector_store.factory import get_vector_store
+from app.core.vector_store_factory import get_vector_store
 from app.services.vector_store.loader import DocumentLoader
 from app.services.vector_store.chunker import DocumentChunker
 

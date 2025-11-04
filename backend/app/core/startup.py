@@ -6,8 +6,8 @@ Initializes critical components on server start.
 from app.core import get_logger
 from app.core.embedding_factory import get_embedding_provider
 from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider, test_llm_provider
+from app.core.vector_store_factory import get_vector_store
 from app.config.settings import settings
-from app.services.vector_store.factory import get_vector_store
 
 
 logger = get_logger(__name__)

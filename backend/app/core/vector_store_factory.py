@@ -36,19 +36,18 @@ def get_vector_store(
     Example:
         # Get pre-initialized embeddings from startup
         embeddings = get_embedding_provider()
-        
-        # Create vector store
-        vector_store = get_vector_store(
+
+        # Get a configured vector store instance (provider from settings or explicit)
+        store = get_vector_store(
             embeddings=embeddings,
             provider="chroma",
             collection_name="my_docs"
         )
         
         # Use LangChain's from_documents pattern
-        vector_store = Chroma.from_documents(
+        vector_store = store.from_documents(
             documents=chunks,
             embedding=embeddings,
-            collection_name="my_docs"
         )
     """
     provider = (provider or settings.VECTOR_DB_PROVIDER).lower()

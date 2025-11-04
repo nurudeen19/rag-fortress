@@ -11,7 +11,7 @@ from langchain_core.documents import Document
 
 from app.services.vector_store.loader import DocumentLoader
 from app.services.vector_store.chunker import DocumentChunker
-from app.services.vector_store.factory import get_vector_store
+from app.core.vector_store_factory import get_vector_store
 from app.core.embedding_factory import get_embedding_provider
 from app.config.settings import settings
 from app.core import get_logger
