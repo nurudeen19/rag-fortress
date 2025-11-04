@@ -6,7 +6,7 @@ Initializes critical components on server start.
 from app.core import get_logger
 from app.core.embedding_factory import get_embedding_provider
 from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider, test_llm_provider
-from app.core.vector_store_factory import get_vector_store
+from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.config.settings import settings
 
 
@@ -25,6 +25,7 @@ class StartupController:
         self.embedding_provider = None
         self.llm_provider = None
         self.fallback_llm_provider = None
+        self.retriever = None
     
     async def initialize(self):
         """
@@ -47,6 +48,9 @@ class StartupController:
             
             # Initialize fallback LLM provider
             await self._initialize_fallback_llm()
+            
+            # Initialize retriever
+            await self._initialize_retriever()
 
             # Optional: very light vector store smoke test (no ingestion)
             # This is gated by env STARTUP_VECTOR_STORE_SMOKE_TEST to avoid
@@ -129,6 +133,20 @@ class StartupController:
         
         except Exception as e:
             logger.error(f"Failed to initialize fallback LLM provider: {e}")
+            raise
+    
+    async def _initialize_retriever(self):
+        """Initialize and warm up retriever."""
+        logger.info("Initializing retriever...")
+        
+        try:
+            # Get retriever (creates instance from vector store)
+            self.retriever = get_retriever(embeddings=self.embedding_provider)
+            
+            logger.info("✓ Retriever initialized successfully")
+        
+        except Exception as e:
+            logger.error(f"Failed to initialize retriever: {e}")
             raise
 
     def _smoke_test_vector_store(self):

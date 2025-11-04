@@ -6,6 +6,7 @@ Provider-agnostic, clean abstraction.
 from typing import Optional
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
+from langchain_core.retrievers import BaseRetriever
 
 from app.config.settings import settings
 from app.core.exceptions import VectorStoreError
@@ -13,6 +14,10 @@ from app.core import get_logger
 
 
 logger = get_logger(__name__)
+
+
+# Global retriever instance
+_retriever_instance: Optional[BaseRetriever] = None
 
 
 def get_vector_store(
@@ -150,3 +155,51 @@ def get_vector_store(
             f"Supported: chroma, qdrant, pinecone, weaviate",
             provider=provider
         )
+
+
+def get_retriever(
+    embeddings: Optional[Embeddings] = None,
+    provider: Optional[str] = None,
+    top_k: Optional[int] = None
+) -> BaseRetriever:
+    """
+    Get retriever instance from vector store.
+    Returns existing instance if initialized, otherwise creates new one.
+    
+    Args:
+        embeddings: Pre-initialized embeddings (optional, uses existing if available)
+        provider: Vector store provider (optional, uses settings default)
+        top_k: Number of results to return (optional, uses RETRIEVER_TOP_K from settings)
+    
+    Returns:
+        BaseRetriever: LangChain Retriever instance
+    """
+    global _retriever_instance
+    
+    # Return existing instance if available
+    if _retriever_instance is not None:
+        # Update search_kwargs if top_k provided
+        if top_k is not None:
+            _retriever_instance.search_kwargs = {"k": top_k}
+        return _retriever_instance
+    
+    # Create new instance
+    if embeddings is None:
+        from app.core.embedding_factory import get_embedding_provider
+        embeddings = get_embedding_provider()
+    
+    vector_store = get_vector_store(
+        embeddings=embeddings,
+        provider=provider
+    )
+    
+    # Get top_k from settings or parameter
+    k = top_k or settings.RETRIEVER_TOP_K
+    
+    # Create retriever from vector store
+    _retriever_instance = vector_store.as_retriever(
+        search_kwargs={"k": k}
+    )
+    
+    logger.info(f"✓ Retriever initialized (top_k={k})")
+    return _retriever_instance

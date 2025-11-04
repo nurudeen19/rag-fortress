@@ -18,6 +18,9 @@ class VectorDBSettings(BaseSettings):
     VECTOR_STORE_COLLECTION_NAME: str = Field("rag_documents", env="VECTOR_STORE_COLLECTION_NAME")
     VECTOR_STORE_PERSIST_DIRECTORY: str = Field("./data/vector_store", env="VECTOR_STORE_PERSIST_DIRECTORY")
     
+    # Retriever Configuration
+    RETRIEVER_TOP_K: int = Field(5, env="RETRIEVER_TOP_K")
+    
     # Qdrant Configuration
     QDRANT_HOST: str = Field("localhost", env="QDRANT_HOST")
     QDRANT_PORT: int = Field(6333, env="QDRANT_PORT")
