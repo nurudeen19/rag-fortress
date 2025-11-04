@@ -5,7 +5,7 @@ Initializes critical components on server start.
 
 from app.core import get_logger
 from app.core.embedding_factory import get_embedding_provider
-from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider
+from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider, test_llm_provider
 from app.config.settings import settings
 from app.services.vector_store.factory import get_vector_store
 
@@ -100,14 +100,11 @@ class StartupController:
             # Get LLM provider (creates instance if needed)
             self.llm_provider = get_llm_provider()
             
-            # Test LLM invocation to ensure it's working
-            test_prompt = "Hello"
-            test_response = self.llm_provider.invoke(test_prompt)
-            
-            if test_response:
+            # Test LLM setup
+            if test_llm_provider():
                 logger.info(f"✓ LLM provider initialized successfully")
             else:
-                raise RuntimeError("LLM provider returned invalid result")
+                raise RuntimeError("LLM provider test failed")
         
         except Exception as e:
             logger.error(f"Failed to initialize LLM provider: {e}")

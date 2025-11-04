@@ -178,3 +178,23 @@ def _create_fallback_llm_provider() -> BaseLanguageModel:
     
     else:
         raise ConfigurationError(f"Unsupported fallback LLM provider: {provider}")
+
+
+def test_llm_provider() -> bool:
+    """
+    Test LLM provider setup with a simple request.
+    
+    Returns:
+        bool: True if provider responds successfully, False otherwise
+    """
+    try:
+        llm = get_llm_provider()
+        response = llm.invoke("Hello")
+        
+        if response and len(str(response).strip()) > 0:
+            return True
+        return False
+    
+    except Exception as e:
+        print(f"LLM provider test failed: {e}")
+        return False
