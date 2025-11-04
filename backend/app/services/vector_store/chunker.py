@@ -53,7 +53,7 @@ class DocumentChunker:
     def chunk_loaded_files(
         self,
         files: List[Dict[str, Any]],
-    ) -> List[Document]:
+    ) -> List[Dict[str, Any]]:
         """
         Chunk a list of files returned from the DocumentLoader.
 
@@ -66,7 +66,7 @@ class DocumentChunker:
         if not files:
             return []
 
-        all_chunks: List[Document] = []
+        all_docs: List[Document] = []
         for f in files:
             try:
                 file_type = (f.get("file_type") or "").lower()
@@ -81,11 +81,12 @@ class DocumentChunker:
                     # Unknown -> attempt text chunking if content present
                     chunks = self._chunk_text_file(f)
 
-                all_chunks.extend(chunks)
+                all_docs.extend(chunks)
             except Exception as e:
                 logger.error(f"Failed to chunk {f.get('file_name')}: {e}", exc_info=False)
 
-        return all_chunks
+        # Convert LangChain Documents → chunk dicts with metadata shape
+        return self._docs_to_chunk_dicts(all_docs)
 
     # --- Strategies ---
     def _chunk_text_file(self, f: Dict[str, Any]) -> List[Document]:
@@ -101,7 +102,7 @@ class DocumentChunker:
         }
 
         doc = Document(page_content=content, metadata=base_meta)
-        return self.splitter.split_documents([doc])
+    return self.splitter.split_documents([doc])
 
     def _chunk_via_loader(self, f: Dict[str, Any]) -> List[Document]:
         """Load non-inline content types (pdf/docx/xlsx) with community loaders then split."""
@@ -143,7 +144,7 @@ class DocumentChunker:
             logger.warning(f"Loader failed for {p.name} ({suffix}): {e}")
             return []
 
-        return self.splitter.split_documents(docs)
+    return self.splitter.split_documents(docs)
 
     def _chunk_structured_file(self, f: Dict[str, Any]) -> List[Document]:
         content = f.get("content")
@@ -202,7 +203,7 @@ class DocumentChunker:
             if isinstance(s, str) and s.strip()
         ]
 
-        return self.splitter.split_documents(docs)
+    return self.splitter.split_documents(docs)
 
     # --- Helpers ---
     def _flatten_dict(self, d: Dict[str, Any], parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
@@ -232,3 +233,51 @@ class DocumentChunker:
         for k, v in rec.items():
             parts.append(f"{k}: {self._coerce_scalar(v)}")
         return "\n".join(parts)
+
+    def _docs_to_chunk_dicts(self, docs: List[Document]) -> List[Dict[str, Any]]:
+        """Convert LangChain Documents to simple chunk dicts with metadata and indices."""
+        if not docs:
+            return []
+
+        result: List[Dict[str, Any]] = []
+        # Track per-source chunk indices
+        per_source_index: Dict[str, int] = {}
+
+        for d in docs:
+            content = (d.page_content or "").strip()
+            if not content:
+                continue
+
+            meta = dict(d.metadata or {})
+            file_path = meta.get("source") or meta.get("file_path") or ""
+            file_name = meta.get("file_name") or (Path(file_path).name if file_path else None)
+            source_type = meta.get("file_type")
+
+            source_key = file_path or (file_name or "unknown")
+            chunk_idx = per_source_index.get(source_key, 0)
+            per_source_index[source_key] = chunk_idx + 1
+
+            # Build metadata following desired shape; keep extras
+            chunk_meta: Dict[str, Any] = {
+                "source": file_name or source_key,
+                "source_type": source_type,
+                "chunk_index": chunk_idx,
+                # Placeholders/basis for future fields
+                "security_level": meta.get("security_level"),
+                "version": meta.get("version"),
+                "timestamp": meta.get("timestamp"),
+                "tags": meta.get("tags", []),
+            }
+
+            # Preserve any remaining metadata (record_index, custom fields)
+            for k, v in meta.items():
+                if k not in chunk_meta and k not in {"file_name", "file_path"}:
+                    chunk_meta[k] = v
+
+            result.append({
+                # "id": str(uuid4()),  # Intentionally omitted unless needed later
+                "content": content,
+                "metadata": chunk_meta,
+            })
+
+        return result
