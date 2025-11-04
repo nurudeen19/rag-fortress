@@ -1,9 +1,9 @@
 """
 Document Storage Service - Orchestrates load → chunk → store pipeline.
-Simple, clean, leverages LangChain patterns.
+Simple, clean, new flow based on loader → chunker (dicts) → store.
 """
 
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 from langchain_core.embeddings import Embeddings
@@ -31,22 +31,22 @@ class IngestionResult:
 
 class DocumentStorageService:
     """
-    Simplified document storage using LangChain patterns.
-    
+    Simplified document storage.
+
     Flow:
-    1. Load documents (DocumentLoader)
-    2. Chunk documents (DocumentChunker)  
-    3. Store with embeddings (VectorStore.from_documents or add_documents)
-    4. Move to processed/
-    
-    Clean, simple, leverages LangChain's built-in capabilities.
+    1) Get/initialize dependencies (embeddings, vector store)
+    2) Load documents (loader → list[dict])
+    3) Chunk (chunker → list[{content, metadata}])
+    4) Store (provider.add_texts or create FAISS via from_texts)
+    5) Post-process: move files to processed/
+    6) Log summary
     """
     
     def __init__(
         self,
         embeddings: Optional[Embeddings] = None,
         vector_store_provider: Optional[str] = None,
-        collection_name: Optional[str] = None
+        collection_name: Optional[str] = None,
     ):
         """
         Initialize storage service.
@@ -70,13 +70,14 @@ class DocumentStorageService:
         
         # Vector store config
         self.provider = vector_store_provider or settings.VECTOR_DB_PROVIDER
-        self.collection_name = collection_name
-        
+    # collection name is optional and not required here (factory/settings handle it)
+    self.collection_name = collection_name
+
         # Get or create vector store (reuses existing if available)
+        # Do not force collection name here; factory/settings handle it.
         self.vector_store = get_vector_store(
             embeddings=self.embeddings,
             provider=self.provider,
-            collection_name=self.collection_name
         )
         
         logger.info("DocumentStorageService initialized")
@@ -115,74 +116,62 @@ class DocumentStorageService:
         """
         results = []
         
-        # Step 1: Load documents
+    # Step 1: Load documents (loader returns list of dicts)
         logger.info("=" * 60)
         logger.info("Starting document ingestion")
         logger.info("=" * 60)
         
-        documents = self.loader.load_from_pending(
+        files = self.loader.load_from_pending(
             recursive=recursive,
-            file_types=file_types
+            file_types=file_types,
         )
-        
-        if not documents:
+
+        if not files:
             logger.info("No documents to process")
             return results
-        
-        # Group documents by source file for processing
-        docs_by_file = {}
-        for doc in documents:
-            source = doc.metadata.get("source", "unknown")
-            if source not in docs_by_file:
-                docs_by_file[source] = []
-            docs_by_file[source].append(doc)
-        
-        logger.info(f"Processing {len(docs_by_file)} files")
-        
-        # Process each file
-        for source_path, docs in docs_by_file.items():
+
+        logger.info(f"Processing {len(files)} files")
+
+        # Step 2: Chunk all files at once using the new chunker flow
+        chunks: List[Dict[str, Any]] = self.chunker.chunk_loaded_files(files)
+
+        if not chunks:
+            logger.warning("No chunks generated from input files")
+            # Move files to processed even if no chunks to avoid reprocessing
+            for f in files:
+                try:
+                    self._move_to_processed(Path(f["file_path"]))
+                except Exception:
+                    pass
+            return results
+
+        # Step 3: Store in vector DB
+        logger.info(f"Storing {len(chunks)} chunks in vector DB...")
+    stored_count = self.store_data(chunks)
+
+        # Step 4: Move all processed files
+        for f in files:
             try:
-                file_path = Path(source_path)
-                logger.info(f"\nProcessing: {file_path.name}")
-                
-                # Step 2: Chunk documents
-                chunks = self.chunker.chunk_documents(docs)
-                
-                if not chunks:
-                    logger.warning(f"No chunks generated for {file_path.name}")
-                    results.append(IngestionResult(
-                        success=False,
-                        document_path=source_path,
-                        error="No chunks generated"
-                    ))
-                    continue
-                
-                # Step 3: Store in vector DB
-                # LangChain handles:
-                # - Embedding generation for each chunk
-                # - Batch processing
-                # - Vector storage with metadata
-                logger.info(f"Storing {len(chunks)} chunks in vector DB...")
-                self.vector_store.add_documents(chunks)
-                
-                logger.info(f"✓ Successfully stored {file_path.name}")
-                
-                # Move to processed
-                self._move_to_processed(file_path)
-                
-                results.append(IngestionResult(
-                    success=True,
-                    document_path=source_path,
-                    chunks_count=len(chunks)
-                ))
-            
+                self._move_to_processed(Path(f["file_path"]))
             except Exception as e:
-                logger.error(f"✗ Failed to process {source_path}: {e}", exc_info=True)
-                results.append(IngestionResult(
-                    success=False,
-                    document_path=source_path,
-                    error=str(e)
-                ))
+                logger.error(f"Failed moving processed file {f.get('file_name')}: {e}")
+
+        # Build per-file results based on chunk metadata source (file name)
+        source_counts: Dict[str, int] = {}
+        for c in chunks:
+            src_name = (c.get("metadata") or {}).get("source")
+            if src_name:
+                source_counts[src_name] = source_counts.get(src_name, 0) + 1
+
+        for f in files:
+            name = f.get("file_name")
+            count = source_counts.get(name, 0)
+            results.append(IngestionResult(
+                success=count > 0,
+                document_path=str(f.get("file_path")),
+                chunks_count=count,
+                error=None if count > 0 else "No chunks generated",
+            ))
         
         # Summary
         successful = sum(1 for r in results if r.success)
@@ -195,3 +184,34 @@ class DocumentStorageService:
         logger.info("=" * 60)
         
         return results
+
+    def store_data(self, chunks: List[Dict[str, Any]]) -> int:
+        """Store chunk dicts into the already-initialized vector store instance.
+
+        Simple flow:
+        - Convert chunk dicts to LangChain Documents
+        - Call vector_store.add_documents(docs)
+        The vector store instance is already configured with the embedding function via the factory.
+        """
+        if not chunks:
+            return 0
+
+        # Convert to Documents
+        docs: List[Document] = []
+        for c in chunks:
+            text = c.get("content")
+            if not isinstance(text, str) or not text.strip():
+                continue
+            meta = c.get("metadata") or {}
+            docs.append(Document(page_content=text, metadata=meta))
+
+        if not docs:
+            return 0
+
+        # Store via provider instance
+        try:
+            self.vector_store.add_documents(docs)
+            return len(docs)
+        except Exception as e:
+            logger.error(f"Failed storing data in vector store: {e}")
+            return 0
