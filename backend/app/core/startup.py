@@ -5,7 +5,7 @@ Initializes critical components on server start.
 
 from app.core import get_logger
 from app.core.embedding_factory import get_embedding_provider
-from app.core.llm_factory import get_llm_provider
+from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider
 from app.config.settings import settings
 from app.services.vector_store.factory import get_vector_store
 
@@ -24,6 +24,7 @@ class StartupController:
         self.initialized = False
         self.embedding_provider = None
         self.llm_provider = None
+        self.fallback_llm_provider = None
     
     async def initialize(self):
         """
@@ -43,6 +44,9 @@ class StartupController:
             
             # Initialize LLM provider
             await self._initialize_llm()
+            
+            # Initialize fallback LLM provider
+            await self._initialize_fallback_llm()
 
             # Optional: very light vector store smoke test (no ingestion)
             # This is gated by env STARTUP_VECTOR_STORE_SMOKE_TEST to avoid
@@ -107,6 +111,27 @@ class StartupController:
         
         except Exception as e:
             logger.error(f"Failed to initialize LLM provider: {e}")
+            raise
+    
+    async def _initialize_fallback_llm(self):
+        """Initialize and warm up fallback LLM provider."""
+        logger.info("Initializing fallback LLM provider...")
+        
+        try:
+            # Get fallback LLM provider (creates instance if needed)
+            self.fallback_llm_provider = get_fallback_llm_provider()
+            
+            # Test fallback LLM invocation to ensure it's working
+            test_prompt = "Hello"
+            test_response = self.fallback_llm_provider.invoke(test_prompt)
+            
+            if test_response:
+                logger.info(f"✓ Fallback LLM provider initialized successfully")
+            else:
+                raise RuntimeError("Fallback LLM provider returned invalid result")
+        
+        except Exception as e:
+            logger.error(f"Failed to initialize fallback LLM provider: {e}")
             raise
 
     def _smoke_test_vector_store(self):
