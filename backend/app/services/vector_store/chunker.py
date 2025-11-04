@@ -5,8 +5,7 @@ Simple, focused responsibility.
 Input: loader results (list of dicts with file_path, file_name, file_type, content,
        and optionally structured_fields, flatten_nested per file).
 
-For structured data (json/csv/xlsx): can select fields (per-file) and flatten
-to readable strings for better LLM context.
+Returns: List of LangChain Document objects ready for vector storage.
 """
 
 from typing import List, Optional, Dict, Any
@@ -53,7 +52,7 @@ class DocumentChunker:
     def chunk_loaded_files(
         self,
         files: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
+    ) -> List[Document]:
         """
         Chunk a list of files returned from the DocumentLoader.
 
@@ -61,7 +60,7 @@ class DocumentChunker:
             files: List of dicts with keys {file_path, file_name, file_type, content}
 
         Returns:
-            List[Document]: All chunks across files
+            List[Document]: All chunks across files as LangChain Documents with enriched metadata
         """
         if not files:
             return []
@@ -70,91 +69,56 @@ class DocumentChunker:
         for f in files:
             try:
                 file_type = (f.get("file_type") or "").lower()
-                if file_type in {"txt", "md", "markdown"}:
-                    chunks = self._chunk_text_file(f)
-                elif file_type in {"json", "csv", "xlsx", "xls"}:
+                content = f.get("content")
+                
+                # Skip files with no content
+                if content is None:
+                    logger.warning(f"Skipping {f.get('file_name')}: no content loaded")
+                    continue
+                
+                # Route based on file type
+                if file_type in {"json", "csv", "xlsx", "xls"}:
                     chunks = self._chunk_structured_file(f)
-                elif file_type in {"pdf", "doc", "docx", "xlsx", "xls"}:
-                    # Load content/documents via appropriate loaders and split
-                    chunks = self._chunk_via_loader(f)
                 else:
-                    # Unknown -> attempt text chunking if content present
+                    # Text files (txt, md, pdf, docx, etc.)
                     chunks = self._chunk_text_file(f)
 
                 all_docs.extend(chunks)
             except Exception as e:
                 logger.error(f"Failed to chunk {f.get('file_name')}: {e}", exc_info=False)
 
-        # Convert LangChain Documents → chunk dicts with metadata shape
-        return self._docs_to_chunk_dicts(all_docs)
+        # Enrich metadata with chunk indices and additional fields
+        enriched_docs = self._enrich_metadata(all_docs)
+        
+        logger.info(f"Generated {len(enriched_docs)} total chunks from {len(files)} files")
+        return enriched_docs
 
     # --- Strategies ---
     def _chunk_text_file(self, f: Dict[str, Any]) -> List[Document]:
+        """Chunk text content from any file type (txt, md, pdf, docx, etc.)."""
         content = f.get("content")
         if not isinstance(content, str) or not content.strip():
-            # No inline text content → try loading via loaders (pdf/docx/xlsx might land here)
-            return self._chunk_via_loader(f)
+            return []
 
         base_meta = {
-            "source": f.get("file_path"),
-            "file_name": f.get("file_name"),
+            "source": f.get("file_name"),
+            "file_path": f.get("file_path"),
             "file_type": f.get("file_type"),
         }
 
         doc = Document(page_content=content, metadata=base_meta)
-    return self.splitter.split_documents([doc])
+        return self.splitter.split_documents([doc])
 
-    def _chunk_via_loader(self, f: Dict[str, Any]) -> List[Document]:
-        """Load non-inline content types (pdf/docx/xlsx) with community loaders then split."""
-        suffix = (f.get("file_type") or "").lower()
-        path = f.get("file_path")
-        if not path:
-            return []
-
-        p = Path(path)
-        docs: List[Document] = []
-
-        try:
-            if suffix == "pdf":
-                from langchain_community.document_loaders import PyPDFLoader
-                loader = PyPDFLoader(str(p))
-                docs = loader.load()
-            elif suffix in {"doc", "docx"}:
-                from langchain_community.document_loaders import Docx2txtLoader
-                loader = Docx2txtLoader(str(p))
-                docs = loader.load()
-            elif suffix in {"xlsx", "xls"}:
-                # Treat spreadsheet as unstructured text for now
-                from langchain_community.document_loaders import UnstructuredExcelLoader
-                loader = UnstructuredExcelLoader(str(p))
-                docs = loader.load()
-            else:
-                # Fallback: read as plain text if possible
-                try:
-                    text = Path(path).read_text(encoding="utf-8")
-                    docs = [Document(page_content=text, metadata={
-                        "source": path,
-                        "file_name": f.get("file_name"),
-                        "file_type": suffix,
-                    })]
-                except Exception:
-                    logger.warning(f"Unsupported or unreadable file type: {suffix} ({path})")
-                    return []
-        except Exception as e:
-            logger.warning(f"Loader failed for {p.name} ({suffix}): {e}")
-            return []
-
-    return self.splitter.split_documents(docs)
 
     def _chunk_structured_file(self, f: Dict[str, Any]) -> List[Document]:
+        """Chunk structured data (JSON, CSV) with optional field selection and flattening."""
         content = f.get("content")
         if content is None:
-            # Nothing to process
             return []
 
         base_meta = {
-            "source": f.get("file_path"),
-            "file_name": f.get("file_name"),
+            "source": f.get("file_name"),
+            "file_path": f.get("file_path"),
             "file_type": f.get("file_type"),
             "is_structured": True,
         }
@@ -163,17 +127,14 @@ class DocumentChunker:
 
         # Normalize content to list[dict]
         if isinstance(content, list):
-            # csv already a list[dict] or json list
             if content and isinstance(content[0], dict):
-                records = content  # type: ignore[assignment]
+                records = content
             else:
                 # list of primitives → wrap
                 records = [{"value": v} for v in content]
         elif isinstance(content, dict):
-            # single json object
             records = [content]
         else:
-            # Unknown structure → stringify and treat as single record
             records = [{"value": str(content)}]
 
         # Per-file options
@@ -203,7 +164,7 @@ class DocumentChunker:
             if isinstance(s, str) and s.strip()
         ]
 
-    return self.splitter.split_documents(docs)
+        return self.splitter.split_documents(docs)
 
     # --- Helpers ---
     def _flatten_dict(self, d: Dict[str, Any], parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
@@ -214,7 +175,6 @@ class DocumentChunker:
             if isinstance(v, dict):
                 items.update(self._flatten_dict(v, new_key, sep=sep))
             elif isinstance(v, list):
-                # Join list items into a readable string
                 items[new_key] = ", ".join([self._coerce_scalar(x) for x in v])
             else:
                 items[new_key] = self._coerce_scalar(v)
@@ -228,37 +188,39 @@ class DocumentChunker:
         return str(v)
 
     def _stringify_record(self, rec: Dict[str, Any]) -> str:
-        # key: value lines for readability and LLM friendliness
+        """Convert record dict to readable key: value format."""
         parts = []
         for k, v in rec.items():
             parts.append(f"{k}: {self._coerce_scalar(v)}")
         return "\n".join(parts)
-
-    def _docs_to_chunk_dicts(self, docs: List[Document]) -> List[Dict[str, Any]]:
-        """Convert LangChain Documents to simple chunk dicts with metadata and indices."""
+    
+    def _enrich_metadata(self, docs: List[Document]) -> List[Document]:
+        """Enrich document metadata with chunk indices and additional fields."""
         if not docs:
             return []
-
-        result: List[Dict[str, Any]] = []
+        
         # Track per-source chunk indices
         per_source_index: Dict[str, int] = {}
-
-        for d in docs:
-            content = (d.page_content or "").strip()
-            if not content:
-                continue
-
-            meta = dict(d.metadata or {})
-            file_path = meta.get("source") or meta.get("file_path") or ""
-            file_name = meta.get("file_name") or (Path(file_path).name if file_path else None)
+        enriched_docs: List[Document] = []
+        
+        for doc in docs:
+            # Get existing metadata
+            meta = dict(doc.metadata or {})
+            
+            # Extract key fields
+            file_name = meta.get("source")
+            file_path = meta.get("file_path", "")
             source_type = meta.get("file_type")
-
-            source_key = file_path or (file_name or "unknown")
+            
+            # Use file_path or file_name as unique key for indexing
+            source_key = file_path or file_name or "unknown"
+            
+            # Get and increment chunk index for this source
             chunk_idx = per_source_index.get(source_key, 0)
             per_source_index[source_key] = chunk_idx + 1
-
-            # Build metadata following desired shape; keep extras
-            chunk_meta: Dict[str, Any] = {
+            
+            # Build enriched metadata
+            enriched_meta: Dict[str, Any] = {
                 "source": file_name or source_key,
                 "source_type": source_type,
                 "chunk_index": chunk_idx,
@@ -268,16 +230,15 @@ class DocumentChunker:
                 "timestamp": meta.get("timestamp"),
                 "tags": meta.get("tags", []),
             }
-
-            # Preserve any remaining metadata (record_index, custom fields)
+            
+            # Preserve any additional metadata fields
             for k, v in meta.items():
-                if k not in chunk_meta and k not in {"file_name", "file_path"}:
-                    chunk_meta[k] = v
-
-            result.append({
-                # "id": str(uuid4()),  # Intentionally omitted unless needed later
-                "content": content,
-                "metadata": chunk_meta,
-            })
-
-        return result
+                if k not in enriched_meta and k not in {"source", "file_path"}:
+                    enriched_meta[k] = v
+            
+            # Create new document with enriched metadata
+            enriched_docs.append(
+                Document(page_content=doc.page_content, metadata=enriched_meta)
+            )
+        
+        return enriched_docs

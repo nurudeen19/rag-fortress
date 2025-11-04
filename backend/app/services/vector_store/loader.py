@@ -95,9 +95,43 @@ class DocumentLoader:
                 reader = csv.DictReader(f)
                 doc['content'] = list(reader)
         
-        # Other file types (pdf, docx, xlsx) - store path for later processing
+        # PDF files
+        elif file_type == 'pdf':
+            try:
+                from langchain_community.document_loaders import PyPDFLoader
+                loader = PyPDFLoader(str(file_path))
+                docs = loader.load()
+                # Combine all pages into single content
+                doc['content'] = "\n\n".join([d.page_content for d in docs])
+            except Exception as e:
+                logger.error(f"Failed to load PDF {file_path.name}: {e}")
+                doc['content'] = None
+        
+        # Word documents
+        elif file_type in ['doc', 'docx']:
+            try:
+                from langchain_community.document_loaders import Docx2txtLoader
+                loader = Docx2txtLoader(str(file_path))
+                docs = loader.load()
+                doc['content'] = "\n\n".join([d.page_content for d in docs])
+            except Exception as e:
+                logger.error(f"Failed to load DOCX {file_path.name}: {e}")
+                doc['content'] = None
+        
+        # Excel files
+        elif file_type in ['xlsx', 'xls']:
+            try:
+                from langchain_community.document_loaders import UnstructuredExcelLoader
+                loader = UnstructuredExcelLoader(str(file_path))
+                docs = loader.load()
+                doc['content'] = "\n\n".join([d.page_content for d in docs])
+            except Exception as e:
+                logger.error(f"Failed to load Excel {file_path.name}: {e}")
+                doc['content'] = None
+        
+        # Unknown file types
         else:
+            logger.warning(f"Unsupported file type: {file_type}")
             doc['content'] = None
-            logger.info(f"File type '{file_type}' will be processed by chunker")
         
         return doc

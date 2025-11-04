@@ -144,24 +144,9 @@ def get_vector_store(
         logger.info(f"✓ Weaviate initialized: {config['collection_name']}")
         return store
     
-    # === FAISS (local) ===
-    elif provider == "faiss":
-        try:
-            from langchain_community.vectorstores import FAISS
-        except ImportError:
-            raise VectorStoreError(
-                "faiss not installed. Run: pip install faiss-cpu",
-                provider="faiss"
-            )
-        
-        # FAISS needs to be created with documents
-        # Return a placeholder that can be used with from_documents()
-        logger.info("✓ FAISS ready (will be created with from_documents)")
-        return None  # Signal to use from_documents() directly
-    
     else:
         raise VectorStoreError(
             f"Unsupported vector store: {provider}. "
-            f"Supported: chroma, qdrant, pinecone, weaviate, faiss",
+            f"Supported: chroma, qdrant, pinecone, weaviate",
             provider=provider
         )

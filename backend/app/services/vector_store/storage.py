@@ -97,26 +97,29 @@ class DocumentStorageService:
     def ingest_from_pending(
         self,
         recursive: bool = True,
-        file_types: Optional[List[str]] = None
+        file_types: Optional[List[str]] = None,
+        batch_size: int = 100
     ) -> List[IngestionResult]:
         """
         Ingest all documents from pending directory.
         
-        Simple 3-step process:
-        1. Load documents
-        2. Chunk documents
-        3. Store in vector DB (LangChain handles embedding + storage)
+        Simple flow:
+        1. Load documents (loader handles all file types)
+        2. Chunk documents (chunker returns LangChain Documents)
+        3. Store in vector DB with batching
+        4. Move only successfully stored files
         
         Args:
             recursive: Search subdirectories
             file_types: Filter by file extensions
+            batch_size: Number of chunks to store per batch (default: 100)
             
         Returns:
             List of ingestion results
         """
         results = []
         
-    # Step 1: Load documents (loader returns list of dicts)
+        # Step 1: Load documents (loader returns list of dicts)
         logger.info("=" * 60)
         logger.info("Starting document ingestion")
         logger.info("=" * 60)
@@ -132,45 +135,45 @@ class DocumentStorageService:
 
         logger.info(f"Processing {len(files)} files")
 
-        # Step 2: Chunk all files at once using the new chunker flow
-        chunks: List[Dict[str, Any]] = self.chunker.chunk_loaded_files(files)
+        # Step 2: Chunk all files at once (returns LangChain Documents)
+        chunks: List[Document] = self.chunker.chunk_loaded_files(files)
 
         if not chunks:
             logger.warning("No chunks generated from input files")
-            # Move files to processed even if no chunks to avoid reprocessing
-            for f in files:
-                try:
-                    self._move_to_processed(Path(f["file_path"]))
-                except Exception:
-                    pass
             return results
 
-        # Step 3: Store in vector DB
+        # Step 3: Store in vector DB with batching and error recovery
         logger.info(f"Storing {len(chunks)} chunks in vector DB...")
-    stored_count = self.store_data(chunks)
+        successfully_stored_sources, stored_count = self.store_data(chunks, batch_size=batch_size)
 
-        # Step 4: Move all processed files
+        # Step 4: Move only successfully stored files
+        moved_count = 0
         for f in files:
-            try:
-                self._move_to_processed(Path(f["file_path"]))
-            except Exception as e:
-                logger.error(f"Failed moving processed file {f.get('file_name')}: {e}")
+            file_name = f.get("file_name")
+            if file_name in successfully_stored_sources:
+                try:
+                    self._move_to_processed(Path(f["file_path"]))
+                    moved_count += 1
+                except Exception as e:
+                    logger.error(f"Failed moving {file_name}: {e}")
 
-        # Build per-file results based on chunk metadata source (file name)
+        # Build per-file results
         source_counts: Dict[str, int] = {}
-        for c in chunks:
-            src_name = (c.get("metadata") or {}).get("source")
+        for chunk in chunks:
+            src_name = chunk.metadata.get("source")
             if src_name:
                 source_counts[src_name] = source_counts.get(src_name, 0) + 1
 
         for f in files:
             name = f.get("file_name")
             count = source_counts.get(name, 0)
+            was_stored = name in successfully_stored_sources
+            
             results.append(IngestionResult(
-                success=count > 0,
+                success=was_stored and count > 0,
                 document_path=str(f.get("file_path")),
-                chunks_count=count,
-                error=None if count > 0 else "No chunks generated",
+                chunks_count=count if was_stored else 0,
+                error=None if was_stored else "Storage failed",
             ))
         
         # Summary
@@ -179,39 +182,48 @@ class DocumentStorageService:
         
         logger.info("=" * 60)
         logger.info(f"Ingestion complete:")
-        logger.info(f"  Files: {successful}/{len(results)}")
-        logger.info(f"  Chunks: {total_chunks}")
+        logger.info(f"  Files processed: {successful}/{len(results)}")
+        logger.info(f"  Files moved: {moved_count}")
+        logger.info(f"  Chunks stored: {total_chunks}")
         logger.info("=" * 60)
         
         return results
 
-    def store_data(self, chunks: List[Dict[str, Any]]) -> int:
-        """Store chunk dicts into the already-initialized vector store instance.
+    def store_data(self, chunks: List[Document], batch_size: int = 100) -> tuple[set, int]:
+        """Store LangChain Documents with batching for scalability.
 
-        Simple flow:
-        - Convert chunk dicts to LangChain Documents
-        - Call vector_store.add_documents(docs)
-        The vector store instance is already configured with the embedding function via the factory.
+        Args:
+            chunks: List of LangChain Document objects
+            batch_size: Number of chunks per batch (default: 100)
+
+        Returns:
+            Tuple of (set of successfully stored source names, total count stored)
         """
         if not chunks:
-            return 0
+            return set(), 0
 
-        # Convert to Documents
-        docs: List[Document] = []
-        for c in chunks:
-            text = c.get("content")
-            if not isinstance(text, str) or not text.strip():
-                continue
-            meta = c.get("metadata") or {}
-            docs.append(Document(page_content=text, metadata=meta))
+        successfully_stored_sources = set()
+        total_stored = 0
 
-        if not docs:
-            return 0
+        # Track which sources we're processing in this batch
+        batch_sources = set()
+        
+        # Process in batches
+        for i in range(0, len(chunks), batch_size):
+            batch = chunks[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            
+            # Track sources in this batch
+            batch_sources = {doc.metadata.get("source") for doc in batch if doc.metadata.get("source")}
+            
+            try:
+                # Use add_documents for batch storage
+                self.vector_store.add_documents(batch)
+                total_stored += len(batch)
+                successfully_stored_sources.update(batch_sources)
+                logger.info(f"✓ Stored batch {batch_num}: {len(batch)} chunks")
+            except Exception as e:
+                logger.error(f"✗ Failed storing batch {batch_num}: {e}")
+                # Don't add these sources to successfully_stored
 
-        # Store via provider instance
-        try:
-            self.vector_store.add_documents(docs)
-            return len(docs)
-        except Exception as e:
-            logger.error(f"Failed storing data in vector store: {e}")
-            return 0
+        return successfully_stored_sources, total_stored
