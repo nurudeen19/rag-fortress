@@ -5,6 +5,7 @@ Initializes critical components on server start.
 
 from app.core import get_logger
 from app.core.embedding_factory import get_embedding_provider
+from app.core.llm_factory import get_llm_provider
 from app.config.settings import settings
 from app.services.vector_store.factory import get_vector_store
 
@@ -22,6 +23,7 @@ class StartupController:
     def __init__(self):
         self.initialized = False
         self.embedding_provider = None
+        self.llm_provider = None
     
     async def initialize(self):
         """
@@ -38,6 +40,9 @@ class StartupController:
         try:
             # Initialize embedding provider
             await self._initialize_embeddings()
+            
+            # Initialize LLM provider
+            await self._initialize_llm()
 
             # Optional: very light vector store smoke test (no ingestion)
             # This is gated by env STARTUP_VECTOR_STORE_SMOKE_TEST to avoid
@@ -81,6 +86,27 @@ class StartupController:
         
         except Exception as e:
             logger.error(f"Failed to initialize embedding provider: {e}")
+            raise
+    
+    async def _initialize_llm(self):
+        """Initialize and warm up LLM provider."""
+        logger.info("Initializing LLM provider...")
+        
+        try:
+            # Get LLM provider (creates instance if needed)
+            self.llm_provider = get_llm_provider()
+            
+            # Test LLM invocation to ensure it's working
+            test_prompt = "Hello"
+            test_response = self.llm_provider.invoke(test_prompt)
+            
+            if test_response:
+                logger.info(f"✓ LLM provider initialized successfully")
+            else:
+                raise RuntimeError("LLM provider returned invalid result")
+        
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM provider: {e}")
             raise
 
     def _smoke_test_vector_store(self):

@@ -1,74 +1,24 @@
 """
 Background ingestion API endpoints.
-Uses FastAPI's BackgroundTasks with clean LangChain-based architecture.
+
+Thin HTTP layer over IngestionService.
+All business logic is in app.services.ingestion_service,
+allowing direct programmatic access without HTTP.
 """
 
-import uuid
 from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
 
 from app.core import get_logger
 from app.jobs import IngestionStatus
-from app.jobs.tracker import get_task_tracker, IngestionTask
-from app.services.vector_store import DocumentStorageService
+from app.services.ingestion_service import (
+    get_ingestion_service,
+    IngestionConfig
+)
 
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/ingestion", tags=["Ingestion"])
-
-
-async def _run_ingestion_task(
-    task: IngestionTask,
-    recursive: bool = True,
-    file_types: Optional[List[str]] = None
-):
-    """
-    Background task that runs the actual ingestion.
-    Clean 3-step process using LangChain patterns.
-    """
-    try:
-        task.start()
-        logger.info(f"Starting ingestion task {task.id}")
-        
-        # Initialize storage service (reuses embeddings from startup)
-        storage = DocumentStorageService()
-        
-        task.update_progress(0.1, "Storage service initialized")
-        
-        # Run ingestion: load → chunk → store
-        # LangChain handles embedding + vector storage
-        results = storage.ingest_from_pending(
-            recursive=recursive,
-            file_types=file_types
-        )
-        
-        # Compile results
-        total = len(results)
-        successful = sum(1 for r in results if r.success)
-        failed = total - successful
-        
-        result_data = {
-            "total": total,
-            "successful": successful,
-            "failed": failed,
-            "results": [
-                {
-                    "document": r.document_path,
-                    "success": r.success,
-                    "chunks": r.chunks_count if r.success else 0,
-                    "error": r.error if not r.success else None
-                }
-                for r in results
-            ]
-        }
-        
-        task.complete(result_data)
-        logger.info(f"Task {task.id} completed: {successful}/{total} documents ingested")
-    
-    except Exception as e:
-        error_msg = str(e)
-        task.fail(error_msg)
-        logger.error(f"Task {task.id} failed: {error_msg}", exc_info=True)
 
 
 @router.post("/start")
@@ -107,31 +57,30 @@ async def start_ingestion(
         # Ingest JSON and CSV files
         POST /ingestion/start?file_types=json&file_types=csv
     """
-    tracker = get_task_tracker()
+    service = get_ingestion_service()
     
-    # Create task
-    task_id = str(uuid.uuid4())
-    task = tracker.create_task(
-        task_id=task_id,
-        user_id=user_id,
-        params={
-            "recursive": recursive,
-            "file_types": file_types
-        }
+    # Create ingestion config
+    config = IngestionConfig(
+        recursive=recursive,
+        file_types=file_types,
+        user_id=user_id
     )
     
-    # Add to background tasks (FastAPI handles execution)
+    # Start background job (creates tracked task)
+    task = service.start_background_job(config)
+    
+    # Add to FastAPI background tasks
     background_tasks.add_task(
-        _run_ingestion_task,
+        service.run_background_task,
         task=task,
         recursive=recursive,
         file_types=file_types
     )
     
-    logger.info(f"Ingestion task {task_id} queued")
+    logger.info(f"Ingestion task {task.id} queued")
     
     return {
-        "task_id": task_id,
+        "task_id": task.id,
         "status": "queued",
         "message": "Ingestion started in background. Use GET /ingestion/status/{task_id} to check progress."
     }
@@ -148,8 +97,8 @@ async def get_task_status(task_id: str):
     Returns:
         Task details including status, progress, and results (if completed)
     """
-    tracker = get_task_tracker()
-    task = tracker.get_task(task_id)
+    service = get_ingestion_service()
+    task = service.get_task_status(task_id)
     
     if not task:
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
@@ -174,8 +123,8 @@ async def list_tasks(
     Returns:
         List of tasks (most recent first)
     """
-    tracker = get_task_tracker()
-    tasks = tracker.list_tasks(status=status, user_id=user_id, limit=limit)
+    service = get_ingestion_service()
+    tasks = service.list_tasks(status=status, user_id=user_id, limit=limit)
     
     return {
         "count": len(tasks),
