@@ -1,0 +1,159 @@
+"""
+Database utilities for managing connections, sessions, and migrations.
+
+This module provides utilities for database operations including session
+management, connection pooling, and migration handling.
+"""
+from typing import AsyncGenerator, Optional
+from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
+from app.config.database_settings import DatabaseSettings
+from app.models import Base
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class DatabaseManager:
+    """Manages database connections, sessions, and migrations."""
+    
+    def __init__(self, settings: DatabaseSettings):
+        """Initialize database manager with settings."""
+        self.settings = settings
+        self.engine = None
+        self.async_engine = None
+        self.session_factory = None
+    
+    def create_engine(self):
+        """Create synchronous SQLAlchemy engine."""
+        config = self.settings.get_database_config()
+        
+        engine_kwargs = {
+            "echo": config.get("echo", False),
+        }
+        
+        # Add pool configuration for PostgreSQL and MySQL
+        if config["provider"] in {"postgresql", "mysql"}:
+            engine_kwargs.update({
+                "pool_size": config.get("pool_size", 5),
+                "max_overflow": config.get("max_overflow", 10),
+                "pool_timeout": config.get("pool_timeout", 30),
+                "pool_recycle": config.get("pool_recycle", 3600),
+            })
+        
+        # Add SQLite-specific configuration
+        if config["provider"] == "sqlite":
+            engine_kwargs["connect_args"] = config.get("connect_args", {})
+        
+        self.engine = create_engine(config["url"], **engine_kwargs)
+        return self.engine
+    
+    async def create_async_engine(self):
+        """Create asynchronous SQLAlchemy engine."""
+        config = self.settings.get_database_config()
+        url = self.settings.get_async_database_url()
+        
+        engine_kwargs = {
+            "echo": config.get("echo", False),
+        }
+        
+        # Add pool configuration for PostgreSQL and MySQL
+        if config["provider"] in {"postgresql", "mysql"}:
+            engine_kwargs.update({
+                "pool_size": config.get("pool_size", 5),
+                "max_overflow": config.get("max_overflow", 10),
+                "pool_timeout": config.get("pool_timeout", 30),
+                "pool_recycle": config.get("pool_recycle", 3600),
+            })
+        else:
+            # SQLite doesn't support connection pooling
+            engine_kwargs["poolclass"] = NullPool
+        
+        # Add SQLite-specific configuration
+        if config["provider"] == "sqlite":
+            engine_kwargs["connect_args"] = config.get("connect_args", {})
+        
+        self.async_engine = create_async_engine(url, **engine_kwargs)
+        return self.async_engine
+    
+    async def get_session(self) -> AsyncSession:
+        """Get an async database session."""
+        if not self.session_factory:
+            await self.create_async_engine()
+            self.session_factory = async_sessionmaker(
+                self.async_engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+        
+        return self.session_factory()
+    
+    async def create_all_tables(self):
+        """Create all tables in the database."""
+        if not self.async_engine:
+            await self.create_async_engine()
+        
+        async with self.async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            logger.info("All database tables created successfully")
+    
+    async def drop_all_tables(self):
+        """Drop all tables from the database."""
+        if not self.async_engine:
+            await self.create_async_engine()
+        
+        async with self.async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            logger.warning("All database tables dropped")
+    
+    def init_db_sync(self):
+        """Initialize database synchronously (for CLI usage)."""
+        if not self.engine:
+            self.create_engine()
+        
+        Base.metadata.create_all(self.engine)
+        logger.info("Database initialized successfully")
+    
+    async def health_check(self) -> bool:
+        """Check database connectivity and health."""
+        try:
+            if not self.async_engine:
+                await self.create_async_engine()
+            
+            async with self.async_engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+                logger.info("Database health check passed")
+                return True
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            return False
+    
+    async def close(self):
+        """Close database connections."""
+        if self.async_engine:
+            await self.async_engine.dispose()
+            logger.info("Database connections closed")
+
+
+# Module-level instance (to be initialized by the application)
+db_manager: Optional[DatabaseManager] = None
+
+
+async def get_db_manager() -> DatabaseManager:
+    """Get or create the database manager instance."""
+    global db_manager
+    if db_manager is None:
+        settings = DatabaseSettings()
+        db_manager = DatabaseManager(settings)
+    return db_manager
+
+
+async def get_session() -> AsyncGenerator[AsyncSession, None]:
+    """Dependency for FastAPI to get database sessions."""
+    manager = await get_db_manager()
+    session = await manager.get_session()
+    try:
+        yield session
+    finally:
+        await session.close()
