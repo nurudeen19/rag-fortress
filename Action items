@@ -1,0 +1,14 @@
+Action items
+setup db
+set app configuration table
+user table
+user roles manager
+add files tracker table to track uploaded files for ingestion
+fix pgadmin web interface
+migrate database
+setup db in application startup
+check when to and not to migrate data
+choose when to run job for data ingestion
+
+Test to see if no errors are reported
+

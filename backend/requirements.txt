@@ -1,126 +1,125 @@
 # ============================================================================
 # FastAPI Core
 # ============================================================================
-fastapi
-uvicorn[standard]
-pydantic
-pydantic-settings
+fastapi==0.121.0
+uvicorn[standard]==0.38.0
+pydantic==2.12.4
+pydantic-settings==2.11.0
 
 # ============================================================================
 # HTTP Client & Async Operations
 # ============================================================================
-httpx
-aiofiles  # Async file operations
+httpx==0.28.1
+aiofiles==23.2.1
+aiohttp==3.9.1
 
 # ============================================================================
 # Database (SQL)
 # ============================================================================
-sqlalchemy
-alembic
+sqlalchemy==2.0.44
+alembic==1.13.1
 
 # Database Drivers
 # PostgreSQL (recommended for production)
-psycopg2-binary  # Sync PostgreSQL driver
-asyncpg  # Async PostgreSQL driver
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
 
 # MySQL
-pymysql  # Sync MySQL driver
-aiomysql  # Async MySQL driver
-cryptography  # Required for MySQL SSL
+pymysql==1.1.0
+aiomysql==0.2.0
+cryptography==41.0.7
 
 # SQLite (included in Python, but async driver needed)
-aiosqlite  # Async SQLite driver
+aiosqlite==0.20.0
 
 # ============================================================================
 # LangChain Core
 # ============================================================================
-langchain
-langchain-core
-langchain-community
+langchain==1.0.3
+langchain-core==1.0.3
+langchain-community==0.4.1
 
 # ============================================================================
 # LangChain - LLM Providers
 # ============================================================================
 # OpenAI
-langchain-openai
-openai
+langchain-openai==1.0.2
+openai==2.7.1
 
 # Google (Gemini)
-langchain-google-genai
-google-generativeai
+langchain-google-genai==1.0.8
+google-generativeai==0.6.0
 
 # HuggingFace
-langchain-huggingface
-huggingface-hub
-transformers
-torch  # Required for local models
+langchain-huggingface==0.0.53
+transformers==4.57.1
 
 # ============================================================================
 # LangChain - Embedding Providers
 # ============================================================================
 # Sentence Transformers (HuggingFace)
-sentence-transformers
+sentence-transformers==5.1.2
 
 # Cohere
-langchain-cohere
-cohere
+langchain-cohere==0.2.0
+cohere==5.5.8
 
 # ============================================================================
 # LangChain - Vector Databases
 # ============================================================================
 # Chroma
-langchain-chroma
-chromadb
+langchain-chroma==0.1.7
+chromadb==0.5.11
 
 # Qdrant
-langchain-qdrant
-qdrant-client
+langchain-qdrant==1.1.11
+qdrant-client==1.10.0
 
 # Pinecone
-langchain-pinecone
-pinecone-client
+langchain-pinecone==0.1.6
+pinecone-client==5.0.1
 
 # Weaviate
-langchain-weaviate
-weaviate-client
+langchain-weaviate==0.1.8
+weaviate-client==4.1.10
 
 # Milvus
-langchain-milvus
-pymilvus
+langchain-milvus==0.1.6
+pymilvus==2.4.3
 
 # ============================================================================
 # Document Processing & Text Splitting
 # ============================================================================
-pypdf2
-unstructured  # Advanced document parsing
-tiktoken  # Token counting for chunking
-python-docx  # Word document processing
-openpyxl  # Excel file processing
-python-pptx  # PowerPoint processing
-python-multipart  # Form data parsing
+pypdf2==4.0.2
+unstructured==0.13.11
+tiktoken==0.12.0
+python-docx==0.8.11
+openpyxl==3.1.2
+python-pptx==0.6.23
+python-multipart==0.0.6
 
 # ============================================================================
 # Security & Authentication
 # ============================================================================
-python-jose[cryptography]
-passlib[bcrypt]  # Password hashing
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
 
 # ============================================================================
 # Logging & Monitoring
 # ============================================================================
-python-json-logger
-colorlog  # Colored logging
+python-json-logger==2.0.7
+colorlog==6.8.2
 
 # ============================================================================
 # Environment & Configuration
 # ============================================================================
-python-dotenv
+python-dotenv==1.2.1
 
 # ============================================================================
 # Testing
 # ============================================================================
-pytest
-pytest-asyncio
-pytest-cov
-pytest-mock
+pytest==8.4.2
+pytest-asyncio==0.24.0
+pytest-cov==5.0.0
+pytest-mock==3.14.0
 
