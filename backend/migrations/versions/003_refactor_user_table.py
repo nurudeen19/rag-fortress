@@ -32,23 +32,6 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('suspension_reason', sa.Text(), nullable=True))
     op.add_column('users', sa.Column('suspended_at', sa.DateTime(), nullable=True))
     
-    # Migrate full_name to first_name and last_name if data exists
-    op.execute("""
-        UPDATE users
-        SET 
-            first_name = CASE 
-                WHEN full_name IS NOT NULL THEN 
-                    SUBSTR(full_name, 1, INSTR(full_name || ' ', ' ') - 1)
-                ELSE 'Unknown'
-            END,
-            last_name = CASE 
-                WHEN full_name IS NOT NULL AND INSTR(full_name, ' ') > 0 THEN
-                    SUBSTR(full_name, INSTR(full_name, ' ') + 1)
-                ELSE ''
-            END
-        WHERE full_name IS NOT NULL
-    """)
-    
     # Set NOT NULL constraint for first_name and last_name
     op.alter_column('users', 'first_name', existing_type=sa.String(length=100), nullable=False)
     op.alter_column('users', 'last_name', existing_type=sa.String(length=100), nullable=False)
