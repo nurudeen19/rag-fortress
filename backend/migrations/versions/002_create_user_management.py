@@ -12,14 +12,15 @@ This migration creates all tables related to user management:
 - role_permissions: Association table for roles and permissions
 """
 from typing import Sequence, Union
+from datetime import datetime, timezone
 
 from alembic import op
 import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "002_create_user_management"
-down_revision: Union[str, None] = "001_create_application_settings"
+revision: str = "002"
+down_revision: Union[str, None] = "001"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
@@ -156,6 +157,8 @@ def upgrade() -> None:
         sa.column('updated_at'),
     )
     
+    now = datetime.now(timezone.utc)
+    
     op.bulk_insert(
         roles_table,
         [
@@ -163,22 +166,22 @@ def upgrade() -> None:
                 'name': 'admin',
                 'description': 'Administrator with full access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'user',
                 'description': 'Regular user with basic access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'viewer',
                 'description': 'Read-only access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
         ]
     )
@@ -203,32 +206,32 @@ def upgrade() -> None:
                 'description': 'Create new users',
                 'resource': 'user',
                 'action': 'create',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'user:read',
                 'description': 'Read user information',
                 'resource': 'user',
                 'action': 'read',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'user:update',
                 'description': 'Update user information',
                 'resource': 'user',
                 'action': 'update',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'user:delete',
                 'description': 'Delete users',
                 'resource': 'user',
                 'action': 'delete',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             # Document permissions
             {
@@ -236,32 +239,32 @@ def upgrade() -> None:
                 'description': 'Upload and create documents',
                 'resource': 'document',
                 'action': 'create',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'document:read',
                 'description': 'Read and view documents',
                 'resource': 'document',
                 'action': 'read',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'document:update',
                 'description': 'Update document metadata',
                 'resource': 'document',
                 'action': 'update',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'document:delete',
                 'description': 'Delete documents',
                 'resource': 'document',
                 'action': 'delete',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             # Settings permissions
             {
@@ -269,16 +272,16 @@ def upgrade() -> None:
                 'description': 'Read application settings',
                 'resource': 'settings',
                 'action': 'read',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'code': 'settings:update',
                 'description': 'Update application settings',
                 'resource': 'settings',
                 'action': 'update',
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
         ]
     )

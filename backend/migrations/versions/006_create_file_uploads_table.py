@@ -17,8 +17,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "006_create_file_uploads_table"
-down_revision: Union[str, None] = "005_create_user_invitations_and_auth_tables"
+revision = '006'
+down_revision = '007'
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 

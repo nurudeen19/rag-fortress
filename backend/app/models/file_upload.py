@@ -95,7 +95,7 @@ class FileUpload(Base):
     # Security
     security_level: Mapped[SecurityLevel] = mapped_column(
         SQLEnum(SecurityLevel),
-        default=SecurityLevel.INTERNAL,
+        default=SecurityLevel.GENERAL,
         nullable=False,
         index=True
     )

@@ -57,7 +57,7 @@ class UserPermission(Base):
     # Organization-wide permission level
     org_level_permission: Mapped[PermissionLevel] = mapped_column(
         Integer,
-        default=PermissionLevel.EMPLOYEE,
+        default=PermissionLevel.GENERAL,
         nullable=False
     )
     

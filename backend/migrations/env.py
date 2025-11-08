@@ -32,14 +32,21 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 from app.models import Base
+from app.config.database_settings import DatabaseSettings
 
 target_metadata = Base.metadata
 
 # Override sqlalchemy.url with environment variable if set
-db_url = os.getenv(
-    "SQLALCHEMY_URL",
-    os.getenv("DATABASE_URL", "sqlite:///./rag_fortress.db")
-)
+# Priority: SQLALCHEMY_URL > DATABASE_URL > DatabaseSettings.get_database_url()
+if os.getenv("SQLALCHEMY_URL"):
+    db_url = os.getenv("SQLALCHEMY_URL")
+elif os.getenv("DATABASE_URL"):
+    db_url = os.getenv("DATABASE_URL")
+else:
+    # Use DatabaseSettings to construct URL from environment variables
+    db_settings = DatabaseSettings()
+    db_url = db_settings.get_database_url()
+
 config.set_main_option("sqlalchemy.url", db_url)
 
 

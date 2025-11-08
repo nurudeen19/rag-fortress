@@ -44,20 +44,14 @@ class StartupController:
             await self._initialize_embeddings()
             
             # Initialize LLM provider
-            await self._initialize_llm()
+            # await self._initialize_llm()
             
             # Initialize fallback LLM provider
-            await self._initialize_fallback_llm()
+            # await self._initialize_fallback_llm()
             
             # Initialize retriever
-            await self._initialize_retriever()
+            # await self._initialize_retriever()
 
-            # Optional: very light vector store smoke test (no ingestion)
-            # This is gated by env STARTUP_VECTOR_STORE_SMOKE_TEST to avoid
-            # heavy operations or side effects during startup.
-            if getattr(settings, "STARTUP_VECTOR_STORE_SMOKE_TEST", False):
-                self._smoke_test_vector_store()
-            
             # Future initializations will be added here:
             # - Vector store connection pool
             # - Database connections

@@ -10,14 +10,15 @@ This migration:
 3. Updates default roles to include: admin, executive, manager, user
 """
 from typing import Sequence, Union
+from datetime import datetime, timezone
 
 from alembic import op
 import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "005_create_user_invitations_and_auth_tables"
-down_revision: Union[str, None] = "004_create_user_profiles_table"
+revision: str = "005"
+down_revision: Union[str, None] = "004"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
@@ -65,6 +66,8 @@ def upgrade() -> None:
         sa.column('updated_at'),
     )
     
+    now = datetime.now(timezone.utc)
+    
     op.bulk_insert(
         roles_table,
         [
@@ -72,29 +75,29 @@ def upgrade() -> None:
                 'name': 'admin',
                 'description': 'Administrator with full access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'executive',
                 'description': 'Executive with strategic access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'manager',
                 'description': 'Manager with team oversight access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'user',
                 'description': 'Regular user with standard access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
         ]
     )
@@ -124,6 +127,8 @@ def downgrade() -> None:
         sa.column('updated_at'),
     )
     
+    now = datetime.now(timezone.utc)
+    
     op.bulk_insert(
         roles_table,
         [
@@ -131,22 +136,22 @@ def downgrade() -> None:
                 'name': 'admin',
                 'description': 'Administrator with full access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'user',
                 'description': 'Regular user with basic access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
             {
                 'name': 'viewer',
                 'description': 'Read-only access',
                 'is_system': True,
-                'created_at': sa.func.now(),
-                'updated_at': sa.func.now(),
+                'created_at': now,
+                'updated_at': now,
             },
         ]
     )

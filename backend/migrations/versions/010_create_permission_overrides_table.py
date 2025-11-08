@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '010_create_permission_overrides_table'
-down_revision = '009_create_user_permissions_table'
+revision = '010'
+down_revision = '009'
 branch_labels = None
 depends_on = None
 
@@ -71,13 +71,13 @@ def upgrade() -> None:
             'created_at',
             sa.DateTime(),
             nullable=False,
-            server_default=sa.func.now(),
+            server_default=sa.func.current_timestamp(),
         ),
         sa.Column(
             'updated_at',
             sa.DateTime(),
             nullable=False,
-            server_default=sa.func.now(),
+            server_default=sa.func.current_timestamp(),
         ),
         sa.ForeignKeyConstraint(
             ['user_id'],

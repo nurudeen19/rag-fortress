@@ -19,8 +19,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "008_update_security_level_to_numbered"
-down_revision: Union[str, None] = "007_create_departments_table"
+revision = '008'
+down_revision = '006'
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
@@ -46,23 +46,15 @@ def upgrade() -> None:
         table_name='file_uploads'
     )
     
-    # Step 3: Alter the column to INTEGER type
+    # Step 3: Alter the column to INTEGER type with new numeric default
     op.alter_column(
         'file_uploads',
         'security_level',
         existing_type=sa.String(length=50),
         type_=sa.Integer(),
         existing_nullable=False,
-        existing_server_default='internal'
-    )
-    
-    # Step 4: Update the server default to numeric value (2 = INTERNAL)
-    op.alter_column(
-        'file_uploads',
-        'security_level',
-        existing_type=sa.Integer(),
-        server_default='2',
-        existing_nullable=False
+        existing_server_default='internal',
+        server_default=sa.text('2')
     )
     
     # Step 5: Recreate the index
@@ -95,26 +87,18 @@ def downgrade() -> None:
         END
     """)
     
-    # Step 3: Alter the column back to STRING type
+    # Step 3: Alter the column back to STRING type with original default
     op.alter_column(
         'file_uploads',
         'security_level',
         existing_type=sa.Integer(),
         type_=sa.String(length=50),
         existing_nullable=False,
-        existing_server_default='2'
+        existing_server_default='2',
+        server_default=sa.text("'internal'")
     )
     
-    # Step 4: Restore original server default
-    op.alter_column(
-        'file_uploads',
-        'security_level',
-        existing_type=sa.String(length=50),
-        server_default='internal',
-        existing_nullable=False
-    )
-    
-    # Step 5: Recreate the index
+    # Step 4: Recreate the index
     op.create_index(
         op.f('ix_file_upload_security_level'),
         'file_uploads',

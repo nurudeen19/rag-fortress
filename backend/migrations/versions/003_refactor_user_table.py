@@ -16,8 +16,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "003_refactor_user_table"
-down_revision: Union[str, None] = "002_create_user_management"
+revision: str = "003"
+down_revision: Union[str, None] = "002"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
@@ -26,15 +26,12 @@ def upgrade() -> None:
     """Apply user table refactoring."""
     
     # Add new columns to users table
-    op.add_column('users', sa.Column('first_name', sa.String(length=100), nullable=True))
-    op.add_column('users', sa.Column('last_name', sa.String(length=100), nullable=True))
+    # For MySQL/PostgreSQL: add with NOT NULL directly
+    op.add_column('users', sa.Column('first_name', sa.String(length=100), nullable=False, server_default='Unknown'))
+    op.add_column('users', sa.Column('last_name', sa.String(length=100), nullable=False, server_default='Unknown'))
     op.add_column('users', sa.Column('is_suspended', sa.Boolean(), nullable=False, server_default='0'))
     op.add_column('users', sa.Column('suspension_reason', sa.Text(), nullable=True))
     op.add_column('users', sa.Column('suspended_at', sa.DateTime(), nullable=True))
-    
-    # Set NOT NULL constraint for first_name and last_name
-    op.alter_column('users', 'first_name', existing_type=sa.String(length=100), nullable=False)
-    op.alter_column('users', 'last_name', existing_type=sa.String(length=100), nullable=False)
     
     # Drop old columns
     op.drop_column('users', 'full_name')
