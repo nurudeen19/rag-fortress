@@ -3,7 +3,7 @@ Document and chunk schemas for RAG system.
 Standardized format used across all vector store providers.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from uuid import UUID, uuid4
 from enum import Enum
@@ -61,7 +61,7 @@ class ChunkMetadata(BaseModel):
     
     # Temporal information
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(timezone.utc),
         description="When the chunk was created/indexed"
     )
     

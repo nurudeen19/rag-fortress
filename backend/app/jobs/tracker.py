@@ -4,7 +4,7 @@ Uses FastAPI's BackgroundTasks - no complex queue needed!
 """
 
 from typing import Dict, Optional, List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.jobs import IngestionStatus
 
@@ -21,7 +21,7 @@ class IngestionTask:
         self.progress = 0.0
         self.progress_message = "Task queued"
         
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         
@@ -31,7 +31,7 @@ class IngestionTask:
     def start(self):
         """Mark task as started."""
         self.status = IngestionStatus.RUNNING
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.progress_message = "Scanning pending directory..."
     
     def update_progress(self, progress: float, message: str):
@@ -42,7 +42,7 @@ class IngestionTask:
     def complete(self, result: Dict[str, Any]):
         """Mark as completed."""
         self.status = IngestionStatus.COMPLETED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.result = result
         self.progress = 1.0
         self.progress_message = "Ingestion completed"
@@ -50,7 +50,7 @@ class IngestionTask:
     def fail(self, error: str):
         """Mark as failed."""
         self.status = IngestionStatus.FAILED
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         self.error = error
         self.progress_message = f"Failed: {error}"
     

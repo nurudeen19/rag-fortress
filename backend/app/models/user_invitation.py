@@ -3,7 +3,7 @@ UserInvitation model for tracking user invitations.
 """
 from sqlalchemy import String, Text, ForeignKey, DateTime, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 from app.models.base import Base
 
@@ -47,7 +47,7 @@ class UserInvitation(Base):
     
     def is_expired(self) -> bool:
         """Check if invitation has expired."""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
     
     def is_valid(self) -> bool:
         """Check if invitation is still valid for acceptance."""

@@ -1,9 +1,9 @@
 """
 Core user model for authentication and user data.
 """
-from sqlalchemy import String, Boolean, Text, ForeignKey, DateTime
+from sqlalchemy import String, Boolean, Text, ForeignKey, DateTime, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 from app.models.base import Base
 
@@ -11,6 +11,8 @@ if TYPE_CHECKING:
     from app.models.user_profile import UserProfile
     from app.models.user_invitation import UserInvitation
     from app.models.auth import Role
+    from app.models.department import Department
+    from app.models.user_permission import UserPermission
 
 
 class User(Base):
@@ -26,6 +28,13 @@ class User(Base):
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     
+    # Organizational
+    department_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True
+    )
+    
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
@@ -38,6 +47,11 @@ class User(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    department: Mapped[Optional["Department"]] = relationship(
+        "Department",
+        back_populates="users",
+        foreign_keys=[department_id],
+    )
     roles: Mapped[list["Role"]] = relationship(
         "Role",
         secondary="user_roles",
@@ -48,6 +62,13 @@ class User(Base):
         "UserInvitation",
         back_populates="invited_by",
         cascade="all, delete-orphan",
+    )
+    permission: Mapped[Optional["UserPermission"]] = relationship(
+        "UserPermission",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        foreign_keys="UserPermission.user_id"
     )
     
     def __repr__(self) -> str:
@@ -67,7 +88,7 @@ class User(Base):
     def suspend_account(self, reason: str = "") -> None:
         self.is_suspended = True
         self.suspension_reason = reason
-        self.suspended_at = datetime.utcnow()
+        self.suspended_at = datetime.now(timezone.utc)
     
     def unsuspend_account(self) -> None:
         self.is_suspended = False

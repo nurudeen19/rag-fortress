@@ -45,11 +45,9 @@ langchain-community>=0.4.1
 # ============================================================================
 # OpenAI
 langchain-openai>=1.0.2
-openai>=2.7.1
 
 # Google (Gemini)
 langchain-google-genai>=3.0.1
-google-generativeai>=0.8.5
 
 # HuggingFace
 langchain-huggingface>=1.0.1
@@ -70,7 +68,6 @@ cohere>=5.5.8
 # ============================================================================
 # Chroma
 langchain-chroma>=1.0.0
-chromadb>=0.5.11
 
 # Qdrant
 langchain-qdrant>=1.1.0
