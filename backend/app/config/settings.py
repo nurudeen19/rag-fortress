@@ -30,6 +30,7 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         """
         # Validate app-specific settings
         self.validate_rag_config()
+        self.validate_email_config()
         
         # Validate LLM configuration
         self.validate_llm_config()

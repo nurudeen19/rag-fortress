@@ -68,7 +68,10 @@ def create_app() -> FastAPI:
     
     # Register routers
     from app.routes.jobs import router as jobs_router
+    from app.routes.email import router as email_router
+    
     app.include_router(jobs_router, prefix="/api/v1")
+    app.include_router(email_router)
     
     # Add more routers here as they're created:
     # from app.routes.documents import router as documents_router
