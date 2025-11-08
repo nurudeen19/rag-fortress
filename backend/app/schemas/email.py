@@ -74,8 +74,9 @@ class InvitationRequest(BaseModel):
     recipient_email: EmailStr = Field(..., description="Email address to invite")
     recipient_name: str = Field(..., description="Full name of invitee")
     inviter_name: str = Field(..., description="Name of person sending invitation")
-    invite_token: str = Field(..., description="Token for accepting invitation")
-    message: Optional[str] = Field(None, description="Optional custom message from inviter")
+    organization_name: str = Field(..., description="Name of organization/team")
+    invitation_token: str = Field(..., description="Token for accepting invitation")
+    custom_message: Optional[str] = Field(None, description="Optional custom message from inviter")
     
     class Config:
         schema_extra = {
@@ -83,8 +84,32 @@ class InvitationRequest(BaseModel):
                 "recipient_email": "colleague@example.com",
                 "recipient_name": "Alice Johnson",
                 "inviter_name": "Bob Smith",
-                "invite_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-                "message": "Please join our team to collaborate on documents!"
+                "organization_name": "Acme Corp",
+                "invitation_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "custom_message": "Please join our team to collaborate on documents!"
+            }
+        }
+
+
+class NotificationRequest(BaseModel):
+    """Single notification email request."""
+    
+    recipient_email: EmailStr = Field(..., description="Email address of recipient")
+    recipient_name: str = Field(..., description="Full name of recipient")
+    notification_title: str = Field(..., description="Title of the notification")
+    notification_message: str = Field(..., description="Notification message content")
+    action_url: Optional[str] = Field(None, description="Optional URL for call-to-action")
+    action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
+    
+    class Config:
+        schema_extra = {
+            "example": {
+                "recipient_email": "user@example.com",
+                "recipient_name": "John Doe",
+                "notification_title": "Document Processed",
+                "notification_message": "Your document has been successfully processed.",
+                "action_url": "https://example.com/documents/123",
+                "action_text": "View Document"
             }
         }
 
@@ -92,13 +117,12 @@ class InvitationRequest(BaseModel):
 class BulkNotificationRequest(BaseModel):
     """Bulk notification email request."""
     
-    recipients: List[dict] = Field(
+    recipients: List[EmailStr] = Field(
         ...,
-        description="List of recipients with 'email' and 'name' keys"
+        description="List of recipient email addresses"
     )
-    subject: str = Field(..., description="Email subject line")
-    title: str = Field(..., description="Email title/heading")
-    message: str = Field(..., description="Email body message")
+    notification_title: str = Field(..., description="Title of the notification")
+    notification_message: str = Field(..., description="Notification message content")
     action_url: Optional[str] = Field(None, description="Optional URL for call-to-action")
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
@@ -106,12 +130,11 @@ class BulkNotificationRequest(BaseModel):
         schema_extra = {
             "example": {
                 "recipients": [
-                    {"email": "user1@example.com", "name": "User One"},
-                    {"email": "user2@example.com", "name": "User Two"}
+                    "user1@example.com",
+                    "user2@example.com"
                 ],
-                "subject": "System Maintenance Notice",
-                "title": "Scheduled Maintenance",
-                "message": "We're performing maintenance on our servers.",
+                "notification_title": "System Maintenance Notice",
+                "notification_message": "We're performing maintenance on our servers.",
                 "action_url": "https://status.example.com",
                 "action_text": "Check Status"
             }

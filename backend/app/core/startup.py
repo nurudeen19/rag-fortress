@@ -4,6 +4,7 @@ Initializes critical components on server start.
 """
 
 from app.core import get_logger
+from app.core.email_client import init_email_client
 from app.core.embedding_factory import get_embedding_provider
 from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider, test_llm_provider
 from app.core.vector_store_factory import get_vector_store, get_retriever
@@ -22,6 +23,7 @@ class StartupController:
     
     def __init__(self):
         self.initialized = False
+        self.email_client = None
         self.embedding_provider = None
         self.llm_provider = None
         self.fallback_llm_provider = None
@@ -40,6 +42,9 @@ class StartupController:
         logger.info("Starting application initialization...")
         
         try:
+            # Initialize email client
+            await self._initialize_email_client()
+            
             # Initialize embedding provider
             await self._initialize_embeddings()
             
@@ -65,6 +70,30 @@ class StartupController:
         except Exception as e:
             logger.error(f"✗ Application initialization failed: {e}", exc_info=True)
             raise
+    
+    async def _initialize_email_client(self):
+        """Initialize email client for sending emails."""
+        logger.info("Initializing email client...")
+        
+        try:
+            # Initialize global email client
+            self.email_client = init_email_client()
+            
+            # Initialize async components
+            await self.email_client.initialize()
+            
+            if self.email_client.is_configured():
+                logger.info("✓ Email client initialized and configured")
+            else:
+                logger.warning(
+                    "⚠ Email client initialized but not configured "
+                    "(missing SMTP credentials - email features will be disabled)"
+                )
+        
+        except Exception as e:
+            logger.error(f"Failed to initialize email client: {e}")
+            # Don't raise - email is optional, app should still start
+            logger.warning("Email features will be unavailable")
     
     async def _initialize_embeddings(self):
         """Initialize and warm up embedding provider."""
@@ -175,6 +204,10 @@ class StartupController:
         logger.info("Starting application shutdown...")
         
         try:
+            # Shutdown email client
+            if self.email_client:
+                await self.email_client.shutdown()
+            
             # Future cleanup tasks:
             # - Close database connections
             # - Flush caches

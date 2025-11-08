@@ -1,5 +1,6 @@
 # Core module
 from .logging import setup_logging, get_logger, default_logger
+from .email_client import EmailClient, get_email_client, init_email_client
 from .exceptions import (
     # Base
     RAGFortressException,
@@ -55,6 +56,11 @@ __all__ = [
     'setup_logging',
     'get_logger',
     'default_logger',
+    
+    # Email Client
+    'EmailClient',
+    'get_email_client',
+    'init_email_client',
     
     # Base Exceptions
     'RAGFortressException',

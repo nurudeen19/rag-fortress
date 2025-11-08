@@ -71,27 +71,6 @@ class AppSettings(BaseSettings):
     LOG_MAX_BYTES: int = Field(10485760, env="LOG_MAX_BYTES")  # 10MB
     LOG_BACKUP_COUNT: int = Field(5, env="LOG_BACKUP_COUNT")
 
-    # Email Configuration (SMTP)
-    SMTP_SERVER: str = Field("smtp.gmail.com", env="SMTP_SERVER")
-    SMTP_PORT: int = Field(587, env="SMTP_PORT")
-    SMTP_USERNAME: Optional[str] = Field(None, env="SMTP_USERNAME")
-    SMTP_PASSWORD: Optional[str] = Field(None, env="SMTP_PASSWORD")
-    SMTP_FROM_EMAIL: str = Field("noreply@ragfortress.com", env="SMTP_FROM_EMAIL")
-    SMTP_FROM_NAME: str = Field("RAG Fortress", env="SMTP_FROM_NAME")
-    SMTP_USE_TLS: bool = Field(True, env="SMTP_USE_TLS")
-    SMTP_USE_SSL: bool = Field(False, env="SMTP_USE_SSL")
-    
-    # Email Settings
-    EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES: int = Field(24 * 60, env="EMAIL_VERIFICATION_TOKEN_EXPIRE_MINUTES")  # 24 hours
-    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(60, env="PASSWORD_RESET_TOKEN_EXPIRE_MINUTES")  # 1 hour
-    INVITE_TOKEN_EXPIRE_DAYS: int = Field(7, env="INVITE_TOKEN_EXPIRE_DAYS")  # 7 days
-    
-    # Frontend URLs for email links
-    FRONTEND_URL: str = Field("http://localhost:5173", env="FRONTEND_URL")
-    EMAIL_VERIFICATION_URL: str = Field("http://localhost:5173/verify-email", env="EMAIL_VERIFICATION_URL")
-    PASSWORD_RESET_URL: str = Field("http://localhost:5173/reset-password", env="PASSWORD_RESET_URL")
-    INVITE_URL: str = Field("http://localhost:5173/accept-invite", env="INVITE_URL")
-
     # Startup Options
     # If true, perform a very lightweight vector store initialization check
     # during application startup (no document ingestion).
@@ -158,19 +137,3 @@ class AppSettings(BaseSettings):
         
         if self.TOP_K_RESULTS < 1:
             raise ValueError("TOP_K_RESULTS must be at least 1")
-
-    def validate_email_config(self):
-        """Validate email configuration."""
-        # Only validate if SMTP is configured
-        if self.SMTP_USERNAME and self.SMTP_PASSWORD:
-            if self.SMTP_PORT < 1 or self.SMTP_PORT > 65535:
-                raise ValueError(f"SMTP_PORT must be between 1 and 65535, got {self.SMTP_PORT}")
-            
-            if not self.SMTP_FROM_EMAIL:
-                raise ValueError("SMTP_FROM_EMAIL is required when SMTP is configured")
-            
-            if self.SMTP_USE_TLS and self.SMTP_USE_SSL:
-                raise ValueError("Cannot use both SMTP_USE_TLS and SMTP_USE_SSL")
-        else:
-            # Log warning but don't fail - email is optional
-            pass

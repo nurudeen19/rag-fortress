@@ -8,9 +8,10 @@ from .llm_settings import LLMSettings
 from .embedding_settings import EmbeddingSettings
 from .vectordb_settings import VectorDBSettings
 from .database_settings import DatabaseSettings
+from .email_settings import EmailSettings
 
 
-class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings):
+class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings):
     """
     Main settings class that inherits from all specialized settings modules.
     
@@ -30,7 +31,6 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         """
         # Validate app-specific settings
         self.validate_rag_config()
-        self.validate_email_config()
         
         # Validate LLM configuration
         self.validate_llm_config()
@@ -44,5 +44,8 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         
         # Validate database configuration
         DatabaseSettings.validate_config(self, self.ENVIRONMENT)
+        
+        # Validate email configuration
+        EmailSettings.validate_config(self)
 
 settings = Settings()
