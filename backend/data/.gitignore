@@ -4,5 +4,8 @@
 !.gitignore
 !README.md
 
+#keep sample data in pending folder
+!/knowledge_base/pending/**
 # But keep subdirectory structure
 !*/
+
