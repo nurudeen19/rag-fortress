@@ -78,6 +78,11 @@ class AppSettings(BaseSettings):
         False, env="STARTUP_VECTOR_STORE_SMOKE_TEST"
     )
 
+    # Admin Account Configuration
+    ADMIN_USERNAME: str = Field("admin", env="ADMIN_USERNAME")
+    ADMIN_EMAIL: str = Field("admin@ragfortress.local", env="ADMIN_EMAIL")
+    ADMIN_PASSWORD: str = Field("admin@RAGFortress123", env="ADMIN_PASSWORD")
+
     @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
     @classmethod
     def parse_list_fields(cls, v):

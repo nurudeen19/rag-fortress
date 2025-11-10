@@ -89,6 +89,19 @@ class DatabaseManager:
         
         return self.session_factory()
     
+    def get_session_factory(self):
+        """Get the session factory."""
+        if not self.session_factory:
+            # Note: This requires async_engine to be created first
+            if not self.async_engine:
+                raise RuntimeError("Async engine not created. Call create_async_engine() first.")
+            self.session_factory = async_sessionmaker(
+                self.async_engine,
+                class_=AsyncSession,
+                expire_on_commit=False,
+            )
+        return self.session_factory
+    
     async def create_all_tables(self):
         """Create all tables in the database."""
         if not self.async_engine:
@@ -134,6 +147,10 @@ class DatabaseManager:
         if self.async_engine:
             await self.async_engine.dispose()
             logger.info("Database connections closed")
+    
+    async def close_connection(self):
+        """Alias for close() for consistency."""
+        await self.close()
 
 
 # Module-level instance (to be initialized by the application)

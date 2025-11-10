@@ -1,6 +1,9 @@
 """
 Application Startup Controller.
 Initializes critical components on server start.
+
+Database seeding is NOT performed here - it's called programmatically via CLI or scripts.
+See app/core/seeders.py for seeding operations.
 """
 
 from app.core import get_logger
@@ -8,7 +11,9 @@ from app.core.email_client import init_email_client
 from app.core.embedding_factory import get_embedding_provider
 from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider, test_llm_provider
 from app.core.vector_store_factory import get_vector_store, get_retriever
+from app.core.database import DatabaseManager
 from app.config.settings import settings
+from app.config.database_settings import DatabaseSettings
 
 
 logger = get_logger(__name__)
@@ -23,6 +28,8 @@ class StartupController:
     
     def __init__(self):
         self.initialized = False
+        self.database_manager = None
+        self.async_session_factory = None
         self.email_client = None
         self.embedding_provider = None
         self.llm_provider = None
@@ -34,6 +41,9 @@ class StartupController:
         Initialize all critical components.
         
         This is called during FastAPI startup event.
+        
+        Note: Database seeding is NOT performed here. Use run_seeders() CLI command
+        or call DatabaseSeeder.seed_all() programmatically from scripts.
         """
         if self.initialized:
             logger.warning("StartupController already initialized")
@@ -42,7 +52,10 @@ class StartupController:
         logger.info("Starting application initialization...")
         
         try:
-            # Initialize email client
+            # Initialize database connection and create tables
+            await self._initialize_database()
+            
+            # Email client initialization
             await self._initialize_email_client()
             
             # Initialize embedding provider
@@ -59,7 +72,6 @@ class StartupController:
 
             # Future initializations will be added here:
             # - Vector store connection pool
-            # - Database connections
             # - Cache warming
             # - Background job queue
             # - etc.
@@ -69,6 +81,33 @@ class StartupController:
         
         except Exception as e:
             logger.error(f"✗ Application initialization failed: {e}", exc_info=True)
+            raise
+    
+    async def _initialize_database(self):
+        """Initialize database connection and create tables (without seeding)."""
+        logger.info("Initializing database...")
+        
+        try:
+            # Create database manager
+            db_settings = DatabaseSettings()
+            self.database_manager = DatabaseManager(db_settings)
+            
+            # Create async engine
+            logger.info("Creating database engine...")
+            self.database_manager.create_async_engine()
+            
+            # Create session factory
+            self.async_session_factory = self.database_manager.get_session_factory()
+            
+            # Create tables
+            logger.info("Creating database tables...")
+            await self.database_manager.create_all_tables()
+            
+            logger.info("✓ Database initialized successfully")
+            logger.info("To seed the database, run: python -m app.scripts.seed_database")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize database: {e}", exc_info=True)
             raise
     
     async def _initialize_email_client(self):
@@ -204,12 +243,17 @@ class StartupController:
         logger.info("Starting application shutdown...")
         
         try:
+            # Close database connections
+            if self.database_manager:
+                logger.info("Closing database connections...")
+                await self.database_manager.close_connection()
+            
             # Shutdown email client
             if self.email_client:
+                logger.info("Shutting down email client...")
                 await self.email_client.shutdown()
             
             # Future cleanup tasks:
-            # - Close database connections
             # - Flush caches
             # - Stop background workers
             # - etc.
