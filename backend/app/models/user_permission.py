@@ -100,12 +100,6 @@ class UserPermission(Base):
         foreign_keys=[department_id]
     )
     
-    permission_overrides: Mapped[list["PermissionOverride"]] = relationship(
-        "PermissionOverride",
-        back_populates="user",
-        foreign_keys="PermissionOverride.user_id"
-    )
-    
     # Indexes
     __table_args__ = (
         Index("idx_user_permission_org_level", "org_level_permission"),
@@ -139,12 +133,12 @@ class UserPermission(Base):
         if self.department_level_permission:
             levels.append(self.department_level_permission.value)
         
-        # Add any active overrides
-        active_overrides = self.get_active_overrides()
-        for override in active_overrides:
-            levels.append(override.override_permission_level)
+        # Add any active overrides (from user's overrides, not user_permission)
+        if self.user and self.user.permission_overrides:
+            for override in self.user.get_active_overrides():
+                levels.append(override.override_permission_level)
         
-        return max(levels)
+        return max(levels) if levels else self.org_level_permission.value
     
     def get_active_overrides(self) -> list["PermissionOverride"]:
         """
@@ -159,17 +153,10 @@ class UserPermission(Base):
         """
         from datetime import timezone
         
-        now = datetime.now(timezone.utc)
-        active = []
+        if not self.user:
+            return []
         
-        for override in self.permission_overrides:
-            if (
-                override.is_active
-                and override.valid_from <= now <= override.valid_until
-            ):
-                active.append(override)
-        
-        return active
+        return self.user.get_active_overrides()
     
     def has_active_override(
         self,

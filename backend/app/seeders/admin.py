@@ -3,15 +3,12 @@
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from passlib.context import CryptContext
 
 from app.models.user import User
 from app.models.auth import Role
 from app.seeders.base import BaseSeed
 
 logger = logging.getLogger(__name__)
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AdminSeeder(BaseSeed):
@@ -20,6 +17,35 @@ class AdminSeeder(BaseSeed):
     name = "admin"
     description = "Creates default admin account"
     required_tables = ["users", "roles"]  # Required tables
+    
+    def _get_password_hasher(self):
+        """Get the best available password hasher."""
+        # Try to import passlib with argon2 (most secure)
+        try:
+            from passlib.context import CryptContext
+            try:
+                return CryptContext(schemes=["argon2"], deprecated="auto")
+            except Exception:
+                # Fallback to pbkdf2 if argon2 not available
+                return CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
+        except ImportError:
+            return None
+    
+    def _hash_password(self, password: str) -> str:
+        """Hash password using available method."""
+        pwd_context = self._get_password_hasher()
+        
+        if pwd_context:
+            try:
+                return pwd_context.hash(password)
+            except Exception as e:
+                logger.warning(f"Failed to hash with passlib: {e}. Using SHA256 fallback.")
+        
+        # Fallback: use simple hash (development only)
+        import hashlib
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        logger.warning("Using SHA256 for password hashing (not recommended for production)")
+        return password_hash
     
     async def run(self, session: AsyncSession, **kwargs) -> dict:
         """Create admin account if it doesn't exist."""
@@ -61,13 +87,16 @@ class AdminSeeder(BaseSeed):
                 session.add(admin_role)
                 await session.flush()
             
+            # Hash password using available method
+            password_hash = self._hash_password(password)
+            
             # Create admin user
             admin_user = User(
                 username=username,
                 email=email,
                 first_name=first_name,
                 last_name=last_name,
-                password_hash=pwd_context.hash(password),
+                password_hash=password_hash,
                 is_active=True,
                 is_verified=True,
                 is_suspended=False

@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from app.models.auth import Role
     from app.models.department import Department
     from app.models.user_permission import UserPermission
+    from app.models.permission_override import PermissionOverride
 
 
 class User(Base):
@@ -71,6 +72,13 @@ class User(Base):
         foreign_keys="UserPermission.user_id"
     )
     
+    permission_overrides: Mapped[list["PermissionOverride"]] = relationship(
+        "PermissionOverride",
+        back_populates="user",
+        foreign_keys="PermissionOverride.user_id",
+        cascade="all, delete-orphan"
+    )
+    
     def __repr__(self) -> str:
         return f"<User(id={self.id}, username='{self.username}')>"
     
@@ -78,6 +86,20 @@ class User(Base):
     def full_name(self) -> str:
         """Get full name from first and last name."""
         return f"{self.first_name} {self.last_name}".strip()
+    
+    def get_active_overrides(self) -> list["PermissionOverride"]:
+        """Get all active, non-expired overrides for this user."""
+        now = datetime.now(timezone.utc)
+        active = []
+        
+        for override in self.permission_overrides:
+            if (
+                override.is_active
+                and override.valid_from <= now <= override.valid_until
+            ):
+                active.append(override)
+        
+        return active
     
     def has_role(self, role_name: str) -> bool:
         return any(role.name == role_name for role in self.roles)

@@ -43,9 +43,17 @@ class BaseSeed(ABC):
             return True, []
         
         try:
-            # Get the inspector from the session's connection
-            inspector = inspect(session.sync_connection)
-            existing_tables = inspector.get_table_names()
+            # Get table names using engine.inspect with run_sync
+            # run_sync passes the connection/session as first argument
+            engine = session.get_bind()
+            
+            def _inspect_tables(sync_session):
+                """Get table names (must be sync code). Gets sync session from run_sync."""
+                inspector = inspect(engine)
+                return inspector.get_table_names()
+            
+            # Execute synchronous inspection code
+            existing_tables = await session.run_sync(_inspect_tables)
             
             missing_tables = [
                 table for table in self.required_tables 

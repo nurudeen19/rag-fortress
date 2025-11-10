@@ -5,7 +5,7 @@ Manages file uploads, approvals, processing status, and security controls.
 Supports complete lifecycle management from upload through storage.
 Includes department-level file association for access control.
 """
-from sqlalchemy import String, Boolean, Text, ForeignKey, DateTime, Integer, Index, Enum as SQLEnum
+from sqlalchemy import String, Boolean, Text, ForeignKey, DateTime, Integer, Index, Enum as SQLEnum, TypeDecorator
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -38,6 +38,30 @@ class SecurityLevel(int, Enum):
     RESTRICTED = 2                  # Internal use only (tier 2)
     CONFIDENTIAL = 3              # Restricted access (tier 3)
     HIGHLY_CONFIDENTIAL = 4                # Highly restricted (tier 4)
+
+
+class IntEnumType(TypeDecorator):
+    """TypeDecorator to handle Python int enums in SQLAlchemy with integer columns."""
+    impl = Integer
+    cache_ok = True
+    
+    def __init__(self, enum_class):
+        super().__init__()
+        self.enum_class = enum_class
+    
+    def process_bind_param(self, value, dialect):
+        """Convert enum to integer when binding to database."""
+        if value is None:
+            return None
+        if isinstance(value, self.enum_class):
+            return value.value
+        return value
+    
+    def process_result_value(self, value, dialect):
+        """Convert integer back to enum when loading from database."""
+        if value is None:
+            return None
+        return self.enum_class(value)
 
 
 class FileUpload(Base):
@@ -94,7 +118,7 @@ class FileUpload(Base):
     
     # Security
     security_level: Mapped[SecurityLevel] = mapped_column(
-        SQLEnum(SecurityLevel),
+        IntEnumType(SecurityLevel),
         default=SecurityLevel.GENERAL,
         nullable=False,
         index=True
@@ -102,7 +126,7 @@ class FileUpload(Base):
     
     # Processing tracking
     status: Mapped[FileStatus] = mapped_column(
-        SQLEnum(FileStatus),
+        SQLEnum(FileStatus, native_enum=False),
         default=FileStatus.PENDING,
         nullable=False,
         index=True
