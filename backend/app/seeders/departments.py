@@ -15,6 +15,7 @@ class DepartmentsSeeder(BaseSeed):
     
     name = "departments"
     description = "Creates system departments"
+    required_tables = ["departments"]  # Required table
     
     DEPARTMENTS = [
         {
@@ -46,6 +47,16 @@ class DepartmentsSeeder(BaseSeed):
     async def run(self, session: AsyncSession, **kwargs) -> dict:
         """Create departments if they don't exist."""
         try:
+            # Validate required tables exist
+            tables_exist, missing_tables = await self.validate_tables_exist(session)
+            if not tables_exist:
+                error_msg = (
+                    f"Required table(s) missing: {', '.join(missing_tables)}. "
+                    "Please run migrations first: python migrate.py"
+                )
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+            
             created_departments = 0
             
             # Create departments

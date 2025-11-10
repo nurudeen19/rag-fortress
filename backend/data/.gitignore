@@ -5,7 +5,7 @@
 !README.md
 
 #keep sample data in pending folder
-!/knowledge_base/pending/**
+!/knowledge_base/demo_data/**
 # But keep subdirectory structure
 !*/
 

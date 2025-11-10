@@ -15,6 +15,7 @@ class RolesPermissionsSeeder(BaseSeed):
     
     name = "roles_permissions"
     description = "Creates system roles and permissions"
+    required_tables = ["roles", "permissions"]  # Required tables
     
     ROLES = [
         {"name": "admin", "description": "Administrator with full access"},
@@ -42,6 +43,16 @@ class RolesPermissionsSeeder(BaseSeed):
     async def run(self, session: AsyncSession, **kwargs) -> dict:
         """Create roles and permissions if they don't exist."""
         try:
+            # Validate required tables exist
+            tables_exist, missing_tables = await self.validate_tables_exist(session)
+            if not tables_exist:
+                error_msg = (
+                    f"Required table(s) missing: {', '.join(missing_tables)}. "
+                    "Please run migrations first: python migrate.py"
+                )
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+            
             created_roles = 0
             created_permissions = 0
             

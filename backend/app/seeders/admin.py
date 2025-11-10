@@ -19,10 +19,21 @@ class AdminSeeder(BaseSeed):
     
     name = "admin"
     description = "Creates default admin account"
+    required_tables = ["users", "roles"]  # Required tables
     
     async def run(self, session: AsyncSession, **kwargs) -> dict:
         """Create admin account if it doesn't exist."""
         try:
+            # Validate required tables exist
+            tables_exist, missing_tables = await self.validate_tables_exist(session)
+            if not tables_exist:
+                error_msg = (
+                    f"Required table(s) missing: {', '.join(missing_tables)}. "
+                    "Please run migrations first: python migrate.py"
+                )
+                logger.error(error_msg)
+                return {"success": False, "message": error_msg}
+            
             username = kwargs.get("username", "admin")
             email = kwargs.get("email", "admin@ragfortress.local")
             password = kwargs.get("password", "admin@RAGFortress123")

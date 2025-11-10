@@ -142,6 +142,48 @@ class DatabaseManager:
             logger.error(f"Database health check failed: {e}")
             return False
     
+    async def table_exists(self, table_name: str) -> bool:
+        """
+        Check if a specific table exists in the database.
+        
+        Args:
+            table_name: Name of the table to check
+            
+        Returns:
+            True if table exists, False otherwise
+        """
+        try:
+            if not self.async_engine:
+                await self.create_async_engine()
+            
+            # Get the inspector to check table existence
+            from sqlalchemy import inspect
+            
+            async with self.async_engine.connect() as conn:
+                inspector = inspect(conn.sync_connection)
+                exists = table_name in inspector.get_table_names()
+                return exists
+        except Exception as e:
+            logger.error(f"Error checking table existence: {e}")
+            return False
+    
+    async def get_missing_tables(self, table_names: list) -> list:
+        """
+        Check which tables are missing from the database.
+        
+        Args:
+            table_names: List of table names to check
+            
+        Returns:
+            List of missing table names
+        """
+        missing = []
+        for table_name in table_names:
+            exists = await self.table_exists(table_name)
+            if not exists:
+                missing.append(table_name)
+        return missing
+    
     async def close(self):
         """Close database connections."""
         if self.async_engine:

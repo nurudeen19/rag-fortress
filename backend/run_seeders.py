@@ -32,9 +32,15 @@ async def run_seeders(seeder_names: list = None) -> int:
         if seeder_names is None:
             seeder_names = list(SEEDERS.keys())
         
-        # Warn about data removal
+        # Warn about data handling
         logger.warning("=" * 70)
-        logger.warning("⚠️  WARNING: Running seeders may overwrite or clear existing data")
+        logger.warning("⚠️  IMPORTANT: Data Handling Policy")
+        logger.warning("=" * 70)
+        logger.warning("Seeders follow an IDEMPOTENT pattern:")
+        logger.warning("  • Existing data is NOT deleted or replaced")
+        logger.warning("  • Duplicate inserts are prevented by unique constraints")
+        logger.warning("  • If data exists, seeders skip creation (no-op)")
+        logger.warning("  • Unique constraint violations result in seeder errors")
         logger.warning("=" * 70)
         
         # Get configuration
@@ -49,10 +55,15 @@ async def run_seeders(seeder_names: list = None) -> int:
         await db_manager.create_async_engine()
         session_factory = db_manager.get_session_factory()
         
-        # Create tables
-        logger.info("Creating database tables...")
-        await db_manager.create_all_tables()
-        logger.info("✓ Database tables created")
+        # Check database connection
+        logger.info("Checking database connection...")
+        is_healthy = await db_manager.health_check()
+        if not is_healthy:
+            logger.error("✗ Database connection failed")
+            logger.error("Please ensure database is running and accessible")
+            return 1
+        
+        logger.info("✓ Database connection successful")
         
         # Run seeders
         logger.info("=" * 70)
