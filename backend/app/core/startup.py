@@ -3,7 +3,7 @@ Application Startup Controller.
 Initializes critical components on server start.
 
 Database seeding is NOT performed here - it's called programmatically via CLI or scripts.
-See app/core/seeders.py for seeding operations.
+See app/seeders/ for seeding operations.
 """
 
 from app.core import get_logger
@@ -42,8 +42,8 @@ class StartupController:
         
         This is called during FastAPI startup event.
         
-        Note: Database seeding is NOT performed here. Use run_seeders() CLI command
-        or call DatabaseSeeder.seed_all() programmatically from scripts.
+        Note: Database seeding is NOT performed here. Use run_seeders.py CLI command
+        or extend from app.seeders.base.BaseSeed for custom seeding.
         """
         if self.initialized:
             logger.warning("StartupController already initialized")
