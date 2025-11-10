@@ -12,8 +12,8 @@ python run_seeders.py
 Run specific seeders:
 ```bash
 python run_seeders.py admin
-python run_seeders.py app
-python run_seeders.py admin app
+python run_seeders.py roles_permissions
+python run_seeders.py admin roles_permissions
 ```
 
 ## Creating New Seeders
@@ -44,7 +44,7 @@ from app.seeders.files import FilesSeeder
 
 SEEDERS = {
     "admin": AdminSeeder,
-    "app": AppSeeder,
+    "roles_permissions": RolesPermissionsSeeder,
     "files": FilesSeeder,  # Add here
 }
 ```
@@ -52,4 +52,4 @@ SEEDERS = {
 ## Available Seeders
 
 - **admin**: Creates default admin account from .env credentials
-- **app**: Creates system roles (admin, user, viewer, moderator)
+- **roles_permissions**: Creates system roles (admin, user, viewer) and 10 default permissions

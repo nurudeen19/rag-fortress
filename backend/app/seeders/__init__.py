@@ -2,12 +2,12 @@
 
 from app.seeders.base import BaseSeed
 from app.seeders.admin import AdminSeeder
-from app.seeders.app import AppSeeder
+from app.seeders.roles_permissions import RolesPermissionsSeeder
 
 # Available seeders mapping
 SEEDERS = {
     "admin": AdminSeeder,
-    "app": AppSeeder,
+    "roles_permissions": RolesPermissionsSeeder,
 }
 
-__all__ = ["BaseSeed", "AdminSeeder", "AppSeeder", "SEEDERS"]
+__all__ = ["BaseSeed", "AdminSeeder", "RolesPermissionsSeeder", "SEEDERS"]

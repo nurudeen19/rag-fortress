@@ -4,13 +4,11 @@ Revision ID: 005_create_user_invitations_and_auth_tables
 Revises: 004_create_user_profiles_table
 Create Date: 2025-11-07 00:00:00.000000
 
-This migration:
-1. Creates the user_invitations table for admin invitation tracking
-2. Adds permission tracking for role-based access control
-3. Updates default roles to include: admin, executive, manager, user
+This migration creates the user_invitations table for admin invitation tracking.
+
+Note: Default roles are seeded via app/seeders/roles_permissions.py
 """
 from typing import Sequence, Union
-from datetime import datetime, timezone
 
 from alembic import op
 import sqlalchemy as sa
@@ -24,7 +22,7 @@ depends_on: Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    """Create user_invitations table and update auth system."""
+    """Create user_invitations table."""
     
     # Create user_invitations table
     op.create_table(
@@ -49,62 +47,10 @@ def upgrade() -> None:
     op.create_index(op.f('ix_invitation_token'), 'user_invitations', ['token'], unique=True)
     op.create_index(op.f('ix_invitation_status'), 'user_invitations', ['status'], unique=False)
     op.create_index(op.f('ix_invitation_expires_at'), 'user_invitations', ['expires_at'], unique=False)
-    
-    # Update roles to include new ones
-    # First, delete old system roles
-    op.execute("DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE is_system = 1)")
-    op.execute("DELETE FROM user_roles WHERE role_id IN (SELECT id FROM roles WHERE is_system = 1)")
-    op.execute("DELETE FROM roles WHERE is_system = 1")
-    
-    # Insert new system roles
-    roles_table = sa.table(
-        'roles',
-        sa.column('name'),
-        sa.column('description'),
-        sa.column('is_system'),
-        sa.column('created_at'),
-        sa.column('updated_at'),
-    )
-    
-    now = datetime.now(timezone.utc)
-    
-    op.bulk_insert(
-        roles_table,
-        [
-            {
-                'name': 'admin',
-                'description': 'Administrator with full access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-            {
-                'name': 'executive',
-                'description': 'Executive with strategic access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-            {
-                'name': 'manager',
-                'description': 'Manager with team oversight access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-            {
-                'name': 'user',
-                'description': 'Regular user with standard access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-        ]
-    )
 
 
 def downgrade() -> None:
-    """Revert user_invitations table and auth updates."""
+    """Revert user_invitations table."""
     
     # Drop user_invitations table
     op.drop_index(op.f('ix_invitation_expires_at'), table_name='user_invitations')
@@ -112,46 +58,3 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_invitation_token'), table_name='user_invitations')
     op.drop_index(op.f('ix_invitation_email'), table_name='user_invitations')
     op.drop_table('user_invitations')
-    
-    # Restore old roles
-    op.execute("DELETE FROM role_permissions WHERE role_id IN (SELECT id FROM roles WHERE is_system = 1)")
-    op.execute("DELETE FROM user_roles WHERE role_id IN (SELECT id FROM roles WHERE is_system = 1)")
-    op.execute("DELETE FROM roles WHERE is_system = 1")
-    
-    roles_table = sa.table(
-        'roles',
-        sa.column('name'),
-        sa.column('description'),
-        sa.column('is_system'),
-        sa.column('created_at'),
-        sa.column('updated_at'),
-    )
-    
-    now = datetime.now(timezone.utc)
-    
-    op.bulk_insert(
-        roles_table,
-        [
-            {
-                'name': 'admin',
-                'description': 'Administrator with full access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-            {
-                'name': 'user',
-                'description': 'Regular user with basic access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-            {
-                'name': 'viewer',
-                'description': 'Read-only access',
-                'is_system': True,
-                'created_at': now,
-                'updated_at': now,
-            },
-        ]
-    )
