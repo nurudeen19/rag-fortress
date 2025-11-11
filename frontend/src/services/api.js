@@ -26,32 +26,21 @@ api.interceptors.request.use(
 // Response interceptor
 api.interceptors.response.use(
   (response) => response.data,
-  (error) => {
+  async (error) => {
+    // Handle 401 Unauthorized
+    if (error.response?.status === 401) {
+      // Clear token and redirect to login
+      localStorage.removeItem('token')
+      // Dynamic import to avoid circular dependency
+      const { default: router } = await import('../router')
+      if (router.currentRoute.value.path !== '/login') {
+        router.push('/login')
+      }
+    }
+    
     console.error('API Error:', error)
     return Promise.reject(error)
   }
 )
 
-export default {
-  // Chat endpoints
-  chat(query) {
-    return api.post('/chat', { query })
-  },
-
-  // Document endpoints
-  uploadDocument(file) {
-    const formData = new FormData()
-    formData.append('file', file)
-    return api.post('/documents/upload', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
-  },
-
-  getDocuments() {
-    return api.get('/documents')
-  },
-
-  deleteDocument(id) {
-    return api.delete(`/documents/${id}`)
-  }
-}
+export default api

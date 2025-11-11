@@ -1,12 +1,92 @@
-:root {
-  --primary-color: #42b983;
-  --text-color: #2c3e50;
-  --background-color: #f5f5f5;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-fortress-950 text-fortress-100 font-sans antialiased;
+  }
+  
+  * {
+    @apply border-fortress-700;
+  }
 }
 
-body {
-  margin: 0;
-  padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background-color: var(--background-color);
+@layer components {
+  /* Custom component styles */
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-fortress-950;
+  }
+  
+  .btn-primary {
+    @apply btn bg-secure hover:bg-secure-dark text-white focus:ring-secure;
+  }
+  
+  .btn-secondary {
+    @apply btn bg-fortress-700 hover:bg-fortress-600 text-fortress-100 focus:ring-fortress-500;
+  }
+  
+  .btn-danger {
+    @apply btn bg-alert hover:bg-alert-dark text-white focus:ring-alert;
+  }
+  
+  .input {
+    @apply w-full px-4 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:outline-none focus:ring-2 focus:ring-secure focus:border-transparent;
+  }
+  
+  .card {
+    @apply bg-fortress-900 border border-fortress-800 rounded-lg shadow-lg;
+  }
+  
+  .card-header {
+    @apply px-6 py-4 border-b border-fortress-800;
+  }
+  
+  .card-body {
+    @apply p-6;
+  }
+  
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-public {
+    @apply bg-success/20 text-success border border-success/30;
+  }
+  
+  .badge-internal {
+    @apply bg-warning/20 text-warning border border-warning/30;
+  }
+  
+  .badge-confidential {
+    @apply bg-alert/20 text-alert border border-alert/30;
+  }
+  
+  .badge-restricted {
+    @apply bg-purple-500/20 text-purple-400 border border-purple-500/30;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.fortress.700') theme('colors.fortress.900');
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-fortress-900;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-fortress-700 rounded-full;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-fortress-600;
+  }
 }
