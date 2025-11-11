@@ -1,137 +1,155 @@
 """
-Document Loader - Loads documents from pending directory.
+Document Loader - Loads documents from FileUpload model with metadata enrichment.
 """
 
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 import json
 import csv
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from app.config.settings import settings
 from app.core import get_logger
+from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
+from app.models.department import Department
 
 
 logger = get_logger(__name__)
 
 
 class DocumentLoader:
-    """Loads documents from pending directory."""
+    """Loads documents from FileUpload model with enriched metadata."""
     
-    def __init__(self, pending_dir: Optional[str] = None):
-        self.pending_dir = Path(pending_dir or settings.PENDING_DIR)
-        self.pending_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self, session: AsyncSession):
+        """Initialize loader with database session."""
+        self.session = session
     
-    def load_from_pending(
-        self,
-        recursive: bool = True,
-        file_types: Optional[List[str]] = None
-    ) -> List[Dict[str, Any]]:
+    async def load_pending_files(self) -> List[Dict[str, Any]]:
         """
-        Load documents from pending directory.
+        Load pending approved files from database with enriched metadata.
         
-        Args:
-            recursive: Search subdirectories
-            file_types: Filter by file extensions (e.g., ['pdf', 'txt'])
-            
         Returns:
-            List of dictionaries with 'file_path', 'file_type', and 'content' keys
+            List of documents with content and metadata
         """
-        logger.info(f"Loading documents from {self.pending_dir}")
+        logger.info("Loading pending approved files from database")
         
-        # Find files
-        pattern = "**/*" if recursive else "*"
-        all_files = list(self.pending_dir.glob(pattern))
+        # Query pending approved files
+        stmt = select(FileUpload).where(
+            (FileUpload.status == FileStatus.APPROVED) &
+            (FileUpload.is_processed == False)
+        ).order_by(FileUpload.created_at)
         
-        # Filter files
-        all_files = [f for f in all_files if f.is_file() and f.name.lower() != 'readme.md']
+        result = await self.session.execute(stmt)
+        file_uploads = result.scalars().all()
         
-        # Filter by file type if specified
-        if file_types:
-            file_types_lower = [ft.lower().lstrip('.') for ft in file_types]
-            all_files = [
-                f for f in all_files 
-                if f.suffix.lower().lstrip('.') in file_types_lower
-            ]
+        logger.info(f"Found {len(file_uploads)} pending files")
         
-        logger.info(f"Found {len(all_files)} files to load")
-        
-        # Load file contents
         documents = []
-        for file_path in all_files:
+        for file_upload in file_uploads:
             try:
-                doc = self._load_file(file_path)
+                # Load and enrich document
+                doc = await self._load_and_enrich(file_upload)
                 documents.append(doc)
-                logger.info(f"✓ Loaded: {file_path.name} ({doc['file_type']})")
+                logger.info(f"✓ Loaded: {file_upload.file_name}")
             except Exception as e:
-                logger.error(f"✗ Failed to load {file_path.name}: {e}")
+                logger.error(f"✗ Failed to load {file_upload.file_name}: {e}")
         
         logger.info(f"Successfully loaded {len(documents)} documents")
         return documents
     
-    def _load_file(self, file_path: Path) -> Dict[str, Any]:
-        """Load file content based on type."""
-        file_type = file_path.suffix.lower().lstrip('.')
+    async def _load_and_enrich(self, file_upload: FileUpload) -> Dict[str, Any]:
+        """Load file and enrich with metadata from model."""
+        file_path = Path(file_upload.file_path)
         
-        doc = {
-            'file_path': str(file_path),
-            'file_name': file_path.name,
-            'file_type': file_type,
-            'content': None
+        # Load file content
+        content = self._load_file_content(file_path, file_upload.file_type)
+        
+        # Get department name if applicable
+        dept_name = None
+        if file_upload.department_id:
+            stmt = select(Department).where(Department.id == file_upload.department_id)
+            result = await self.session.execute(stmt)
+            dept = result.scalar_one_or_none()
+            dept_name = dept.name if dept else None
+        
+        # Build enriched metadata
+        meta = {
+            "upload_token": file_upload.upload_token,
+            "file_id": file_upload.id,
+            "security_level": file_upload.security_level.name,  # e.g., "GENERAL", "CONFIDENTIAL"
+            "is_department_only": file_upload.is_department_only,
+            "department": dept_name,
+            "file_type": file_upload.file_type,
+            "department_id": file_upload.department_id or None,
+            "file_purpose": file_upload.file_purpose,
+            "file_size_bytes": file_upload.file_size,
         }
         
+        return {
+            "file_id": file_upload.id,
+            "file_name": file_upload.file_name,
+            "file_type": file_upload.file_type,
+            "content": content,
+            "meta": meta,
+        }
+    
+    def _load_file_content(self, file_path: Path, file_type: str) -> Any:
+        """Load file content based on type."""
+        if not file_path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        file_type_lower = file_type.lower()
+        
         # Text-based files
-        if file_type in ['txt', 'md', 'markdown']:
+        if file_type_lower in ['txt', 'md', 'markdown']:
             with open(file_path, 'r', encoding='utf-8') as f:
-                doc['content'] = f.read()
+                return f.read()
         
         # JSON files
-        elif file_type == 'json':
+        elif file_type_lower == 'json':
             with open(file_path, 'r', encoding='utf-8') as f:
-                doc['content'] = json.load(f)
+                return json.load(f)
         
         # CSV files
-        elif file_type == 'csv':
+        elif file_type_lower == 'csv':
             with open(file_path, 'r', encoding='utf-8') as f:
                 reader = csv.DictReader(f)
-                doc['content'] = list(reader)
+                return list(reader)
         
         # PDF files
-        elif file_type == 'pdf':
+        elif file_type_lower == 'pdf':
             try:
                 from langchain_community.document_loaders import PyPDFLoader
                 loader = PyPDFLoader(str(file_path))
                 docs = loader.load()
-                # Combine all pages into single content
-                doc['content'] = "\n\n".join([d.page_content for d in docs])
+                return "\n\n".join([d.page_content for d in docs])
             except Exception as e:
-                logger.error(f"Failed to load PDF {file_path.name}: {e}")
-                doc['content'] = None
+                logger.error(f"Failed to load PDF: {e}")
+                raise
         
         # Word documents
-        elif file_type in ['doc', 'docx']:
+        elif file_type_lower in ['doc', 'docx']:
             try:
                 from langchain_community.document_loaders import Docx2txtLoader
                 loader = Docx2txtLoader(str(file_path))
                 docs = loader.load()
-                doc['content'] = "\n\n".join([d.page_content for d in docs])
+                return "\n\n".join([d.page_content for d in docs])
             except Exception as e:
-                logger.error(f"Failed to load DOCX {file_path.name}: {e}")
-                doc['content'] = None
+                logger.error(f"Failed to load DOCX: {e}")
+                raise
         
         # Excel files
-        elif file_type in ['xlsx', 'xls']:
+        elif file_type_lower in ['xlsx', 'xls']:
             try:
                 from langchain_community.document_loaders import UnstructuredExcelLoader
                 loader = UnstructuredExcelLoader(str(file_path))
                 docs = loader.load()
-                doc['content'] = "\n\n".join([d.page_content for d in docs])
+                return "\n\n".join([d.page_content for d in docs])
             except Exception as e:
-                logger.error(f"Failed to load Excel {file_path.name}: {e}")
-                doc['content'] = None
+                logger.error(f"Failed to load Excel: {e}")
+                raise
         
-        # Unknown file types
         else:
-            logger.warning(f"Unsupported file type: {file_type}")
-            doc['content'] = None
-        
-        return doc
+            raise ValueError(f"Unsupported file type: {file_type_lower}")
+
