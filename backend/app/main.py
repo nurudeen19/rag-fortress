@@ -67,15 +67,13 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     
     # Register routers
-    from app.routes.jobs import router as jobs_router
     from app.routes.email import router as email_router
+    from app.routes.auth import router as auth_router
+    from app.routes.users import router as users_router
     
-    app.include_router(jobs_router, prefix="/api/v1")
     app.include_router(email_router)
-    
-    # Add more routers here as they're created:
-    # from app.routes.documents import router as documents_router
-    # app.include_router(documents_router, prefix="/api/v1")
+    app.include_router(auth_router)
+    app.include_router(users_router)
     
     # Health check endpoint
     @app.get("/health")

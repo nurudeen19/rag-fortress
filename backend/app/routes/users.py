@@ -1,0 +1,381 @@
+"""
+Admin user management routes.
+
+Routes delegate request handling to handlers for business logic separation.
+Requires "admin" role for access.
+
+Endpoints:
+- GET  /api/v1/admin/users - List all users (paginated)
+- GET  /api/v1/admin/users/{user_id} - Get user details
+- POST /api/v1/admin/users/{user_id}/suspend - Suspend user
+- POST /api/v1/admin/users/{user_id}/unsuspend - Unsuspend user
+- GET  /api/v1/admin/users/{user_id}/roles - Get user roles
+- POST /api/v1/admin/users/{user_id}/roles - Assign role to user
+- DELETE /api/v1/admin/users/{user_id}/roles/{role_id} - Revoke role
+- GET  /api/v1/admin/roles - List all roles
+- POST /api/v1/admin/roles - Create new role
+- GET  /api/v1/admin/permissions - List all permissions
+- POST /api/v1/admin/permissions - Create new permission
+"""
+
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_session
+from app.core.security import get_current_user, require_role
+from app.schemas.user import (
+    UserResponse,
+    UserListResponse,
+    RoleResponse,
+    RoleDetailResponse,
+    PermissionResponse,
+    RoleAssignRequest,
+    RoleRevokeRequest,
+    UserSuspendRequest,
+    CreateRoleRequest,
+    CreatePermissionRequest,
+    AssignPermissionToRoleRequest,
+    RevokePermissionFromRoleRequest,
+    SuccessResponse,
+)
+from app.models.user import User
+from app.core import get_logger
+from app.handlers.users import (
+    handle_list_users,
+    handle_get_user,
+    handle_suspend_user,
+    handle_unsuspend_user,
+    handle_get_user_roles,
+    handle_assign_role_to_user,
+    handle_revoke_role_from_user,
+    handle_list_roles,
+    handle_create_role,
+    handle_list_permissions,
+    handle_create_permission,
+    handle_assign_permission_to_role,
+    handle_revoke_permission_from_role,
+)
+
+
+logger = get_logger(__name__)
+router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+
+
+# ============================================================================
+# USER MANAGEMENT (ADMIN)
+# ============================================================================
+
+@router.get("/users", response_model=UserListResponse)
+async def list_users(
+    active_only: bool = Query(True, description="Only active users"),
+    department_id: Optional[int] = Query(None, description="Filter by department"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    List users with optional filtering.
+    
+    Requires admin role.
+    """
+    result = await handle_list_users(
+        active_only=active_only,
+        department_id=department_id,
+        limit=limit,
+        offset=offset,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to list users")
+        )
+    
+    return UserListResponse(
+        total=result["total"],
+        limit=limit,
+        offset=offset,
+        users=[UserResponse(**u) for u in result["users"]]
+    )
+
+
+@router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user_details(
+    user_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Get user details by ID. Requires admin role."""
+    result = await handle_get_user(user_id, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=result.get("error", "User not found")
+        )
+    
+    return UserResponse(**result["user"])
+
+
+@router.post("/users/{user_id}/suspend", response_model=SuccessResponse)
+async def suspend_user(
+    user_id: int,
+    request: UserSuspendRequest,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Suspend user account. Requires admin role."""
+    result = await handle_suspend_user(
+        user_id=user_id,
+        reason=request.reason or "",
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to suspend user")
+        )
+    
+    return SuccessResponse(message=result.get("message", "User suspended"))
+
+
+@router.post("/users/{user_id}/unsuspend", response_model=SuccessResponse)
+async def unsuspend_user(
+    user_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Unsuspend user account. Requires admin role."""
+    result = await handle_unsuspend_user(
+        user_id=user_id,
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to unsuspend user")
+        )
+    
+    return SuccessResponse(message=result.get("message", "User unsuspended"))
+
+
+# ============================================================================
+# ROLE MANAGEMENT (ADMIN)
+# ============================================================================
+
+@router.get("/users/{user_id}/roles", response_model=list[RoleResponse])
+async def get_user_roles(
+    user_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Get all roles assigned to user. Requires admin role."""
+    result = await handle_get_user_roles(user_id, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to get user roles")
+        )
+    
+    return [RoleResponse(**r) for r in result["roles"]]
+
+
+@router.post("/users/{user_id}/roles", response_model=SuccessResponse)
+async def assign_role_to_user(
+    user_id: int,
+    request: RoleAssignRequest,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Assign role to user. Requires admin role."""
+    result = await handle_assign_role_to_user(
+        user_id=user_id,
+        role_id=request.role_id,
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to assign role")
+        )
+    
+    return SuccessResponse(message=result.get("message", "Role assigned"))
+
+
+@router.delete("/users/{user_id}/roles/{role_id}", response_model=SuccessResponse)
+async def revoke_role_from_user(
+    user_id: int,
+    role_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Revoke role from user. Requires admin role."""
+    result = await handle_revoke_role_from_user(
+        user_id=user_id,
+        role_id=role_id,
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to revoke role")
+        )
+    
+    return SuccessResponse(message=result.get("message", "Role revoked"))
+
+
+@router.get("/roles", response_model=list[RoleDetailResponse])
+async def list_roles(
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """List all available roles. Requires admin role."""
+    result = await handle_list_roles(session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to list roles")
+        )
+    
+    return [
+        RoleDetailResponse(
+            id=r["id"],
+            name=r["name"],
+            description=r["description"],
+            is_system=r["is_system"],
+            permissions=[PermissionResponse(**p) for p in r.get("permissions", [])]
+        )
+        for r in result["roles"]
+    ]
+
+
+@router.post("/roles", response_model=RoleResponse, status_code=201)
+async def create_role(
+    request: CreateRoleRequest,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Create new role. Requires admin role."""
+    result = await handle_create_role(
+        name=request.name,
+        description=request.description or "",
+        is_system=request.is_system,
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to create role")
+        )
+    
+    return RoleResponse(**result["role"])
+
+
+# ============================================================================
+# PERMISSION MANAGEMENT (ADMIN)
+# ============================================================================
+
+@router.get("/permissions", response_model=list[PermissionResponse])
+async def list_permissions(
+    resource: Optional[str] = Query(None, description="Filter by resource"),
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """List all permissions, optionally filtered by resource. Requires admin role."""
+    result = await handle_list_permissions(resource=resource, session=session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to list permissions")
+        )
+    
+    return [PermissionResponse(**p) for p in result["permissions"]]
+
+
+@router.post("/permissions", response_model=PermissionResponse, status_code=201)
+async def create_permission(
+    request: CreatePermissionRequest,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Create new permission. Requires admin role."""
+    result = await handle_create_permission(
+        code=request.code,
+        resource=request.resource,
+        action=request.action,
+        description=request.description or "",
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to create permission")
+        )
+    
+    return PermissionResponse(**result["permission"])
+
+
+@router.post("/roles/{role_id}/permissions", response_model=SuccessResponse)
+async def assign_permission_to_role(
+    role_id: int,
+    request: AssignPermissionToRoleRequest,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Assign permission to role. Requires admin role."""
+    result = await handle_assign_permission_to_role(
+        role_id=role_id,
+        permission_id=request.permission_id,
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to assign permission")
+        )
+    
+    return SuccessResponse(message=result.get("message", "Permission assigned"))
+
+
+@router.delete("/roles/{role_id}/permissions/{permission_id}", response_model=SuccessResponse)
+async def revoke_permission_from_role(
+    role_id: int,
+    permission_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Revoke permission from role. Requires admin role."""
+    result = await handle_revoke_permission_from_role(
+        role_id=role_id,
+        permission_id=permission_id,
+        admin_user=admin,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to revoke permission")
+        )
+    
+    return SuccessResponse(message=result.get("message", "Permission revoked"))
