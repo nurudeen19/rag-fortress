@@ -90,7 +90,8 @@ class DocumentLoader:
             "file_id": file_upload.id,
             "file_name": file_upload.file_name,
             "file_type": file_upload.file_type,
-            "content": content,
+            "content": content,            
+            "field_selection": file_upload.field_selection or None,
             "meta": meta,
         }
     
