@@ -5,6 +5,7 @@ from app.seeders.admin import AdminSeeder
 from app.seeders.roles_permissions import RolesPermissionsSeeder
 from app.seeders.departments import DepartmentsSeeder
 from app.seeders.knowledge_base import KnowledgeBaseSeeder
+from app.seeders.jobs import JobsSeeder
 
 # Available seeders mapping
 SEEDERS = {
@@ -12,6 +13,7 @@ SEEDERS = {
     "roles_permissions": RolesPermissionsSeeder,
     "departments": DepartmentsSeeder,
     "knowledge_base": KnowledgeBaseSeeder,
+    "jobs": JobsSeeder,
 }
 
-__all__ = ["BaseSeed", "AdminSeeder", "RolesPermissionsSeeder", "DepartmentsSeeder", "KnowledgeBaseSeeder", "SEEDERS"]
+__all__ = ["BaseSeed", "AdminSeeder", "RolesPermissionsSeeder", "DepartmentsSeeder", "KnowledgeBaseSeeder", "JobsSeeder", "SEEDERS"]

@@ -1,8 +1,15 @@
 """
 Application Startup Controller.
-Initializes critical components on server start.
+Initializes critical components on server start in proper order:
 
-Database seeding is NOT performed here - it's called programmatically via CLI or scripts.
+1. Database (first - everything depends on it)
+2. Job Queue (for processing)
+3. Embedding Provider (for vector operations)
+4. Vector Store (uses embedding provider)
+5. LLM Provider (for AI operations)
+6. Email Client (for notifications)
+
+Database seeding is NOT performed here - it's called via setup.py or CLI.
 See app/seeders/ for seeding operations.
 """
 
@@ -14,6 +21,8 @@ from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.core.database import DatabaseManager
 from app.config.settings import settings
 from app.config.database_settings import DatabaseSettings
+from app.jobs import get_job_manager
+from app.jobs.integration import JobQueueIntegration
 
 
 logger = get_logger(__name__)
@@ -30,6 +39,8 @@ class StartupController:
         self.initialized = False
         self.database_manager = None
         self.async_session_factory = None
+        self.job_manager = None
+        self.job_integration = None
         self.email_client = None
         self.embedding_provider = None
         self.llm_provider = None
@@ -38,12 +49,20 @@ class StartupController:
     
     async def initialize(self):
         """
-        Initialize all critical components.
+        Initialize all critical components in proper order.
+        
+        Order matters:
+        1. Database (required by all other components)
+        2. Job Queue (for task processing)
+        3. Embedding Provider (for vector operations)
+        4. Vector Store (uses embeddings)
+        5. LLM Provider (optional AI operations)
+        6. Email Client (optional notifications)
         
         This is called during FastAPI startup event.
         
-        Note: Database seeding is NOT performed here. Use run_seeders.py CLI command
-        or extend from app.seeders.base.BaseSeed for custom seeding.
+        Note: Database seeding is NOT performed here. Use setup.py CLI command
+        for first-time setup or run_seeders.py for additional seeding.
         """
         if self.initialized:
             logger.warning("StartupController already initialized")
@@ -52,28 +71,29 @@ class StartupController:
         logger.info("Starting application initialization...")
         
         try:
-            # Initialize database connection and create tables
+            # ========== STEP 1: Database (required by everything) ==========
             await self._initialize_database()
             
-            # Email client initialization
-            await self._initialize_email_client()
+            # ========== STEP 2: Job Queue (for task processing) ==========
+            await self._initialize_job_queue()
             
-            # Initialize embedding provider
+            # ========== STEP 3: Embedding Provider (for vectors) ==========
             await self._initialize_embeddings()
             
-            # Initialize LLM provider
+            # ========== STEP 4: Vector Store (uses embeddings) ==========
+            # await self._initialize_vector_store()
+            
+            # ========== STEP 5: LLM Provider (optional) ==========
             # await self._initialize_llm()
-            
-            # Initialize fallback LLM provider
             # await self._initialize_fallback_llm()
-            
-            # Initialize retriever
             # await self._initialize_retriever()
+            
+            # ========== STEP 6: Email Client (optional notifications) ==========
+            await self._initialize_email_client()
 
             # Future initializations will be added here:
             # - Vector store connection pool
             # - Cache warming
-            # - Background job queue
             # - etc.
             
             self.initialized = True
@@ -104,10 +124,34 @@ class StartupController:
             await self.database_manager.create_all_tables()
             
             logger.info("✓ Database initialized successfully")
-            logger.info("To seed the database, run: python -m app.scripts.seed_database")
+            logger.info("To seed the database, run: python setup.py")
             
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}", exc_info=True)
+            raise
+    
+    async def _initialize_job_queue(self):
+        """Initialize job queue for async task processing and recovery."""
+        logger.info("Initializing job queue...")
+        
+        try:
+            if not self.async_session_factory:
+                raise RuntimeError("Database must be initialized before job queue")
+            
+            # Start job manager (APScheduler)
+            self.job_manager = get_job_manager()
+            self.job_manager.start()
+            logger.info("✓ Job manager started")
+            
+            # Setup job integration (bridges persistence + scheduling)
+            self.job_integration = JobQueueIntegration(self.async_session_factory)
+            
+            # Recover pending jobs from database and reschedule
+            recovered_count = await self.job_integration.recover_and_schedule_pending()
+            logger.info(f"✓ Job queue initialized (recovered {recovered_count} pending jobs)")
+            
+        except Exception as e:
+            logger.error(f"Failed to initialize job queue: {e}", exc_info=True)
             raise
     
     async def _initialize_email_client(self):
@@ -243,6 +287,11 @@ class StartupController:
         logger.info("Starting application shutdown...")
         
         try:
+            # Shutdown job manager
+            if self.job_manager:
+                logger.info("Shutting down job manager...")
+                self.job_manager.shutdown(wait=True)
+            
             # Close database connections
             if self.database_manager:
                 logger.info("Closing database connections...")
