@@ -1,13 +1,5 @@
-"""
-Simple background task tracking for document ingestion.
-"""
+"""Job scheduling and management module."""
 
-from enum import Enum
+from app.jobs.job_manager import JobManager, get_job_manager
 
-
-class IngestionStatus(str, Enum):
-    """Status of background ingestion task."""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
+__all__ = ["JobManager", "get_job_manager"]
