@@ -1,25 +1,20 @@
 """
-FileUploadService - Manages file upload lifecycle and integration with ingestion.
-
-Handles:
-1. File upload tracking and storage
-2. Approval workflow management
-3. Processing lifecycle (pending → processing → processed/failed)
-4. Error handling and retry logic
-5. Data retention and cleanup
-6. Security level enforcement
+FileUploadService - Manages file upload lifecycle.
+Simple, focused service for file tracking and status management.
 """
+
 import uuid
 import hashlib
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
-from sqlalchemy import select, and_, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
+from app.schemas.file_upload import FileUploadCreate
 from app.core import get_logger
 
 
@@ -27,304 +22,206 @@ logger = get_logger(__name__)
 
 
 class FileUploadService:
-    """Service for managing file uploads through the ingestion pipeline."""
+    """Manages file upload lifecycle: creation, approval, processing."""
     
-    def __init__(self, db_session: AsyncSession):
-        """Initialize service with database session."""
-        self.db = db_session
+    def __init__(self, session: AsyncSession):
+        """Initialize with database session."""
+        self.session = session
     
-    # ============================================================================
-    # File Registration & Tracking
-    # ============================================================================
+    async def create_from_form(self, data: FileUploadCreate, file_path: str) -> FileUpload:
+        """
+        Create file upload from form submission (recommended for frontend).
+        
+        Args:
+            data: FileUploadCreate schema with all required fields
+            file_path: Full path where file is stored
+        
+        Returns:
+            FileUpload record
+        """
+        try:
+            # Calculate file hash
+            file_hash = await self._calculate_hash(file_path)
+            
+            # Convert security level enum to value
+            security_level = SecurityLevel[data.security_level.value]
+            
+            file_upload = FileUpload(
+                upload_token=str(uuid.uuid4()),
+                file_name=data.file_name,
+                file_type=data.file_type,
+                file_size=data.file_size,
+                file_path=file_path,
+                file_hash=file_hash,
+                uploaded_by_id=data.uploaded_by_id,
+                department_id=data.department_id,
+                is_department_only=data.is_department_only,
+                security_level=security_level,
+                file_purpose=data.file_purpose,
+                field_selection=json.dumps(data.field_selection) if data.field_selection else None,
+            )
+            
+            self.session.add(file_upload)
+            await self.session.flush()
+            
+            logger.info(
+                f"Created upload: {data.file_name} "
+                f"(size={data.file_size}, security={security_level.name}, dept={data.department_id})"
+            )
+            return file_upload
+        
+        except Exception as e:
+            logger.error(f"Failed to create upload for {data.file_name}: {e}")
+            raise
     
-    async def create_file_upload(
+    async def create_upload(
         self,
         file_path: str,
         file_name: str,
         file_type: str,
         file_size: int,
         uploaded_by_id: int,
+        security_level: SecurityLevel = SecurityLevel.GENERAL,
         file_purpose: Optional[str] = None,
         field_selection: Optional[List[str]] = None,
-        extraction_config: Optional[Dict[str, Any]] = None,
-        security_level: SecurityLevel = SecurityLevel.INTERNAL,
-        retention_days: Optional[int] = None,
+        department_id: Optional[int] = None,
+        is_department_only: bool = False,
     ) -> FileUpload:
         """
-        Create a new file upload record.
+        Create file upload record (for programmatic use).
+        For frontend forms, use create_from_form() instead.
         
         Args:
-            file_path: Full path to the uploaded file
-            file_name: Original file name
-            file_type: File extension (pdf, txt, csv, etc.)
-            file_size: File size in bytes
-            uploaded_by_id: User ID of uploader
-            file_purpose: Optional description of why file is being uploaded
-            field_selection: Optional list of fields to extract from file
-            extraction_config: Optional JSON config for extraction rules
-            security_level: Classification level (public, internal, confidential, restricted)
-            retention_days: Optional days to retain file (None = indefinite)
-            
+            file_path: Full file path
+            file_name: Original filename
+            file_type: Extension (pdf, txt, csv, etc)
+            file_size: Size in bytes
+            uploaded_by_id: Uploader user ID
+            security_level: Security classification
+            file_purpose: Optional purpose/description
+            field_selection: Optional fields to extract
+            department_id: Optional department ID
+            is_department_only: If True, only department can access
+        
         Returns:
             FileUpload record
         """
         try:
-            # Calculate file hash for deduplication
-            file_hash = await self._calculate_file_hash(file_path)
-            
-            # Check for duplicate file (same hash, same security level)
-            existing = await self.get_file_by_hash(file_hash, security_level)
-            if existing:
-                logger.warning(
-                    f"Duplicate file detected: {file_name} "
-                    f"(matches {existing.file_name}, hash={file_hash})"
-                )
-            
-            # Generate unique upload token
-            upload_token = str(uuid.uuid4())
-            
-            # Calculate retention date
-            retention_until = None
-            if retention_days:
-                retention_until = datetime.now(timezone.utc) + timedelta(days=retention_days)
-            
-            # Convert field_selection list to JSON if provided
-            field_selection_json = json.dumps(field_selection) if field_selection else None
-            extraction_config_json = json.dumps(extraction_config) if extraction_config else None
+            # Calculate file hash
+            file_hash = await self._calculate_hash(file_path)
             
             file_upload = FileUpload(
-                upload_token=upload_token,
+                upload_token=str(uuid.uuid4()),
                 file_name=file_name,
                 file_type=file_type,
                 file_size=file_size,
                 file_path=file_path,
                 file_hash=file_hash,
                 uploaded_by_id=uploaded_by_id,
-                file_purpose=file_purpose,
-                field_selection=field_selection_json,
-                extraction_config=extraction_config_json,
+                department_id=department_id,
+                is_department_only=is_department_only,
                 security_level=security_level,
-                retention_until=retention_until,
+                file_purpose=file_purpose,
+                field_selection=json.dumps(field_selection) if field_selection else None,
             )
             
-            self.db.add(file_upload)
-            await self.db.flush()
+            self.session.add(file_upload)
+            await self.session.flush()
             
-            logger.info(
-                f"Created file upload: {file_name} "
-                f"(token={upload_token}, size={file_size}, security={security_level.value})"
-            )
-            
+            logger.info(f"Created upload: {file_name} (size={file_size}, security={security_level.name})")
             return file_upload
         
         except Exception as e:
-            logger.error(f"Failed to create file upload for {file_name}: {e}")
+            logger.error(f"Failed to create upload for {file_name}: {e}")
             raise
     
-    # ============================================================================
-    # Approval Workflow
-    # ============================================================================
+    async def get_file(self, file_id: int) -> Optional[FileUpload]:
+        """Get file by ID."""
+        result = await self.session.execute(
+            select(FileUpload).where(FileUpload.id == file_id)
+        )
+        return result.scalar_one_or_none()
     
-    async def approve_file(
+    async def get_by_token(self, token: str) -> Optional[FileUpload]:
+        """Get file by upload token."""
+        result = await self.session.execute(
+            select(FileUpload).where(FileUpload.upload_token == token)
+        )
+        return result.scalar_one_or_none()
+    
+    async def approve(
         self,
-        file_upload_id: int,
+        file_id: int,
         approved_by_id: int,
         reason: str = ""
     ) -> FileUpload:
-        """
-        Approve a file for processing.
-        
-        Args:
-            file_upload_id: FileUpload record ID
-            approved_by_id: User ID of approver
-            reason: Optional approval reason/notes
-            
-        Returns:
-            Updated FileUpload record
-        """
-        file_upload = await self.get_file_upload(file_upload_id)
+        """Approve file for processing."""
+        file_upload = await self.get_file(file_id)
         if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
+            raise ValueError(f"File not found: {file_id}")
         
-        if not file_upload.is_awaiting_approval():
-            raise ValueError(f"File is not awaiting approval (status={file_upload.status.value})")
+        if file_upload.status != FileStatus.PENDING:
+            raise ValueError(f"File not pending (status={file_upload.status.name})")
         
         file_upload.mark_approved(approved_by_id, reason)
-        await self.db.flush()
+        await self.session.flush()
         
-        logger.info(
-            f"Approved file: {file_upload.file_name} "
-            f"(approved_by={approved_by_id}, reason={reason})"
-        )
-        
+        logger.info(f"Approved: {file_upload.file_name}")
         return file_upload
     
-    async def reject_file(
+    async def reject(
         self,
-        file_upload_id: int,
+        file_id: int,
         rejected_by_id: int,
         reason: str = ""
     ) -> FileUpload:
-        """
-        Reject a file from processing.
-        
-        Args:
-            file_upload_id: FileUpload record ID
-            rejected_by_id: User ID of rejector
-            reason: Optional rejection reason
-            
-        Returns:
-            Updated FileUpload record
-        """
-        file_upload = await self.get_file_upload(file_upload_id)
+        """Reject file from processing."""
+        file_upload = await self.get_file(file_id)
         if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
+            raise ValueError(f"File not found: {file_id}")
         
-        if not file_upload.is_awaiting_approval():
-            raise ValueError(f"File is not awaiting approval (status={file_upload.status.value})")
+        if file_upload.status != FileStatus.PENDING:
+            raise ValueError(f"File not pending (status={file_upload.status.name})")
         
         file_upload.mark_rejected(rejected_by_id, reason)
-        await self.db.flush()
+        await self.session.flush()
         
-        logger.info(f"Rejected file: {file_upload.file_name} (reason={reason})")
-        
+        logger.info(f"Rejected: {file_upload.file_name}")
         return file_upload
     
-    # ============================================================================
-    # Processing Lifecycle
-    # ============================================================================
-    
-    async def start_processing(self, file_upload_id: int) -> FileUpload:
-        """
-        Mark file as currently being processed.
-        
-        Args:
-            file_upload_id: FileUpload record ID
-            
-        Returns:
-            Updated FileUpload record
-        """
-        file_upload = await self.get_file_upload(file_upload_id)
-        if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
-        
-        if not file_upload.is_approved():
-            raise ValueError(f"File must be approved before processing (status={file_upload.status.value})")
-        
-        file_upload.mark_processing()
-        await self.db.flush()
-        
-        logger.info(f"Started processing: {file_upload.file_name}")
-        
-        return file_upload
-    
-    async def mark_processing_complete(
+    async def mark_processed(
         self,
-        file_upload_id: int,
+        file_id: int,
         chunks_created: int,
-        processing_time_ms: int
+        processing_time_ms: int,
     ) -> FileUpload:
-        """
-        Mark file as successfully processed.
-        
-        Args:
-            file_upload_id: FileUpload record ID
-            chunks_created: Number of chunks created from file
-            processing_time_ms: Time taken to process (milliseconds)
-            
-        Returns:
-            Updated FileUpload record
-        """
-        file_upload = await self.get_file_upload(file_upload_id)
+        """Mark file as successfully processed."""
+        file_upload = await self.get_file(file_id)
         if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
+            raise ValueError(f"File not found: {file_id}")
         
         file_upload.mark_processed(chunks_created, processing_time_ms)
-        await self.db.flush()
+        await self.session.flush()
         
-        logger.info(
-            f"Completed processing: {file_upload.file_name} "
-            f"(chunks={chunks_created}, time={processing_time_ms}ms)"
-        )
-        
+        logger.info(f"Processed: {file_upload.file_name} (chunks={chunks_created}, time={processing_time_ms}ms)")
         return file_upload
     
-    async def mark_processing_failed(
-        self,
-        file_upload_id: int,
-        error: str
-    ) -> FileUpload:
-        """
-        Mark file processing as failed.
-        
-        If retry count < max_retries, status reverts to PENDING for retry.
-        If retry count >= max_retries, status becomes FAILED.
-        
-        Args:
-            file_upload_id: FileUpload record ID
-            error: Error message
-            
-        Returns:
-            Updated FileUpload record
-        """
-        file_upload = await self.get_file_upload(file_upload_id)
+    async def mark_failed(self, file_id: int, error: str) -> FileUpload:
+        """Mark file processing as failed."""
+        file_upload = await self.get_file(file_id)
         if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
+            raise ValueError(f"File not found: {file_id}")
         
         file_upload.mark_failed(error)
-        await self.db.flush()
+        await self.session.flush()
         
-        if file_upload.can_retry():
-            logger.warning(
-                f"Processing failed (will retry): {file_upload.file_name} "
-                f"(retry {file_upload.retry_count}/{file_upload.max_retries}): {error}"
-            )
-        else:
-            logger.error(
-                f"Processing failed permanently: {file_upload.file_name} "
-                f"(max retries exceeded): {error}"
-            )
-        
+        status = "will retry" if file_upload.can_retry() else "max retries exceeded"
+        logger.error(f"Failed: {file_upload.file_name} ({status}): {error}")
         return file_upload
     
-    # ============================================================================
-    # Queries & Retrieval
-    # ============================================================================
-    
-    async def get_file_upload(self, file_upload_id: int) -> Optional[FileUpload]:
-        """Get a file upload record by ID."""
-        result = await self.db.execute(
-            select(FileUpload).where(FileUpload.id == file_upload_id)
-        )
-        return result.scalar_one_or_none()
-    
-    async def get_file_by_token(self, upload_token: str) -> Optional[FileUpload]:
-        """Get a file upload record by upload token."""
-        result = await self.db.execute(
-            select(FileUpload).where(FileUpload.upload_token == upload_token)
-        )
-        return result.scalar_one_or_none()
-    
-    async def get_file_by_hash(
-        self,
-        file_hash: str,
-        security_level: SecurityLevel
-    ) -> Optional[FileUpload]:
-        """Get a file by hash and security level (for duplicate detection)."""
-        result = await self.db.execute(
-            select(FileUpload).where(
-                and_(
-                    FileUpload.file_hash == file_hash,
-                    FileUpload.security_level == security_level,
-                    FileUpload.status != FileStatus.DELETED,
-                )
-            ).order_by(FileUpload.created_at.desc())
-        )
-        return result.scalar_one_or_none()
-    
-    async def get_pending_approvals(self, limit: int = 50) -> List[FileUpload]:
+    async def get_pending_approval(self, limit: int = 50) -> List[FileUpload]:
         """Get files awaiting approval."""
-        result = await self.db.execute(
+        result = await self.session.execute(
             select(FileUpload)
             .where(FileUpload.status == FileStatus.PENDING)
             .order_by(FileUpload.created_at.asc())
@@ -332,9 +229,9 @@ class FileUploadService:
         )
         return result.scalars().all()
     
-    async def get_approved_pending_processing(self, limit: int = 50) -> List[FileUpload]:
+    async def get_approved_files(self, limit: int = 50) -> List[FileUpload]:
         """Get approved files ready for processing."""
-        result = await self.db.execute(
+        result = await self.session.execute(
             select(FileUpload)
             .where(FileUpload.status == FileStatus.APPROVED)
             .order_by(FileUpload.created_at.asc())
@@ -342,146 +239,46 @@ class FileUploadService:
         )
         return result.scalars().all()
     
-    async def get_failed_retryable(self, limit: int = 50) -> List[FileUpload]:
-        """Get failed files that can be retried."""
-        result = await self.db.execute(
+    async def get_by_user(self, user_id: int, limit: int = 100) -> List[FileUpload]:
+        """Get files uploaded by user."""
+        result = await self.session.execute(
             select(FileUpload)
-            .where(
-                and_(
-                    FileUpload.status.in_([FileStatus.PENDING, FileStatus.FAILED]),
-                    FileUpload.retry_count < FileUpload.max_retries,
-                )
-            )
-            .order_by(FileUpload.updated_at.asc())
+            .where(FileUpload.uploaded_by_id == user_id)
+            .order_by(FileUpload.created_at.desc())
             .limit(limit)
         )
         return result.scalars().all()
     
-    async def get_by_user(
-        self,
-        user_id: int,
-        status: Optional[FileStatus] = None,
-        limit: int = 100
-    ) -> List[FileUpload]:
-        """Get file uploads by user."""
-        query = select(FileUpload).where(FileUpload.uploaded_by_id == user_id)
-        
-        if status:
-            query = query.where(FileUpload.status == status)
-        
-        result = await self.db.execute(
-            query.order_by(FileUpload.created_at.desc()).limit(limit)
-        )
-        return result.scalars().all()
-    
-    # ============================================================================
-    # Data Retention & Cleanup
-    # ============================================================================
-    
-    async def get_expired_files(self, limit: int = 100) -> List[FileUpload]:
-        """Get files that have exceeded retention period."""
-        result = await self.db.execute(
-            select(FileUpload)
-            .where(
-                and_(
-                    FileUpload.retention_until.isnot(None),
-                    FileUpload.retention_until < datetime.now(timezone.utc),
-                    FileUpload.status != FileStatus.DELETED,
-                )
-            )
-            .order_by(FileUpload.retention_until.asc())
-            .limit(limit)
-        )
-        return result.scalars().all()
-    
-    async def archive_file(self, file_upload_id: int) -> FileUpload:
-        """Mark file as archived (for long-term storage)."""
-        file_upload = await self.get_file_upload(file_upload_id)
+    async def delete(self, file_id: int, delete_file: bool = True) -> FileUpload:
+        """Delete file record and optionally physical file."""
+        file_upload = await self.get_file(file_id)
         if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
-        
-        file_upload.is_archived = True
-        file_upload.updated_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        
-        logger.info(f"Archived file: {file_upload.file_name}")
-        return file_upload
-    
-    async def delete_file(
-        self,
-        file_upload_id: int,
-        delete_physical_file: bool = True
-    ) -> FileUpload:
-        """
-        Mark file as deleted and optionally remove physical file.
-        
-        Args:
-            file_upload_id: FileUpload record ID
-            delete_physical_file: Whether to also delete the physical file from disk
-            
-        Returns:
-            Updated FileUpload record
-        """
-        file_upload = await self.get_file_upload(file_upload_id)
-        if not file_upload:
-            raise ValueError(f"FileUpload not found: {file_upload_id}")
+            raise ValueError(f"File not found: {file_id}")
         
         file_upload.status = FileStatus.DELETED
-        file_upload.updated_at = datetime.now(timezone.utc)
-        await self.db.flush()
+        await self.session.flush()
         
-        # Delete physical file if requested
-        if delete_physical_file:
+        if delete_file:
             try:
                 path = Path(file_upload.file_path)
                 if path.exists():
                     path.unlink()
                     logger.info(f"Deleted physical file: {path}")
             except Exception as e:
-                logger.error(f"Failed to delete physical file {file_upload.file_path}: {e}")
+                logger.error(f"Failed to delete physical file: {e}")
         
-        logger.info(f"Marked file as deleted: {file_upload.file_name}")
+        logger.info(f"Deleted: {file_upload.file_name}")
         return file_upload
     
-    # ============================================================================
-    # Utility Methods
-    # ============================================================================
-    
     @staticmethod
-    async def _calculate_file_hash(file_path: str) -> str:
+    async def _calculate_hash(file_path: str) -> str:
         """Calculate SHA-256 hash of file."""
-        sha256_hash = hashlib.sha256()
-        
+        sha256 = hashlib.sha256()
         try:
             with open(file_path, "rb") as f:
-                # Read file in chunks to handle large files
                 for chunk in iter(lambda: f.read(4096), b""):
-                    sha256_hash.update(chunk)
-            return sha256_hash.hexdigest()
+                    sha256.update(chunk)
+            return sha256.hexdigest()
         except Exception as e:
             logger.error(f"Failed to calculate hash for {file_path}: {e}")
             raise
-    
-    async def get_statistics(self) -> Dict[str, Any]:
-        """Get file upload statistics."""
-        # Query all statuses
-        result = await self.db.execute(
-            select(
-                FileUpload.status,
-                func.count(FileUpload.id).label('count')
-            ).group_by(FileUpload.status)
-        )
-        
-        status_counts = {row.status.value: row.count for row in result.all()}
-        
-        # Total statistics
-        total_result = await self.db.execute(select(func.count(FileUpload.id)))
-        total = total_result.scalar()
-        
-        return {
-            "total_files": total,
-            "by_status": status_counts,
-            "pending_approvals": status_counts.get(FileStatus.PENDING.value, 0),
-            "processed": status_counts.get(FileStatus.PROCESSED.value, 0),
-            "failed": status_counts.get(FileStatus.FAILED.value, 0),
-        }
