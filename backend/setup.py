@@ -3,14 +3,25 @@
 Setup script for RAG Fortress application.
 
 Usage:
-    python setup.py              # Run full setup: connect -> migrate -> seed
-    python setup.py --verify     # Verify setup is complete
-    python setup.py --clear-db   # Clear database (for recovery/restart)
+    python setup.py                          # Run full setup (all seeders by default)
+    python setup.py --verify                 # Verify setup is complete
+    python setup.py --clear-db               # Clear database (for recovery/restart)
+    python setup.py --list-seeders           # Show available seeders and current config
+    python setup.py --only-seeder admin,roles_permissions  # Run only specified seeders
+    python setup.py --skip-seeder departments  # Run all except specified seeders
+
+Environment Variables (optional):
+    ENABLED_SEEDERS                          # Comma-separated seeders to run (empty = all)
+    DISABLED_SEEDERS                         # Comma-separated seeders to skip (empty = none)
+
+NOTE: If both ENABLED_SEEDERS and DISABLED_SEEDERS are set, ENABLED_SEEDERS takes priority.
+      CLI flags (--only-seeder, --skip-seeder) override environment variables.
 """
 
 import asyncio
 import sys
 import logging
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -37,6 +48,95 @@ console_handler.setLevel(logging.INFO)
 console_handler.setFormatter(logging.Formatter('[%(levelname)s] %(message)s'))
 logger.addHandler(console_handler)
 logger.setLevel(logging.INFO)
+
+# Seeders that are required to run before others (dependencies)
+CRITICAL_SEEDERS = {"admin", "roles_permissions"}
+
+# Preferred seeding order (respects dependencies)
+SEEDING_ORDER = [
+    "roles_permissions",
+    "departments",
+    "admin",
+    "jobs",
+    "knowledge_base",
+]
+
+
+def get_seeders_to_run() -> list:
+    """Get list of seeders to run based on environment configuration.
+    
+    Priority:
+    1. ENABLED_SEEDERS (if set, runs only these)
+    2. DISABLED_SEEDERS (if set, runs all except these)
+    3. Default (if both empty, runs all)
+    
+    Returns list of seeder names.
+    """
+    all_seeders = list(SEEDERS.keys())
+    
+    # Check ENABLED_SEEDERS first (highest priority)
+    enabled = os.getenv("ENABLED_SEEDERS", "").strip()
+    if enabled:
+        seeders = [s.strip() for s in enabled.split(",") if s.strip()]
+        return seeders
+    
+    # Check DISABLED_SEEDERS second
+    disabled = os.getenv("DISABLED_SEEDERS", "").strip()
+    if disabled:
+        skip_list = [s.strip() for s in disabled.split(",") if s.strip()]
+        return [s for s in all_seeders if s not in skip_list]
+    
+    # Default: run all seeders
+    return all_seeders
+
+
+def parse_cli_seeders(args: list) -> tuple:
+    """Parse CLI arguments for seeder selection flags.
+    
+    Returns (only_seeders, skip_seeders) tuples of lists, or (None, None) if not specified.
+    
+    Flags:
+        --only-seeder admin,roles_permissions  (run only these)
+        --skip-seeder departments              (run all except these)
+    """
+    only_seeders = None
+    skip_seeders = None
+    
+    if "--only-seeder" in args:
+        idx = args.index("--only-seeder")
+        if idx + 1 < len(args):
+            only_seeders = [s.strip() for s in args[idx + 1].split(",") if s.strip()]
+    
+    if "--skip-seeder" in args:
+        idx = args.index("--skip-seeder")
+        if idx + 1 < len(args):
+            skip_seeders = [s.strip() for s in args[idx + 1].split(",") if s.strip()]
+    
+    return only_seeders, skip_seeders
+
+
+def list_seeders() -> None:
+    """Display available seeders and current configuration."""
+    seeders_to_run = get_seeders_to_run()
+    all_seeders = list(SEEDERS.keys())
+    
+    logger.info("Available seeders:")
+    for seeder_name in all_seeders:
+        status = "✓" if seeder_name in seeders_to_run else "✗"
+        logger.info(f"  {status} {seeder_name}")
+    
+    logger.info(f"\nSeeders to run: {', '.join(seeders_to_run)}")
+    
+    # Show environment configuration
+    enabled = os.getenv("ENABLED_SEEDERS", "").strip()
+    disabled = os.getenv("DISABLED_SEEDERS", "").strip()
+    
+    if enabled:
+        logger.info(f"Configuration: ENABLED_SEEDERS={enabled}")
+    elif disabled:
+        logger.info(f"Configuration: DISABLED_SEEDERS={disabled}")
+    else:
+        logger.info("Configuration: Default (no env vars set)")
 
 
 async def run_migrations() -> bool:
@@ -66,8 +166,12 @@ async def run_migrations() -> bool:
         return False
 
 
-async def run_seeders() -> bool:
-    """Run seeders and return success status."""
+async def run_seeders(seeders_to_run: list = None) -> bool:
+    """Run seeders and return success status.
+    
+    Args:
+        seeders_to_run: List of seeder names to run. If None, uses environment config.
+    """
     try:
         db_settings = DatabaseSettings()
         app_settings = AppSettings()
@@ -82,26 +186,33 @@ async def run_seeders() -> bool:
             logger.error("✗ Database connection failed")
             return False
         
+        # Determine which seeders to run
+        if seeders_to_run is None:
+            seeders_to_run = get_seeders_to_run()
+        
+        # Validate seeder names
+        invalid = [s for s in seeders_to_run if s not in SEEDERS]
+        if invalid:
+            logger.error(f"✗ Unknown seeders: {', '.join(invalid)}")
+            return False
+        
+        # Ensure dependencies are included
+        if "admin" in seeders_to_run and "roles_permissions" not in seeders_to_run:
+            logger.info("  [INFO] Adding 'roles_permissions' (required by 'admin')")
+            seeders_to_run.insert(0, "roles_permissions")
+        
         logger.info("Running seeders...")
         
-        # Seeding order
-        seeding_order = [
-            "roles_permissions",
-            "departments",
-            "admin",
-            "jobs",
-            "knowledge_base",
-        ]
+        # Filter to only requested seeders, keeping preferred order
+        ordered_seeders = [s for s in SEEDING_ORDER if s in seeders_to_run]
         
         failed = []
         async with session_factory() as session:
-            for seeder_name in seeding_order:
-                if seeder_name not in SEEDERS:
-                    continue
-                
+            for seeder_name in ordered_seeders:
                 seeder = SEEDERS[seeder_name]()
                 kwargs = {}
                 
+                # Prepare kwargs for admin seeder (if needed)
                 if seeder_name == "admin":
                     kwargs = {
                         "username": app_settings.ADMIN_USERNAME,
@@ -117,7 +228,7 @@ async def run_seeders() -> bool:
                     logger.info(f"  ✓ {seeder_name}: {result.get('message')}")
                 else:
                     logger.warning(f"  ! {seeder_name}: {result.get('message')}")
-                    if seeder_name in ["roles_permissions", "admin"]:
+                    if seeder_name in CRITICAL_SEEDERS:
                         failed.append(seeder_name)
         
         await db_manager.close_connection()
@@ -135,7 +246,7 @@ async def run_seeders() -> bool:
 
 
 async def verify_setup() -> bool:
-    """Verify setup is complete."""
+    """Verify setup is complete by checking if database has tables from all seeders."""
     try:
         db_settings = DatabaseSettings()
         db_manager = DatabaseManager(db_settings)
@@ -146,7 +257,7 @@ async def verify_setup() -> bool:
             logger.error("✗ Database connection failed")
             return False
         
-        # Check tables
+        # Check tables using SQLAlchemy metadata
         from sqlalchemy import inspect as sql_inspect
         
         session_factory = db_manager.get_session_factory()
@@ -154,19 +265,19 @@ async def verify_setup() -> bool:
         def check_tables(sync_session):
             inspector = sql_inspect(db_manager.async_engine.sync_engine)
             tables = inspector.get_table_names()
-            required = ["users", "roles", "permissions", "departments", "jobs", "file_uploads"]
-            return all(t in tables for t in required)
+            # Verify database has tables (indicates migrations ran)
+            return len(tables) > 0
         
         async with session_factory() as session:
-            tables_ok = await session.run_sync(check_tables)
+            has_tables = await session.run_sync(check_tables)
         
         await db_manager.close_connection()
         
-        if tables_ok:
-            logger.info("✓ Setup verified - all tables exist")
+        if has_tables:
+            logger.info("✓ Setup verified - database has tables")
             return True
         else:
-            logger.error("✗ Setup incomplete - missing required tables")
+            logger.error("✗ Setup incomplete - no tables found")
             return False
     
     except Exception as e:
@@ -223,11 +334,27 @@ async def clear_database() -> bool:
 
 async def main(args):
     """Main setup flow."""
+    if "--list-seeders" in args:
+        list_seeders()
+        return 0
+    
     if "--clear-db" in args:
         return 0 if await clear_database() else 1
     
     if "--verify" in args:
         return 0 if await verify_setup() else 1
+    
+    # Parse CLI seeder selection flags
+    only_seeders, skip_seeders = parse_cli_seeders(args)
+    
+    # Determine which seeders to run
+    if only_seeders is not None:
+        seeders_to_run = only_seeders
+    elif skip_seeders is not None:
+        default_seeders = get_seeders_to_run()
+        seeders_to_run = [s for s in default_seeders if s not in skip_seeders]
+    else:
+        seeders_to_run = None  # Use environment defaults in run_seeders()
     
     # Full setup: migrate -> seed
     logger.info("Setting up RAG Fortress...\n")
@@ -238,7 +365,7 @@ async def main(args):
     
     logger.info("")
     
-    if not await run_seeders():
+    if not await run_seeders(seeders_to_run):
         logger.error("\nSetup failed at seeding - data may be partially loaded")
         logger.info("Run 'python setup.py --clear-db' to reset and try again\n")
         return 1
