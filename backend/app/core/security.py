@@ -26,13 +26,13 @@ logger = get_logger(__name__)
 
 # Password hashing context
 pwd_context = CryptContext(
-    schemes=["bcrypt"],
+    schemes=["argon2"],
     deprecated="auto"
 )
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
+    """Hash a password using argon2."""
     return pwd_context.hash(password)
 
 

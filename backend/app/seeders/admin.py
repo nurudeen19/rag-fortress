@@ -18,34 +18,18 @@ class AdminSeeder(BaseSeed):
     description = "Creates default admin account"
     required_tables = ["users", "roles"]  # Required tables
     
-    def _get_password_hasher(self):
-        """Get the best available password hasher."""
-        # Try to import passlib with argon2 (most secure)
-        try:
-            from passlib.context import CryptContext
-            try:
-                return CryptContext(schemes=["argon2"], deprecated="auto")
-            except Exception:
-                # Fallback to pbkdf2 if argon2 not available
-                return CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-        except ImportError:
-            return None
-    
     def _hash_password(self, password: str) -> str:
-        """Hash password using available method."""
-        pwd_context = self._get_password_hasher()
+        """Hash password using argon2 (must match security.py configuration)."""
+        from passlib.context import CryptContext
         
-        if pwd_context:
-            try:
-                return pwd_context.hash(password)
-            except Exception as e:
-                logger.warning(f"Failed to hash with passlib: {e}. Using SHA256 fallback.")
+        # Use argon2 to match security.py configuration
+        pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
         
-        # Fallback: use simple hash (development only)
-        import hashlib
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-        logger.warning("Using SHA256 for password hashing (not recommended for production)")
-        return password_hash
+        try:
+            return pwd_context.hash(password)
+        except Exception as e:
+            logger.error(f"Failed to hash password with bcrypt: {e}")
+            raise
     
     async def run(self, session: AsyncSession, **kwargs) -> dict:
         """Create admin account if it doesn't exist."""

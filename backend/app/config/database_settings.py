@@ -19,7 +19,7 @@ class DatabaseSettings(BaseSettings):
     )
     
     # Database Provider Selection
-    DATABASE_PROVIDER: str = Field("sqlite", env="DATABASE_PROVIDER")
+    DATABASE_PROVIDER: str = Field("postgresql", env="DATABASE_PROVIDER")
     
     # Unified Database Configuration (PostgreSQL & MySQL)
     # These fields are used by both PostgreSQL and MySQL

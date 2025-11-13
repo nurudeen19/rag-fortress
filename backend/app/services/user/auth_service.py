@@ -26,7 +26,7 @@ class AuthService:
         self.session = session
         # Password hashing context
         self.pwd_context = CryptContext(
-            schemes=["bcrypt"],
+            schemes=["argon2"],
             deprecated="auto"
         )
     

@@ -75,23 +75,23 @@ class StartupController:
             await self._initialize_database()
             
             # ========== STEP 2: Embedding Provider (CRITICAL) ==========
-            await self._initialize_embeddings()
+            # await self._initialize_embeddings()
             
             # ========== STEP 3: Vector Store (CRITICAL) ==========
-            await self._initialize_vector_store()
+            # await self._initialize_vector_store()
             
             # ========== STEP 4: Retriever (CRITICAL) ==========
-            await self._initialize_retriever()
+            # await self._initialize_retriever()
             
             # ========== STEP 5: LLM Provider (CRITICAL) ==========
-            await self._initialize_llm()
+            # await self._initialize_llm()
             # await self._initialize_fallback_llm()
             
             # ========== STEP 6: Email Client (OPTIONAL) ==========
-            await self._initialize_email_client()
+            # await self._initialize_email_client()
             
             # ========== STEP 7: Job Queue (OPTIONAL, at end) ==========
-            await self._initialize_job_queue()
+            # await self._initialize_job_queue()
 
             # Future initializations will be added here:
             # - Vector store connection pool

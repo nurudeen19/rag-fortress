@@ -39,7 +39,7 @@ class PasswordService:
         """Initialize with database session."""
         self.session = session
         self.pwd_context = CryptContext(
-            schemes=["bcrypt"],
+            schemes=["argon2"],
             deprecated="auto"
         )
     
