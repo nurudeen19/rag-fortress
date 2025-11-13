@@ -199,70 +199,6 @@ class DocumentParsingError(DocumentError):
         )
 
 
-# ============================================================================
-# Vector Store Exceptions
-# ============================================================================
-
-class VectorStoreError(RAGFortressException):
-    """Base exception for vector store errors."""
-    
-    def __init__(
-        self,
-        message: str,
-        provider: Optional[str] = None,
-        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
-        details: Optional[Dict[str, Any]] = None
-    ):
-        details = details or {}
-        if provider:
-            details["provider"] = provider
-        
-        super().__init__(
-            message=message,
-            status_code=status_code,
-            details=details
-        )
-
-
-class VectorStoreConnectionError(VectorStoreError):
-    """Raised when connection to vector store fails."""
-    
-    def __init__(self, provider: str, message: Optional[str] = None):
-        super().__init__(
-            message=message or f"Failed to connect to {provider} vector store",
-            provider=provider,
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
-        )
-
-
-class VectorStoreNotInitializedError(VectorStoreError):
-    """Raised when attempting to use uninitialized vector store."""
-    
-    def __init__(self, provider: str):
-        super().__init__(
-            message=f"Vector store not initialized: {provider}",
-            provider=provider,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-class EmbeddingDimensionMismatchError(VectorStoreError):
-    """Raised when embedding dimension doesn't match expected."""
-    
-    def __init__(
-        self,
-        expected: int,
-        actual: int,
-        provider: Optional[str] = None
-    ):
-        super().__init__(
-            message=f"Embedding dimension mismatch: expected {expected}, got {actual}",
-            provider=provider,
-            status_code=status.HTTP_400_BAD_REQUEST,
-            details={"expected": expected, "actual": actual}
-        )
-
-
 class UnsupportedDocumentTypeError(DocumentError):
     """Raised when document type is not supported."""
     
@@ -289,6 +225,8 @@ class DocumentTooLargeError(DocumentError):
         )
 
 
+
+
 # ============================================================================
 # Vector Store Exceptions
 # ============================================================================
@@ -299,16 +237,20 @@ class VectorStoreError(RAGFortressException):
     def __init__(
         self,
         message: str,
+        provider: Optional[str] = None,
         collection: Optional[str] = None,
+        status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
         details: Optional[Dict[str, Any]] = None
     ):
         details = details or {}
+        if provider:
+            details["provider"] = provider
         if collection:
             details["collection"] = collection
         
         super().__init__(
             message=message,
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=status_code,
             details=details
         )
 
@@ -324,8 +266,7 @@ class CollectionNotFoundError(VectorStoreError):
     def __init__(self, collection: str):
         super().__init__(
             message=f"Collection not found: {collection}",
-            collection=collection,
-            details={"collection": collection}
+            collection=collection
         )
 
 

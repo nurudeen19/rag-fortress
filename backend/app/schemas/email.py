@@ -21,7 +21,7 @@ class EmailRequest(BaseModel):
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
@@ -42,7 +42,7 @@ class AccountActivationRequest(BaseModel):
     activation_token: str = Field(..., description="Token for email verification")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipient_email": "newuser@example.com",
                 "recipient_name": "Jane Smith",
@@ -59,7 +59,7 @@ class PasswordResetRequest(BaseModel):
     reset_token: str = Field(..., description="Token for password reset")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
@@ -79,7 +79,7 @@ class InvitationRequest(BaseModel):
     custom_message: Optional[str] = Field(None, description="Optional custom message from inviter")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipient_email": "colleague@example.com",
                 "recipient_name": "Alice Johnson",
@@ -102,7 +102,7 @@ class NotificationRequest(BaseModel):
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
@@ -127,7 +127,7 @@ class BulkNotificationRequest(BaseModel):
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "recipients": [
                     "user1@example.com",
@@ -150,7 +150,7 @@ class EmailResponse(BaseModel):
     timestamp: str = Field(..., description="ISO format timestamp of request")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "Email sent successfully",
@@ -171,7 +171,7 @@ class BulkEmailResponse(BaseModel):
     timestamp: str = Field(..., description="ISO format timestamp of request")
     
     class Config:
-        schema_extra = {
+        json_schema_extra = {
             "example": {
                 "success": True,
                 "total": 2,

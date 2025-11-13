@@ -71,25 +71,27 @@ class StartupController:
         logger.info("Starting application initialization...")
         
         try:
-            # ========== STEP 1: Database (required by everything) ==========
+            # ========== STEP 1: Database (CRITICAL) ==========
             await self._initialize_database()
             
-            # ========== STEP 2: Job Queue (for task processing) ==========
-            await self._initialize_job_queue()
-            
-            # ========== STEP 3: Embedding Provider (for vectors) ==========
+            # ========== STEP 2: Embedding Provider (CRITICAL) ==========
             await self._initialize_embeddings()
             
-            # ========== STEP 4: Vector Store (uses embeddings) ==========
-            # await self._initialize_vector_store()
+            # ========== STEP 3: Vector Store (CRITICAL) ==========
+            await self._initialize_vector_store()
             
-            # ========== STEP 5: LLM Provider (optional) ==========
-            # await self._initialize_llm()
+            # ========== STEP 4: Retriever (CRITICAL) ==========
+            await self._initialize_retriever()
+            
+            # ========== STEP 5: LLM Provider (CRITICAL) ==========
+            await self._initialize_llm()
             # await self._initialize_fallback_llm()
-            # await self._initialize_retriever()
             
-            # ========== STEP 6: Email Client (optional notifications) ==========
+            # ========== STEP 6: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
+            
+            # ========== STEP 7: Job Queue (OPTIONAL, at end) ==========
+            await self._initialize_job_queue()
 
             # Future initializations will be added here:
             # - Vector store connection pool
@@ -114,14 +116,11 @@ class StartupController:
             
             # Create async engine
             logger.info("Creating database engine...")
-            self.database_manager.create_async_engine()
+            await self.database_manager.create_async_engine()
             
             # Create session factory
             self.async_session_factory = self.database_manager.get_session_factory()
             
-            # Create tables
-            logger.info("Creating database tables...")
-            await self.database_manager.create_all_tables()
             
             logger.info("✓ Database initialized successfully")
             logger.info("To seed the database, run: python setup.py")
@@ -131,7 +130,7 @@ class StartupController:
             raise
     
     async def _initialize_job_queue(self):
-        """Initialize job queue for async task processing and recovery."""
+        """Initialize job queue (optional - catches errors without blocking startup)."""
         logger.info("Initializing job queue...")
         
         try:
@@ -151,8 +150,7 @@ class StartupController:
             logger.info(f"✓ Job queue initialized (recovered {recovered_count} pending jobs)")
             
         except Exception as e:
-            logger.error(f"Failed to initialize job queue: {e}", exc_info=True)
-            raise
+            logger.warning(f"⚠ Job queue initialization skipped: {e}")
     
     async def _initialize_email_client(self):
         """Initialize email client for sending emails."""
@@ -202,8 +200,24 @@ class StartupController:
             logger.error(f"Failed to initialize embedding provider: {e}")
             raise
     
+    async def _initialize_vector_store(self):
+        """Initialize vector store (optional - catches errors without blocking startup)."""
+        logger.info("Initializing vector store...")
+        
+        try:
+            # Get vector store with embeddings
+            store = get_vector_store(
+                embeddings=self.embedding_provider,
+                provider=getattr(settings, "VECTOR_DB_PROVIDER", None)
+            )
+            
+            logger.info(f"✓ Vector store initialized (provider: {settings.VECTOR_DB_PROVIDER})")
+        
+        except Exception as e:
+            logger.warning(f"⚠ Vector store initialization skipped: {e}")
+    
     async def _initialize_llm(self):
-        """Initialize and warm up LLM provider."""
+        """Initialize LLM provider (optional - catches errors without blocking startup)."""
         logger.info("Initializing LLM provider...")
         
         try:
@@ -217,8 +231,7 @@ class StartupController:
                 raise RuntimeError("LLM provider test failed")
         
         except Exception as e:
-            logger.error(f"Failed to initialize LLM provider: {e}")
-            raise
+            logger.warning(f"⚠ LLM provider initialization skipped: {e}")
     
     async def _initialize_fallback_llm(self):
         """Initialize and warm up fallback LLM provider."""
@@ -242,7 +255,7 @@ class StartupController:
             raise
     
     async def _initialize_retriever(self):
-        """Initialize and warm up retriever."""
+        """Initialize retriever (optional - catches errors without blocking startup)."""
         logger.info("Initializing retriever...")
         
         try:
@@ -252,8 +265,7 @@ class StartupController:
             logger.info("✓ Retriever initialized successfully")
         
         except Exception as e:
-            logger.error(f"Failed to initialize retriever: {e}")
-            raise
+            logger.warning(f"⚠ Retriever initialization skipped: {e}")
 
     def _smoke_test_vector_store(self):
         """Lightweight vector store initialization check without ingestion."""

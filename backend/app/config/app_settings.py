@@ -88,8 +88,17 @@ class AppSettings(BaseSettings):
     @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
     @classmethod
     def parse_list_fields(cls, v):
-        """Parse list fields from comma-separated string or list."""
+        """Parse list fields from JSON array, comma-separated string, or list."""
         if isinstance(v, str):
+            # Try to parse as JSON array first
+            if v.strip().startswith("["):
+                import json
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, fall back to comma-separated
+                    pass
+            # Parse as comma-separated string
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
