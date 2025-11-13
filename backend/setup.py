@@ -62,6 +62,93 @@ SEEDING_ORDER = [
 ]
 
 
+def show_help() -> None:
+    """Display help information for all available options."""
+    help_text = """
+RAG Fortress Setup - Configuration Options
+
+USAGE:
+    python setup.py [OPTIONS]
+
+OPTIONS:
+    (no arguments)              Run full setup: migrations + seeders + verification
+                                Uses ENABLED_SEEDERS or DISABLED_SEEDERS from .env
+                                Default: runs all seeders if env vars not set
+
+    --help                      Show this help message
+
+    --list-seeders              Display available seeders and current configuration
+                                Shows which seeders will run based on env settings
+
+    --verify                    Verify setup is complete
+                                Checks if database has tables (indicates migrations ran)
+
+    --clear-db                  Clear all database tables
+                                DANGEROUS: Requires 'yes' confirmation
+                                Use this to reset and start fresh
+
+    --only-seeder NAMES         Run only specified seeders (overrides env vars)
+                                NAMES: comma-separated list, e.g., admin,roles_permissions
+                                Example: python setup.py --only-seeder admin,roles_permissions
+
+    --skip-seeder NAMES         Run all seeders except specified (overrides env vars)
+                                NAMES: comma-separated list, e.g., departments,jobs
+                                Example: python setup.py --skip-seeder departments,jobs
+
+ENVIRONMENT VARIABLES (optional):
+    ENABLED_SEEDERS             Comma-separated list of seeders to run
+                                If set, ONLY these seeders will run (ignores all others)
+                                Example: ENABLED_SEEDERS=admin,roles_permissions
+                                Default: (empty) runs all seeders
+
+    DISABLED_SEEDERS            Comma-separated list of seeders to skip
+                                Runs all seeders EXCEPT these (only if ENABLED_SEEDERS not set)
+                                Example: DISABLED_SEEDERS=departments,jobs
+                                Default: (empty) skips nothing
+
+PRIORITY ORDER (what takes precedence):
+    1. CLI flags (--only-seeder, --skip-seeder) - Highest priority
+    2. Environment variables (ENABLED_SEEDERS, DISABLED_SEEDERS)
+    3. Default behavior (run all seeders) - Lowest priority
+
+    Note: If both ENABLED_SEEDERS and DISABLED_SEEDERS are set, ENABLED_SEEDERS wins
+
+AVAILABLE SEEDERS:
+    • admin                 Create admin user account (critical)
+    • roles_permissions     Create roles and permissions (critical)
+    • departments           Create department records (optional)
+    • jobs                  Create initial job records (optional)
+    • knowledge_base        Create knowledge base records (optional)
+
+DEPENDENCIES:
+    • admin requires roles_permissions (automatically included if needed)
+    • Other seeders have no dependencies
+
+EXAMPLES:
+    # Run everything (default, all 5 seeders)
+    python setup.py
+
+    # View what will run based on current config
+    python setup.py --list-seeders
+
+    # Production setup (minimal, only critical seeders)
+    ENABLED_SEEDERS=admin,roles_permissions python setup.py
+
+    # Development without optional data
+    DISABLED_SEEDERS=departments,jobs python setup.py
+
+    # Test specific seeders
+    python setup.py --only-seeder admin,roles_permissions
+
+    # Reset database
+    python setup.py --clear-db
+
+    # Verify setup is complete
+    python setup.py --verify
+"""
+    print(help_text)
+
+
 def get_seeders_to_run() -> list:
     """Get list of seeders to run based on environment configuration.
     
@@ -334,6 +421,10 @@ async def clear_database() -> bool:
 
 async def main(args):
     """Main setup flow."""
+    if "--help" in args or "-h" in args:
+        show_help()
+        return 0
+    
     if "--list-seeders" in args:
         list_seeders()
         return 0
