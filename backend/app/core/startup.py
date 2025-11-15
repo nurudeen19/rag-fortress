@@ -91,7 +91,7 @@ class StartupController:
             await self._initialize_email_client()
             
             # ========== STEP 7: Job Queue (OPTIONAL, at end) ==========
-            # await self._initialize_job_queue()
+            await self._initialize_job_queue()
 
             # Future initializations will be added here:
             # - Vector store connection pool

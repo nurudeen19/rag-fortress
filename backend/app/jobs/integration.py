@@ -15,6 +15,7 @@ Flow:
 import json
 from typing import Optional, Callable, Any
 from sqlalchemy.ext.asyncio import AsyncSession
+import asyncio
 
 from app.models.job import Job, JobStatus, JobType
 from app.services.job_service import JobService
@@ -78,7 +79,7 @@ class JobQueueIntegration:
         # Schedule with JobManager for immediate execution
         job_id_str = job_id or f"{job_type.value}_{reference_id}_{job.id}"
         self.job_manager.add_immediate_job(
-            self._job_wrapper,
+            self._sync_job_wrapper,
             job.id,
             handler,
             job_id=job_id_str
@@ -107,7 +108,7 @@ class JobQueueIntegration:
                     # Schedule job
                     job_id_str = f"{job.job_type.value}_{job.reference_id}_{job.id}"
                     self.job_manager.add_immediate_job(
-                        self._job_wrapper,
+                        self._sync_job_wrapper,
                         job.id,
                         handler,
                         job_id=job_id_str
@@ -119,6 +120,31 @@ class JobQueueIntegration:
             
             logger.info(f"Recovered and scheduled {count} pending jobs")
             return count
+    
+    def _sync_job_wrapper(self, job_id: int, handler: Callable) -> None:
+        """
+        Synchronous wrapper for async job execution.
+        
+        This is called by APScheduler (which expects sync functions).
+        It runs the async _job_wrapper in a new event loop.
+        
+        Args:
+            job_id: Database job ID
+            handler: Async handler to execute
+        """
+        try:
+            # Get or create event loop for this thread
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Run the async wrapper
+            loop.run_until_complete(self._job_wrapper(job_id, handler))
+        
+        except Exception as e:
+            logger.error(f"Error in sync job wrapper for job {job_id}: {e}", exc_info=True)
     
     async def _job_wrapper(self, job_id: int, handler: Callable) -> None:
         """
