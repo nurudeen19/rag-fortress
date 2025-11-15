@@ -87,7 +87,7 @@ def get_vector_store(
     # === Qdrant ===
     elif provider == "qdrant":
         try:
-            from langchain_qdrant import Qdrant
+            from langchain_qdrant import QdrantVectorStore
             from qdrant_client import QdrantClient
         except ImportError:
             raise VectorStoreError(
@@ -100,10 +100,10 @@ def get_vector_store(
             api_key=config.get("api_key")
         )
         
-        store = Qdrant(
+        store = QdrantVectorStore(
             client=client,
             collection_name=config["collection_name"],
-            embeddings=embeddings
+            embedding=embeddings
         )
         logger.info(f"✓ Qdrant initialized: {config['collection_name']}")
         return store
