@@ -404,7 +404,7 @@ async def handle_password_reset_request(
         session: Database session
         
     Returns:
-        Dict with success status (always returns success for security)
+        Dict with success status and message
     """
     try:
         logger.info(f"Password reset requested for {request.email}")
@@ -428,10 +428,9 @@ async def handle_password_reset_request(
         
         if error:
             logger.warning(f"Failed to create reset token for {request.email}: {error}")
-            # Still return success to not leak information
             return {
-                "success": True,
-                "message": "If email exists, password reset link will be sent"
+                "success": False,
+                "error": "Failed to generate reset token. Please try again later."
             }
         
         # Queue password reset email job
@@ -459,24 +458,24 @@ async def handle_password_reset_request(
             )
             
             logger.info(f"Password reset email job queued for {request.email}")
+            
+            return {
+                "success": True,
+                "message": "Password reset link will be sent to your email"
+            }
         
         except Exception as e:
-            logger.warning(f"Failed to queue password reset email job (continuing anyway): {e}")
-        
-        # Always return success
-        logger.info(f"Password reset token generated for {request.email}")
-        
-        return {
-            "success": True,
-            "message": "If email exists, password reset link will be sent"
-        }
+            logger.error(f"Failed to queue password reset email job for {request.email}: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": "Failed to send reset email. Please try again later."
+            }
         
     except Exception as e:
         logger.error(f"Error handling password reset request: {str(e)}", exc_info=True)
-        # Still return success for security
         return {
-            "success": True,
-            "message": "If email exists, password reset link will be sent"
+            "success": False,
+            "error": "An unexpected error occurred. Please try again later."
         }
 
 
