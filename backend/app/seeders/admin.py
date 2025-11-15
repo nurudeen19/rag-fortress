@@ -7,6 +7,7 @@ from sqlalchemy.future import select
 from app.models.user import User
 from app.models.auth import Role
 from app.seeders.base import BaseSeed
+from app.config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,7 @@ class AdminSeeder(BaseSeed):
         try:
             return pwd_context.hash(password)
         except Exception as e:
-            logger.error(f"Failed to hash password with bcrypt: {e}")
+            logger.error(f"Failed to hash password with argon2: {e}")
             raise
     
     async def run(self, session: AsyncSession, **kwargs) -> dict:
@@ -44,11 +45,11 @@ class AdminSeeder(BaseSeed):
                 logger.error(error_msg)
                 return {"success": False, "message": error_msg}
             
-            username = kwargs.get("username", "admin")
-            email = kwargs.get("email", "admin@ragfortress.local")
-            password = kwargs.get("password", "admin@RAGFortress123")
-            first_name = kwargs.get("first_name", "Admin")
-            last_name = kwargs.get("last_name", "User")
+            username = kwargs.get("username", settings.ADMIN_USERNAME)
+            email = kwargs.get("email", settings.ADMIN_EMAIL)
+            password = kwargs.get("password", settings.ADMIN_PASSWORD)
+            first_name = kwargs.get("first_name", settings.ADMIN_FIRSTNAME)
+            last_name = kwargs.get("last_name", settings.ADMIN_LASTNAME)
             
             # Check if admin exists
             stmt = select(User).where(User.username == username)

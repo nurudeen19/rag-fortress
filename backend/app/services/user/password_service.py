@@ -27,6 +27,10 @@ class PasswordResetTokenStatus(str, Enum):
     ALREADY_USED = "already_used"
 
 
+# Simple in-memory token store (use Redis or DB in production)
+_reset_tokens = {}
+
+
 class PasswordService:
     """Service for password management and security."""
     
@@ -164,31 +168,23 @@ class PasswordService:
     
     async def reset_password(
         self,
-        email: str,
-        reset_token: str,
+        user_id: int,
         new_password: str
     ) -> Tuple[bool, Optional[str]]:
         """
-        Reset password using reset token (typically from email).
+        Reset password for a user (after token verification).
         
-        Note: In production, verify token expiry and validity via token store/cache.
-        This is a simplified implementation.
+        Note: Token verification should be done before calling this method.
         
         Args:
-            email: User email address
-            reset_token: Password reset token from email
+            user_id: User ID
             new_password: New plain text password
         
         Returns:
             Tuple of (success, error_message)
         """
         try:
-            user = None
-            result = await self.session.execute(
-                select(User).where(User.email == email)
-            )
-            user = result.scalar_one_or_none()
-            
+            user = await self.session.get(User, user_id)
             if not user:
                 return False, "User not found"
             
@@ -196,9 +192,6 @@ class PasswordService:
             is_valid, error = self.validate_password_strength(new_password)
             if not is_valid:
                 return False, error
-            
-            # In production: verify token validity and expiry from token store
-            # For now, assuming token validation is done by caller
             
             # Update password
             user.password_hash = self.pwd_context.hash(new_password)
@@ -219,3 +212,77 @@ class PasswordService:
     def verify_password(self, plain_password: str, password_hash: str) -> bool:
         """Verify plain text password against hash."""
         return self.pwd_context.verify(plain_password, password_hash)
+    
+    async def create_reset_token(self, user_id: int) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Create a password reset token for a user.
+        
+        Args:
+            user_id: User ID
+        
+        Returns:
+            Tuple of (token, error_message)
+        """
+        try:
+            user = await self.session.get(User, user_id)
+            if not user:
+                return None, "User not found"
+            
+            # Generate secure token
+            token = secrets.token_urlsafe(32)
+            
+            # Store token with expiry (in-memory for now, use Redis in production)
+            expiry = datetime.now(timezone.utc) + timedelta(hours=self.RESET_TOKEN_EXPIRY_HOURS)
+            _reset_tokens[token] = {
+                "user_id": user_id,
+                "email": user.email,
+                "expiry": expiry
+            }
+            
+            logger.info(f"Reset token created for user {user_id}")
+            return token, None
+        
+        except Exception as e:
+            logger.error(f"Create reset token error: {e}")
+            return None, "Failed to create reset token"
+    
+    async def verify_reset_token(
+        self,
+        token: str,
+        email: str
+    ) -> Tuple[Optional[int], Optional[str]]:
+        """
+        Verify a password reset token.
+        
+        Args:
+            token: Reset token
+            email: User email to verify against token
+        
+        Returns:
+            Tuple of (user_id, error_message)
+        """
+        try:
+            if token not in _reset_tokens:
+                return None, "Invalid reset token"
+            
+            token_data = _reset_tokens[token]
+            
+            # Check expiry
+            if datetime.now(timezone.utc) > token_data["expiry"]:
+                del _reset_tokens[token]
+                return None, "Reset token has expired"
+            
+            # Verify email matches
+            if token_data["email"] != email:
+                return None, "Email does not match token"
+            
+            user_id = token_data["user_id"]
+            # Consume token (delete it)
+            del _reset_tokens[token]
+            
+            logger.info(f"Reset token verified for user {user_id}")
+            return user_id, None
+        
+        except Exception as e:
+            logger.error(f"Verify reset token error: {e}")
+            return None, "Failed to verify reset token"

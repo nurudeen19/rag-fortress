@@ -218,6 +218,25 @@ class UserAccountService:
             logger.error(f"Get user error: {e}")
             raise
     
+    async def get_user_by_email(self, email: str) -> Optional[User]:
+        """
+        Get user by email address.
+        
+        Args:
+            email: User email address
+        
+        Returns:
+            User object if found, None otherwise
+        """
+        try:
+            result = await self.session.execute(
+                select(User).where(User.email == email).limit(1)
+            )
+            return result.scalar_one_or_none()
+        except Exception as e:
+            logger.error(f"Get user by email error: {e}")
+            raise
+    
     async def list_users(
         self,
         active_only: bool = True,

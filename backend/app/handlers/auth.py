@@ -471,7 +471,7 @@ async def handle_password_reset_confirm(
         
         # Verify reset token
         user_id, error = await password_service.verify_reset_token(
-            token=request.token,
+            token=request.reset_token,
             email=request.email
         )
         
