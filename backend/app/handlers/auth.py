@@ -25,6 +25,8 @@ from app.services.user import (
     PasswordService,
     UserAccountService,
 )
+from app.core.startup import get_startup_controller
+from app.models.job import JobType
 
 logger = logging.getLogger(__name__)
 
@@ -395,7 +397,7 @@ async def handle_password_reset_request(
     session: AsyncSession
 ) -> dict:
     """
-    Handle password reset request (send reset email).
+    Handle password reset request (queue reset email job).
     
     Args:
         request: Email address for password reset
@@ -432,7 +434,36 @@ async def handle_password_reset_request(
                 "message": "If email exists, password reset link will be sent"
             }
         
-        # TODO: Send reset email with token
+        # Queue password reset email job
+        try:
+            startup_controller = get_startup_controller()
+            job_integration = startup_controller.job_integration
+            
+            if job_integration is None:
+                raise Exception("Job integration not initialized")
+            
+            recipient_name = f"{user.first_name} {user.last_name}".strip() or user.username
+            
+            # Create and schedule the email job
+            await job_integration.create_and_schedule(
+                job_type=JobType.PASSWORD_RESET_EMAIL,
+                reference_id=user.id,
+                reference_type="user",
+                handler=job_integration._handle_password_reset_email,
+                payload={
+                    "recipient_email": request.email,
+                    "recipient_name": recipient_name,
+                    "reset_token": reset_token
+                },
+                max_retries=3
+            )
+            
+            logger.info(f"Password reset email job queued for {request.email}")
+        
+        except Exception as e:
+            logger.warning(f"Failed to queue password reset email job (continuing anyway): {e}")
+        
+        # Always return success
         logger.info(f"Password reset token generated for {request.email}")
         
         return {

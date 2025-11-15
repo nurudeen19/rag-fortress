@@ -173,6 +173,7 @@ class JobQueueIntegration:
             JobType.EMBEDDING_GENERATION: self._handle_embedding,
             JobType.VECTOR_STORAGE: self._handle_vector_storage,
             JobType.CLEANUP: self._handle_cleanup,
+            JobType.PASSWORD_RESET_EMAIL: self._handle_password_reset_email,
         }
         
         handler = handlers.get(job_type)
@@ -207,6 +208,38 @@ class JobQueueIntegration:
         # TODO: Implement actual cleanup logic
         logger.info("Running cleanup")
         return {"status": "cleaned"}
+    
+    async def _handle_password_reset_email(self, job: Job) -> dict:
+        """Handle password reset email job."""
+        payload = json.loads(job.payload) if job.payload else {}
+        
+        try:
+            from app.services.email import get_email_service
+            
+            email_service = get_email_service()
+            
+            recipient_email = payload.get("recipient_email")
+            recipient_name = payload.get("recipient_name")
+            reset_token = payload.get("reset_token")
+            
+            if not all([recipient_email, recipient_name, reset_token]):
+                raise ValueError("Missing required payload fields: recipient_email, recipient_name, reset_token")
+            
+            success = await email_service.send_password_reset(
+                recipient_email=recipient_email,
+                recipient_name=recipient_name,
+                reset_token=reset_token
+            )
+            
+            if success:
+                logger.info(f"Password reset email sent to {recipient_email}")
+                return {"status": "sent", "recipient_email": recipient_email}
+            else:
+                raise Exception(f"Failed to send password reset email to {recipient_email}")
+        
+        except Exception as e:
+            logger.error(f"Error sending password reset email: {e}", exc_info=True)
+            raise
 
 
 async def get_job_integration(session_factory) -> JobQueueIntegration:

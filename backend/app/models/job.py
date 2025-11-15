@@ -20,6 +20,7 @@ class JobType(str, Enum):
     EMBEDDING_GENERATION = "embedding_generation"
     VECTOR_STORAGE = "vector_storage"
     CLEANUP = "cleanup"
+    PASSWORD_RESET_EMAIL = "password_reset_email"
 
 
 class Job(Base):
