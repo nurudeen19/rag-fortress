@@ -71,11 +71,13 @@ def create_app() -> FastAPI:
     from app.routes.auth import router as auth_router
     from app.routes.users import router as users_router
     from app.routes.file_upload import router as file_upload_router
+    from app.routes.jobs import router as jobs_router
     
     app.include_router(email_router)
     app.include_router(auth_router)
     app.include_router(users_router)
     app.include_router(file_upload_router)
+    app.include_router(jobs_router)
     
     # Health check endpoint
     @app.get("/health")
