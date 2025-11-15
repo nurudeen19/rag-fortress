@@ -13,7 +13,7 @@ from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
@@ -57,7 +57,7 @@ def create_access_token(
     """
     if expires_delta is None:
         expires_delta = timedelta(
-            minutes=settings.app_settings.ACCESS_TOKEN_EXPIRE_MINUTES
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
         )
     
     expire = datetime.now(timezone.utc) + expires_delta
@@ -70,9 +70,13 @@ def create_access_token(
     
     encoded_jwt = jwt.encode(
         to_encode,
-        settings.app_settings.SECRET_KEY,
-        algorithm=settings.app_settings.ALGORITHM
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
     )
+    
+    # Ensure token is a string (jwt.encode may return bytes in some versions)
+    if isinstance(encoded_jwt, bytes):
+        encoded_jwt = encoded_jwt.decode('utf-8')
     
     logger.debug(f"Created access token for user {user_id}")
     return encoded_jwt
@@ -100,8 +104,8 @@ def verify_token(token: str) -> Optional[int]:
     try:
         payload = jwt.decode(
             token,
-            settings.app_settings.SECRET_KEY,
-            algorithms=[settings.app_settings.ALGORITHM]
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
         )
         
         user_id: str = payload.get("sub")
@@ -121,8 +125,7 @@ def verify_token(token: str) -> Optional[int]:
 # ============================================================================
 
 async def get_current_user_id(
-    token: str = Depends(lambda: None),
-    authorization: Optional[str] = None,
+    authorization: Optional[str] = Header(None)
 ) -> int:
     """
     Extract and validate user ID from Authorization header.

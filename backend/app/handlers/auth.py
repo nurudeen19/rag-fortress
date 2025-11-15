@@ -77,6 +77,7 @@ async def handle_login(
                 "email": user.email,
                 "first_name": user.first_name,
                 "last_name": user.last_name,
+                "full_name": f"{user.first_name} {user.last_name}".strip(),
                 "is_active": user.is_active,
                 "is_verified": user.is_verified,
             }

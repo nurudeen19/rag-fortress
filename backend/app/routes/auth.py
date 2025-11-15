@@ -80,6 +80,7 @@ async def login(
         email=result["user"]["email"],
         first_name=result["user"]["first_name"],
         last_name=result["user"]["last_name"],
+        full_name=result["user"]["full_name"],
         is_verified=result["user"]["is_verified"],
         is_active=result["user"]["is_active"],
     )
@@ -110,8 +111,13 @@ async def register(
         email=user["email"],
         first_name=user["first_name"],
         last_name=user["last_name"],
+        full_name=user.get("full_name", f"{user['first_name']} {user['last_name']}".strip()),
+        department_id=user.get("department_id"),
         is_active=user["is_active"],
         is_verified=user["is_verified"],
+        is_suspended=user.get("is_suspended", False),
+        suspension_reason=user.get("suspension_reason"),
+        suspended_at=user.get("suspended_at"),
     )
 
 
@@ -203,8 +209,13 @@ async def get_profile(
         email=user["email"],
         first_name=user["first_name"],
         last_name=user["last_name"],
+        full_name=user.get("full_name", f"{user['first_name']} {user['last_name']}".strip()),
+        department_id=user.get("department_id"),
         is_active=user["is_active"],
         is_verified=user["is_verified"],
+        is_suspended=user.get("is_suspended", False),
+        suspension_reason=user.get("suspension_reason"),
+        suspended_at=user.get("suspended_at"),
     )
 
 
@@ -231,8 +242,13 @@ async def update_profile(
         email=user["email"],
         first_name=user["first_name"],
         last_name=user["last_name"],
+        full_name=user.get("full_name", f"{user['first_name']} {user['last_name']}".strip()),
+        department_id=user.get("department_id"),
         is_active=user["is_active"],
         is_verified=user["is_verified"],
+        is_suspended=user.get("is_suspended", False),
+        suspension_reason=user.get("suspension_reason"),
+        suspended_at=user.get("suspended_at"),
     )
 
 
