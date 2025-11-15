@@ -145,9 +145,29 @@ class StartupController:
             # Setup job integration (bridges persistence + scheduling)
             self.job_integration = JobQueueIntegration(self.async_session_factory)
             
-            # Recover pending jobs from database and reschedule
-            recovered_count = await self.job_integration.recover_and_schedule_pending()
-            logger.info(f"✓ Job queue initialized (recovered {recovered_count} pending jobs)")
+            # Schedule job recovery to run after 20 seconds (allows app to fully stabilize)
+            import asyncio
+            from datetime import datetime, timedelta, timezone
+            
+            def _schedule_job_recovery():
+                """Schedule job recovery after a delay."""
+                async def _recover_jobs():
+                    try:
+                        recovered_count = await self.job_integration.recover_and_schedule_pending()
+                        logger.info(f"✓ Job queue initialized (recovered {recovered_count} pending jobs)")
+                    except Exception as e:
+                        logger.error(f"Failed to recover pending jobs: {e}", exc_info=True)
+                
+                # Schedule recovery in 20 seconds
+                run_time = datetime.now(timezone.utc) + timedelta(seconds=20)
+                self.job_manager.add_scheduled_job(
+                    _recover_jobs,
+                    run_at=run_time,
+                    job_id="job_recovery_startup"
+                )
+                logger.info("Job recovery scheduled for 3 seconds after startup")
+            
+            _schedule_job_recovery()
             
         except Exception as e:
             logger.warning(f"⚠ Job queue initialization skipped: {e}")

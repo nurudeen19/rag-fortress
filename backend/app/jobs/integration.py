@@ -126,22 +126,26 @@ class JobQueueIntegration:
         Synchronous wrapper for async job execution.
         
         This is called by APScheduler (which expects sync functions).
-        It runs the async _job_wrapper in a new event loop.
+        It runs the async _job_wrapper in a dedicated event loop for background jobs.
         
         Args:
             job_id: Database job ID
             handler: Async handler to execute
         """
+        logger.info(f"Starting sync wrapper for job {job_id} with handler {handler.__name__}")
         try:
-            # Get or create event loop for this thread
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+            # Create a fresh event loop for this background job
+            # This avoids conflicts with the main FastAPI event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            logger.debug(f"Created new event loop for job {job_id}")
             
-            # Run the async wrapper
-            loop.run_until_complete(self._job_wrapper(job_id, handler))
+            try:
+                # Run the async wrapper in the new loop
+                loop.run_until_complete(self._job_wrapper(job_id, handler))
+            finally:
+                # Clean up the loop
+                loop.close()
         
         except Exception as e:
             logger.error(f"Error in sync job wrapper for job {job_id}: {e}", exc_info=True)
@@ -159,22 +163,30 @@ class JobQueueIntegration:
             job_service = JobService(session)
             
             try:
+                # Fetch job details
+                job = await job_service.get(job_id)
+                if not job:
+                    logger.error(f"Job {job_id} not found in database")
+                    return
+                
+                logger.info(f"Processing job {job_id}: type={job.job_type}, reference={job.reference_type}/{job.reference_id}")
+                
                 # Mark as processing
                 job = await job_service.mark_processing(job_id)
                 await session.commit()
                 
                 # Execute handler
-                logger.info(f"Executing job {job_id}")
+                logger.info(f"Executing job {job_id} handler: {handler.__name__}")
                 result = await handler(job)
                 
                 # Mark completed
                 await job_service.mark_completed(job_id, result=result)
                 await session.commit()
                 
-                logger.info(f"Job {job_id} completed successfully")
+                logger.info(f"Job {job_id} completed successfully: {result}")
             
             except Exception as e:
-                logger.error(f"Job {job_id} failed: {e}", exc_info=True)
+                logger.error(f"Job {job_id} failed with error: {e}", exc_info=True)
                 
                 # Mark failed with retry logic
                 try:
@@ -237,9 +249,11 @@ class JobQueueIntegration:
     
     async def _handle_password_reset_email(self, job: Job) -> dict:
         """Handle password reset email job."""
-        payload = json.loads(job.payload) if job.payload else {}
-        
         try:
+            payload = json.loads(job.payload) if job.payload else {}
+            
+            logger.info(f"Password reset email job payload: {payload}")
+            
             from app.services.email import get_email_service
             
             email_service = get_email_service()
@@ -248,8 +262,20 @@ class JobQueueIntegration:
             recipient_name = payload.get("recipient_name")
             reset_token = payload.get("reset_token")
             
+            logger.info(
+                f"Processing password reset email: "
+                f"email={recipient_email}, name={recipient_name}, token={reset_token[:10]}..."
+            )
+            
             if not all([recipient_email, recipient_name, reset_token]):
-                raise ValueError("Missing required payload fields: recipient_email, recipient_name, reset_token")
+                missing = []
+                if not recipient_email:
+                    missing.append("recipient_email")
+                if not recipient_name:
+                    missing.append("recipient_name")
+                if not reset_token:
+                    missing.append("reset_token")
+                raise ValueError(f"Missing required payload fields: {', '.join(missing)}")
             
             success = await email_service.send_password_reset(
                 recipient_email=recipient_email,

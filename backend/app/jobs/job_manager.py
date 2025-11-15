@@ -114,7 +114,7 @@ class JobManager:
         
         job = self.scheduler.add_job(
             func,
-            trigger=DateTrigger(run_time=run_at),
+            trigger=DateTrigger(run_date=run_at),
             args=args,
             kwargs=kwargs,
             id=job_id,
