@@ -70,6 +70,7 @@ async def handle_list_users(
                 "is_verified": u.is_verified,
                 "is_suspended": u.is_suspended,
                 "suspension_reason": u.suspension_reason,
+                "suspended_at": u.suspended_at,
                 "roles": [
                     {
                         "id": role.id,

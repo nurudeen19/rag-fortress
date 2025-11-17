@@ -16,14 +16,10 @@ try:
     # Connect and check users table
     engine = create_engine(url)
     with engine.connect() as conn:
-        # Get users with hashed password
-        result = conn.execute(text('SELECT id, username, email, password_hash FROM users'))
+        # Get users
+        result = conn.execute(text('SELECT id, username, email, is_active, is_verified, is_suspended FROM users'))
+        print("All Users:")
         for row in result:
-            print(f"User: {row[1]} ({row[2]})")
-            print(f"  Password Hash: {row[3][:50]}...")
+            print(f"  ID: {row[0]}, Username: {row[1]}, Email: {row[2]}, Active: {row[3]}, Verified: {row[4]}, Suspended: {row[5]}")
 except Exception as e:
     print(f"Error: {e}")
-
-
-
-
