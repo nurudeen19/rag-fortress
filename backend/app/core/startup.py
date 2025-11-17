@@ -121,6 +121,10 @@ class StartupController:
             # Create session factory
             self.async_session_factory = self.database_manager.get_session_factory()
             
+            # Health check
+            is_healthy = await self.database_manager.health_check()
+            if not is_healthy:
+                raise RuntimeError("Database health check failed")
             
             logger.info("✓ Database initialized successfully")
             logger.info("To seed the database, run: python setup.py")

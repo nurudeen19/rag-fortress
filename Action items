@@ -1,14 +1,26 @@
-Action items
-setup db
-set app configuration table
-user table
-user roles manager
-add files tracker table to track uploaded files for ingestion
-fix pgadmin web interface
-migrate database
-setup db in application startup
-check when to and not to migrate data
-choose when to run job for data ingestion
+Action items TODO
+
+modularize file upload service if possible
+dispatch ingestion tasks on app startup using settings from db
+implement AUTH login/logout and the resets
+
+
+setup quantized model for internal llm
+setup llm router to switch llm based on security level of query
+provide option to do a partial and full app setup
+store custom config in db to be used in app startup for llm overrides from .env
+setup manual history tracking per user session
+always log security incidents on when users try to access restricted info
 
 Test to see if no errors are reported
+
+
+Future file inclusions
+external data sources api/web content
+sql data sources
+external files like s3 files etc
+
+
+
+Add detailed readme for setup, and other scripts plus their configurations
 
