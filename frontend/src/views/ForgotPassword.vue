@@ -58,8 +58,10 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
+const router = useRouter()
 const authStore = useAuthStore()
 
 const email = ref('')
@@ -74,7 +76,11 @@ const handleReset = async () => {
   loading.value = true
 
   try {
-    const result = await authStore.requestPasswordReset(email.value)
+    // Build the reset link template with the frontend's reset page URL
+    const baseUrl = window.location.origin
+    const resetLinkTemplate = `${baseUrl}/reset-password?token={token}`
+    
+    const result = await authStore.requestPasswordReset(email.value, resetLinkTemplate)
     success.value = true
     successMessage.value = result.message || 'If email exists, password reset link will be sent'
   } catch (err) {

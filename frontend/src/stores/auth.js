@@ -141,16 +141,50 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function requestPasswordReset(email) {
+  async function requestPasswordReset(email, resetLinkTemplate = null) {
     loading.value = true
     error.value = null
     
     try {
-      await api.post('/v1/auth/password-reset', { email })
-      return { success: true }
+      const payload = { email }
+      if (resetLinkTemplate) {
+        payload.reset_link_template = resetLinkTemplate
+      }
+      const response = await api.post('/v1/auth/password-reset', payload)
+      return { success: true, message: response.message }
     } catch (err) {
       error.value = err.response?.data?.detail || 'Request failed'
       return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function verifyResetToken(token) {
+    try {
+      const response = await api.get('/v1/auth/password-reset/verify', {
+        params: { token }
+      })
+      return { success: true, message: response.message }
+    } catch (err) {
+      throw err
+    }
+  }
+
+  async function confirmPasswordReset(token, newPassword, confirmPassword) {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await api.post('/v1/auth/password-reset-confirm', {
+        reset_token: token,
+        new_password: newPassword,
+        confirm_password: confirmPassword
+      })
+      return { success: true, message: response.message }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Password reset failed'
+      throw err
     } finally {
       loading.value = false
     }
@@ -198,6 +232,8 @@ export const useAuthStore = defineStore('auth', () => {
     updateProfile,
     changePassword,
     requestPasswordReset,
+    verifyResetToken,
+    confirmPasswordReset,
     logout,
     clearError,
   }

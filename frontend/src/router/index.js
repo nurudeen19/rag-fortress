@@ -17,6 +17,12 @@ const router = createRouter({
       component: () => import('../views/ForgotPassword.vue'),
       meta: { public: true }
     },
+    {
+      path: '/reset-password',
+      name: 'reset-password',
+      component: () => import('../views/ResetPassword.vue'),
+      meta: { public: true }
+    },
 
     // Protected routes with dashboard layout
     {
