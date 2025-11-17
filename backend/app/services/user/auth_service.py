@@ -46,12 +46,15 @@ class AuthService:
             Tuple of (User, None) if success, (None, error_message) if failure
         """
         try:
-            # Find user by username or email
+            # Find user by username or email with eager loading of roles
+            from sqlalchemy.orm import selectinload
             result = await self.session.execute(
-                select(User).where(
+                select(User)
+                .where(
                     (User.username == username_or_email) |
                     (User.email == username_or_email)
                 )
+                .options(selectinload(User.roles))
             )
             user = result.scalar_one_or_none()
             

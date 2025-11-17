@@ -46,19 +46,17 @@ export const useAuthStore = defineStore('auth', () => {
       tokenExpiresAt.value = response.expires_at
       
       // Store user data from the user object in response
-      const userData = response.user || {
-        id: response.user_id,
-        username: response.username,
-        email: response.email,
-        first_name: response.first_name,
-        last_name: response.last_name,
-        full_name: response.full_name,
-        is_verified: response.is_verified,
-        is_active: response.is_active,
-        roles: [],
+      user.value = {
+        id: response.user.id,
+        username: response.user.username,
+        email: response.user.email,
+        first_name: response.user.first_name,
+        last_name: response.user.last_name,
+        full_name: response.user.full_name,
+        is_verified: response.user.is_verified,
+        is_active: response.user.is_active,
+        roles: response.user.roles || [],
       }
-      
-      user.value = userData
       
       // Persist token, expiry, and user
       localStorage.setItem('token', response.token)

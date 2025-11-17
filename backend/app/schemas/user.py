@@ -20,18 +20,10 @@ class LoginRequest(BaseModel):
 class LoginResponse(BaseModel):
     """Schema for successful login response."""
     
-    user_id: int
-    username: str
-    email: str
-    first_name: str
-    last_name: str
-    full_name: str
-    is_verified: bool
-    is_active: bool
     token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer")
     expires_at: str = Field(..., description="Token expiration timestamp (ISO 8601)")
-    user: Optional[dict] = Field(default=None, description="Full user data including roles")
+    user: dict = Field(..., description="Full user data including roles")
     
     class Config:
         json_encoders = {
