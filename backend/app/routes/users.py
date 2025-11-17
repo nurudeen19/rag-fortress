@@ -35,6 +35,7 @@ from app.schemas.user import (
     RoleAssignRequest,
     RoleRevokeRequest,
     UserSuspendRequest,
+    UserInviteRequest,
     CreateRoleRequest,
     CreatePermissionRequest,
     AssignPermissionToRoleRequest,
@@ -48,6 +49,7 @@ from app.handlers.users import (
     handle_get_user,
     handle_suspend_user,
     handle_unsuspend_user,
+    handle_invite_user,
     handle_get_user_roles,
     handle_assign_role_to_user,
     handle_revoke_role_from_user,
@@ -166,6 +168,30 @@ async def unsuspend_user(
         )
     
     return SuccessResponse(message=result.get("message", "User unsuspended"))
+
+
+@router.post("/users/invite", response_model=SuccessResponse)
+async def invite_user(
+    request: UserInviteRequest,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """Send invitation to new user. Requires admin role."""
+    result = await handle_invite_user(
+        email=request.email,
+        role_id=request.role_id,
+        admin_user=admin,
+        invitation_link_template=request.invitation_link_template,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to send invitation")
+        )
+    
+    return SuccessResponse(message=result.get("message", "Invitation sent"))
 
 
 # ============================================================================

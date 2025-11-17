@@ -36,52 +36,119 @@
 
     <!-- Users Tab -->
     <div v-if="activeTab === 'users'" class="flex-1 flex flex-col gap-4">
-      <!-- Filters -->
-      <div class="flex gap-2 items-center">
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search users..."
-          class="input flex-1"
-          @keyup.enter="handleSearch"
-        />
-        <button @click="handleSearch" class="btn btn-primary">Search</button>
-        <button @click="resetFilters" class="btn btn-secondary">Reset</button>
+      <!-- Header with Filters and Actions -->
+      <div class="flex gap-2 items-center justify-between">
+        <div class="flex gap-2 items-center flex-1">
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="Search users..."
+            class="input flex-1"
+            @keyup.enter="handleSearch"
+          />
+          <button @click="handleSearch" class="btn btn-primary">Search</button>
+          <button @click="resetFilters" class="btn btn-secondary">Reset</button>
+        </div>
+        <button @click="showInviteModal = true" class="btn btn-primary">
+          + Invite User
+        </button>
       </div>
 
-      <!-- Users List -->
-      <div v-if="!adminStore.isLoading" class="flex-1 card overflow-auto">
-        <div class="space-y-2">
-          <div v-if="adminStore.users.length === 0" class="text-center py-8 text-fortress-400">
-            No users found
-          </div>
+      <!-- Users Table -->
+      <div v-if="!adminStore.isLoading" class="flex-1 card overflow-hidden flex flex-col">
+        <div v-if="adminStore.users.length === 0" class="text-center py-8 text-fortress-400">
+          No users found
+        </div>
 
-          <div
-            v-for="user in adminStore.users"
-            :key="user.id"
-            class="p-4 bg-fortress-800/50 rounded-lg hover:bg-fortress-800 cursor-pointer transition-colors"
-            @click="navigateToUser(user.id)"
-          >
-            <div class="flex items-center justify-between">
-              <div class="flex-1">
-                <div class="flex items-center gap-2 mb-1">
-                  <span class="font-semibold text-fortress-100">{{ user.full_name }}</span>
-                  <span v-if="user.is_suspended" class="px-2 py-1 bg-alert/20 text-alert text-xs rounded">
+        <div v-else class="overflow-x-auto flex-1">
+          <table class="w-full">
+            <thead class="sticky top-0 bg-fortress-800 border-b border-fortress-700">
+              <tr>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-fortress-300 uppercase tracking-wider">Name</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-fortress-300 uppercase tracking-wider">Email</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-fortress-300 uppercase tracking-wider">Status</th>
+                <th class="px-6 py-3 text-left text-xs font-semibold text-fortress-300 uppercase tracking-wider">Verified</th>
+                <th class="px-6 py-3 text-right text-xs font-semibold text-fortress-300 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-fortress-700">
+              <tr v-for="user in adminStore.users" :key="user.id" class="hover:bg-fortress-800/50 transition-colors">
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <div 
+                    @click="navigateToUser(user.id)"
+                    class="cursor-pointer hover:text-secure transition-colors"
+                  >
+                    <div class="font-medium text-fortress-100">{{ user.full_name }}</div>
+                    <div class="text-xs text-fortress-400">@{{ user.username }}</div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-fortress-300">
+                  {{ user.email }}
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span 
+                    v-if="user.is_suspended"
+                    class="px-3 py-1 bg-alert/20 text-alert text-xs rounded-full font-medium"
+                  >
                     Suspended
                   </span>
-                  <span v-if="user.is_verified" class="px-2 py-1 bg-success/20 text-success text-xs rounded">
-                    Verified
+                  <span 
+                    v-else-if="user.is_active"
+                    class="px-3 py-1 bg-success/20 text-success text-xs rounded-full font-medium"
+                  >
+                    Active
                   </span>
-                </div>
-                <div class="text-sm text-fortress-400">
-                  {{ user.email }} · @{{ user.username }}
-                </div>
-              </div>
-              <div class="text-right text-sm text-fortress-400">
-                ID: {{ user.id }}
-              </div>
-            </div>
-          </div>
+                  <span 
+                    v-else
+                    class="px-3 py-1 bg-fortress-700 text-fortress-300 text-xs rounded-full font-medium"
+                  >
+                    Inactive
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                  <span 
+                    v-if="user.is_verified"
+                    class="px-3 py-1 bg-success/20 text-success text-xs rounded-full"
+                  >
+                    ✓ Verified
+                  </span>
+                  <span 
+                    v-else
+                    class="px-3 py-1 bg-fortress-700 text-fortress-300 text-xs rounded-full"
+                  >
+                    Pending
+                  </span>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap text-right">
+                  <div class="flex justify-end gap-2">
+                    <button
+                      @click="openSuspendModal(user)"
+                      v-if="!user.is_suspended"
+                      class="px-3 py-1 text-xs bg-alert/10 text-alert hover:bg-alert/20 rounded transition-colors"
+                      title="Suspend user"
+                    >
+                      Suspend
+                    </button>
+                    <button
+                      @click="unsuspendUser(user.id)"
+                      v-else
+                      class="px-3 py-1 text-xs bg-success/10 text-success hover:bg-success/20 rounded transition-colors"
+                      title="Unsuspend user"
+                    >
+                      Unsuspend
+                    </button>
+                    <button
+                      @click="navigateToUser(user.id)"
+                      class="px-3 py-1 text-xs bg-secure/10 text-secure hover:bg-secure/20 rounded transition-colors"
+                      title="View details"
+                    >
+                      Details
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -114,6 +181,22 @@
         </div>
       </div>
     </div>
+
+    <!-- Suspend Modal -->
+    <UserSuspendModal 
+      v-if="suspendModal.show"
+      :user="suspendModal.user"
+      @confirm="confirmSuspend"
+      @close="suspendModal.show = false"
+    />
+
+    <!-- Invite Modal -->
+    <UserInviteModal
+      v-if="showInviteModal"
+      :roles="adminStore.roles"
+      @invite="handleInviteUser"
+      @close="showInviteModal = false"
+    />
 
     <!-- Roles Tab -->
     <div v-if="activeTab === 'roles'" class="flex-1 card overflow-auto">
@@ -172,11 +255,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
+import UserSuspendModal from '../../components/admin/UserSuspendModal.vue'
+import UserInviteModal from '../../components/admin/UserInviteModal.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
 const activeTab = ref('users')
 const searchQuery = ref('')
+const showInviteModal = ref(false)
+const suspendModal = ref({
+  show: false,
+  user: null
+})
 
 const totalPages = computed(() => {
   return Math.ceil(adminStore.totalUsers / adminStore.pageSize)
@@ -222,8 +312,62 @@ function previousPage() {
   }
 }
 
+function openSuspendModal(user) {
+  suspendModal.value = {
+    show: true,
+    user
+  }
+}
+
+async function confirmSuspend(reason) {
+  await adminStore.suspendUser(suspendModal.value.user.id, reason)
+  suspendModal.value.show = false
+  await loadUsers()
+}
+
+async function unsuspendUser(userId) {
+  await adminStore.unsuspendUser(userId)
+  await loadUsers()
+}
+
+async function handleInviteUser(inviteData) {
+  // Call API to send invite
+  const result = await adminStore.inviteUser(inviteData.email, inviteData.roleId)
+  if (result.success) {
+    showInviteModal.value = false
+    await loadUsers()
+  }
+}
+
 onMounted(async () => {
   await loadUsers()
   await loadRoles()
 })
 </script>
+
+<style scoped>
+table {
+  border-collapse: collapse;
+}
+
+thead tr {
+  border-bottom: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+tbody tr {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+tbody tr:hover {
+  background-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+th {
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+td {
+  vertical-align: middle;
+}
+</style>

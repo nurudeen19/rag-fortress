@@ -112,6 +112,25 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  async function inviteUser(email, roleId) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.post('/v1/admin/users/invite', {
+        email,
+        role_id: roleId
+      })
+
+      return { success: true, message: response.message }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to send invite'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
   // Actions - Roles
   async function fetchRoles() {
     loading.value = true
@@ -218,6 +237,7 @@ export const useAdminStore = defineStore('admin', () => {
     fetchUserDetails,
     suspendUser,
     unsuspendUser,
+    inviteUser,
     fetchRoles,
     assignRoleToUser,
     revokeRoleFromUser,

@@ -171,6 +171,18 @@ class UserSuspendRequest(BaseModel):
     reason: Optional[str] = Field(None, description="Reason for suspension")
 
 
+class UserInviteRequest(BaseModel):
+    """Schema for inviting new user."""
+    
+    email: EmailStr = Field(..., description="Email address to invite")
+    role_id: int = Field(..., gt=0, description="Role to assign to the invited user")
+    invitation_link_template: Optional[str] = Field(
+        None,
+        description="Frontend invitation link template with {token} placeholder. "
+                    "Example: https://app.example.com/signup?token={token}"
+    )
+
+
 class PermissionCheckResponse(BaseModel):
     """Response for permission check."""
     
