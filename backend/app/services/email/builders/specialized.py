@@ -103,7 +103,8 @@ class PasswordResetEmailBuilder(BaseEmailBuilder):
         self,
         recipient_email: EmailStr,
         recipient_name: str,
-        reset_token: str
+        reset_token: str,
+        reset_link_template: str = None
     ) -> bool:
         """
         Build and send password reset email.
@@ -112,13 +113,21 @@ class PasswordResetEmailBuilder(BaseEmailBuilder):
             recipient_email: Email address of recipient
             recipient_name: Name of recipient
             reset_token: Password reset token
+            reset_link_template: Optional frontend-provided link template with {token} placeholder
             
         Returns:
             True if sent successfully
         """
         try:
-            # Build reset URL
-            reset_url = f"{settings.PASSWORD_RESET_URL}?token={reset_token}"
+            # Build reset URL using template if provided, otherwise use default
+            if reset_link_template and "{token}" in reset_link_template:
+                # Frontend provided a link template - use it
+                reset_url = reset_link_template.replace("{token}", reset_token)
+                logger.info(f"Using frontend-provided reset link template for {recipient_email}")
+            else:
+                # Fallback to default - use FRONTEND_URL as base
+                reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+                logger.info(f"Using default reset link for {recipient_email}")
             
             # Render email
             subject, html_body = render_password_reset_email(
@@ -175,8 +184,8 @@ class InvitationEmailBuilder(BaseEmailBuilder):
             True if sent successfully
         """
         try:
-            # Build invitation URL
-            invitation_url = f"{settings.INVITE_URL}?token={invitation_token}"
+            # Build invitation URL - use FRONTEND_URL as base, frontend controls the path
+            invitation_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation_token}"
             
             # Render email
             subject, html_body = render_invitation_email(

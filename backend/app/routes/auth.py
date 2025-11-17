@@ -163,6 +163,38 @@ async def request_password_reset(
     return SuccessResponse(message=result.get("message", "If email exists, password reset link will be sent"))
 
 
+@router.get("/password-reset/verify", response_model=SuccessResponse)
+async def verify_password_reset_token(
+    token: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Verify password reset token is valid.
+    
+    Called by frontend when user lands on reset page to verify token before showing form.
+    """
+    from app.services.user import PasswordService
+    
+    try:
+        password_service = PasswordService(session)
+        is_valid = await password_service.is_reset_token_valid(token)
+        
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password reset token is invalid or expired"
+            )
+        
+        return SuccessResponse(message="Token is valid")
+    
+    except Exception as e:
+        logger.error(f"Error verifying reset token: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to verify token"
+        )
+
+
 @router.post("/password-reset-confirm", response_model=SuccessResponse)
 async def confirm_password_reset(
     request: PasswordResetConfirmSchema,

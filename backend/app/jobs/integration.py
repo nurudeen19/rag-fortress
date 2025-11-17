@@ -305,6 +305,7 @@ class JobQueueIntegration:
             recipient_email = payload.get("recipient_email")
             recipient_name = payload.get("recipient_name")
             reset_token = payload.get("reset_token")
+            reset_link_template = payload.get("reset_link_template")
             
             logger.info(
                 f"Processing password reset email: "
@@ -324,7 +325,8 @@ class JobQueueIntegration:
             success = await email_service.send_password_reset(
                 recipient_email=recipient_email,
                 recipient_name=recipient_name,
-                reset_token=reset_token
+                reset_token=reset_token,
+                reset_link_template=reset_link_template
             )
             
             if success:

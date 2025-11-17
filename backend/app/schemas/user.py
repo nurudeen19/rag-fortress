@@ -50,6 +50,11 @@ class PasswordResetRequestSchema(BaseModel):
     """Schema for password reset request."""
     
     email: EmailStr = Field(..., description="Email address")
+    reset_link_template: Optional[str] = Field(
+        None,
+        description="Frontend reset link template with {token} placeholder. "
+                    "Example: https://app.example.com/reset-password?token={token}"
+    )
 
 
 class PasswordResetConfirmSchema(BaseModel):

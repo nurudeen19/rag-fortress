@@ -455,7 +455,8 @@ async def handle_password_reset_request(
                 payload={
                     "recipient_email": request.email,
                     "recipient_name": recipient_name,
-                    "reset_token": reset_token
+                    "reset_token": reset_token,
+                    "reset_link_template": request.reset_link_template
                 },
                 max_retries=3
             )

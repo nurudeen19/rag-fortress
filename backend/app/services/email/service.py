@@ -62,7 +62,8 @@ class EmailService:
         self,
         recipient_email: EmailStr,
         recipient_name: str,
-        reset_token: str
+        reset_token: str,
+        reset_link_template: str = None
     ) -> bool:
         """
         Send password reset email.
@@ -71,6 +72,7 @@ class EmailService:
             recipient_email: Email address of recipient
             recipient_name: Name of recipient
             reset_token: Password reset token
+            reset_link_template: Optional frontend-provided link template with {token} placeholder
             
         Returns:
             True if sent successfully
@@ -78,7 +80,8 @@ class EmailService:
         return await self.password_reset_builder.build_and_send(
             recipient_email=recipient_email,
             recipient_name=recipient_name,
-            reset_token=reset_token
+            reset_token=reset_token,
+            reset_link_template=reset_link_template
         )
     
     async def send_invitation(

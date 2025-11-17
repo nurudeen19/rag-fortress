@@ -304,6 +304,49 @@ class PasswordService:
             logger.error(f"Verify reset token error: {e}")
             return None, "Failed to verify reset token"
     
+    async def is_reset_token_valid(self, token: str) -> bool:
+        """
+        Check if a password reset token is valid without consuming it.
+        
+        Used by frontend to verify token before showing password reset form.
+        
+        Args:
+            token: Reset token
+        
+        Returns:
+            True if token is valid and not expired/used
+        """
+        try:
+            # Query for token
+            result = await self.session.execute(
+                select(PasswordResetToken).where(
+                    PasswordResetToken.token == token
+                )
+            )
+            reset_token = result.scalar_one_or_none()
+            
+            if not reset_token:
+                logger.debug(f"Invalid reset token: token not found")
+                return False
+            
+            # Check if already used
+            if reset_token.is_used:
+                logger.debug(f"Reset token already used (user: {reset_token.user_id})")
+                return False
+            
+            # Check if expired
+            now = datetime.now(timezone.utc)
+            if now > reset_token.expires_at:
+                logger.debug(f"Reset token expired (user: {reset_token.user_id})")
+                return False
+            
+            logger.debug(f"Reset token is valid (user: {reset_token.user_id})")
+            return True
+        
+        except Exception as e:
+            logger.error(f"Error checking reset token validity: {e}")
+            return False
+    
     async def cleanup_expired_tokens(self) -> int:
         """
         Delete expired password reset tokens from database.
