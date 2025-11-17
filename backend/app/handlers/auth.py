@@ -556,6 +556,38 @@ async def handle_password_reset_confirm(
         
         logger.info(f"Password reset successful for user {user_id}")
         
+        # Queue password changed notification email
+        try:
+            startup_controller = get_startup_controller()
+            job_integration = startup_controller.job_integration
+            
+            if job_integration is None:
+                raise Exception("Job integration not initialized")
+            
+            # Get user info for email
+            user = await user_service.get_user_by_id(user_id)
+            if user:
+                recipient_name = f"{user.first_name} {user.last_name}".strip() or user.username
+                
+                # Create and schedule the password changed email job
+                await job_integration.create_and_schedule(
+                    job_type=JobType.PASSWORD_CHANGED_EMAIL,
+                    reference_id=user_id,
+                    reference_type="user",
+                    handler=job_integration._handle_password_changed_email,
+                    payload={
+                        "recipient_email": email,
+                        "recipient_name": recipient_name
+                    },
+                    max_retries=3
+                )
+                
+                logger.info(f"Password changed notification email queued for {email}")
+        
+        except Exception as e:
+            logger.warning(f"Failed to queue password changed notification for {email}: {e}")
+            # Don't fail the password reset if email notification fails
+        
         return {
             "success": True,
             "message": "Password reset successfully"

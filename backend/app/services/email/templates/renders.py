@@ -285,3 +285,54 @@ def render_notification_email(
     )
     
     return subject, html_body
+
+
+def render_password_changed_email(
+    recipient_name: str
+) -> tuple[str, str]:
+    """
+    Render password changed notification email.
+    
+    Args:
+        recipient_name: Name of the recipient
+        
+    Returns:
+        Tuple of (subject, html_body)
+    """
+    subject = "Your RAG Fortress Password Has Been Changed"
+    preview = f"Hi {recipient_name}, your password was successfully changed."
+    
+    content = f"""
+        <h1 class="heading">Password Changed Successfully ✅</h1>
+        
+        <p class="text">Hi <strong>{recipient_name}</strong>,</p>
+        
+        <p class="text">
+            This is a confirmation that your RAG Fortress account password was successfully changed.
+        </p>
+        
+        <div style="background-color: #f0fdf4; border-left: 4px solid #22c55e; padding: 16px; margin: 24px 0; border-radius: 4px;">
+            <p class="text" style="margin: 0; color: #166534;">
+                ✓ Your account is now secured with your new password.
+            </p>
+        </div>
+        
+        <p class="text">
+            <strong>Didn't make this change?</strong> If you didn't request this password change or believe your account 
+            has been compromised, please contact our support team immediately or visit your account security settings.
+        </p>
+        
+        <div class="divider"></div>
+        
+        <p class="text" style="font-size: 14px; color: #718096;">
+            This is an automated security notification. Please do not reply to this email.
+        </p>
+    """
+    
+    html_body = get_base_template(
+        title=subject,
+        preview_text=preview,
+        content_html=content
+    )
+    
+    return subject, html_body

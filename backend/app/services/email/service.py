@@ -10,6 +10,7 @@ from pydantic import EmailStr
 from .builders import (
     AccountActivationEmailBuilder,
     PasswordResetEmailBuilder,
+    PasswordChangedEmailBuilder,
     InvitationEmailBuilder,
     NotificationEmailBuilder,
     BulkNotificationEmailBuilder,
@@ -30,6 +31,7 @@ class EmailService:
         """Initialize email service with all builders."""
         self.activation_builder = AccountActivationEmailBuilder()
         self.password_reset_builder = PasswordResetEmailBuilder()
+        self.password_changed_builder = PasswordChangedEmailBuilder()
         self.invitation_builder = InvitationEmailBuilder()
         self.notification_builder = NotificationEmailBuilder()
         self.bulk_notification_builder = BulkNotificationEmailBuilder()
@@ -82,6 +84,26 @@ class EmailService:
             recipient_name=recipient_name,
             reset_token=reset_token,
             reset_link_template=reset_link_template
+        )
+    
+    async def send_password_changed(
+        self,
+        recipient_email: EmailStr,
+        recipient_name: str
+    ) -> bool:
+        """
+        Send password changed notification email.
+        
+        Args:
+            recipient_email: Email address of recipient
+            recipient_name: Name of recipient
+            
+        Returns:
+            True if sent successfully
+        """
+        return await self.password_changed_builder.build_and_send(
+            recipient_email=recipient_email,
+            recipient_name=recipient_name
         )
     
     async def send_invitation(

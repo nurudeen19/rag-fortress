@@ -256,6 +256,7 @@ class JobQueueIntegration:
             JobType.VECTOR_STORAGE: self._handle_vector_storage,
             JobType.CLEANUP: self._handle_cleanup,
             JobType.PASSWORD_RESET_EMAIL: self._handle_password_reset_email,
+            JobType.PASSWORD_CHANGED_EMAIL: self._handle_password_changed_email,
         }
         
         handler = handlers.get(job_type)
@@ -337,6 +338,48 @@ class JobQueueIntegration:
         
         except Exception as e:
             logger.error(f"Error sending password reset email: {e}", exc_info=True)
+            raise
+
+    async def _handle_password_changed_email(self, job: Job) -> dict:
+        """Handle password changed notification email job."""
+        try:
+            payload = json.loads(job.payload) if job.payload else {}
+            
+            logger.info(f"Password changed email job payload: {payload}")
+            
+            from app.services.email import get_email_service
+            
+            email_service = get_email_service()
+            
+            recipient_email = payload.get("recipient_email")
+            recipient_name = payload.get("recipient_name")
+            
+            logger.info(
+                f"Processing password changed email: "
+                f"email={recipient_email}, name={recipient_name}"
+            )
+            
+            if not all([recipient_email, recipient_name]):
+                missing = []
+                if not recipient_email:
+                    missing.append("recipient_email")
+                if not recipient_name:
+                    missing.append("recipient_name")
+                raise ValueError(f"Missing required payload fields: {', '.join(missing)}")
+            
+            success = await email_service.send_password_changed(
+                recipient_email=recipient_email,
+                recipient_name=recipient_name
+            )
+            
+            if success:
+                logger.info(f"Password changed notification sent to {recipient_email}")
+                return {"status": "sent", "recipient_email": recipient_email}
+            else:
+                raise Exception(f"Failed to send password changed notification to {recipient_email}")
+        
+        except Exception as e:
+            logger.error(f"Error sending password changed notification: {e}", exc_info=True)
             raise
 
 

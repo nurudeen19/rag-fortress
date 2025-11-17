@@ -16,6 +16,7 @@ from app.core import get_email_client
 from ..templates import (
     render_account_activation_email,
     render_password_reset_email,
+    render_password_changed_email,
     render_invitation_email,
     render_notification_email,
 )
@@ -152,6 +153,52 @@ class PasswordResetEmailBuilder(BaseEmailBuilder):
         except Exception as e:
             logger.error(
                 f"Error building/sending password reset email to {recipient_email}: {str(e)}",
+                exc_info=True
+            )
+            return False
+
+
+class PasswordChangedEmailBuilder(BaseEmailBuilder):
+    """Builder for password changed notification emails."""
+    
+    async def build_and_send(
+        self,
+        recipient_email: EmailStr,
+        recipient_name: str
+    ) -> bool:
+        """
+        Build and send password changed notification email.
+        
+        Args:
+            recipient_email: Email address of recipient
+            recipient_name: Name of recipient
+            
+        Returns:
+            True if sent successfully
+        """
+        try:
+            # Render email
+            subject, html_body = render_password_changed_email(
+                recipient_name=recipient_name
+            )
+            
+            # Send email
+            success = await self._client.send_email(
+                recipient=recipient_email,
+                subject=subject,
+                html_body=html_body
+            )
+            
+            if success:
+                logger.info(f"Password changed notification sent to {recipient_email}")
+            else:
+                logger.warning(f"Failed to send password changed notification to {recipient_email}")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(
+                f"Error building/sending password changed notification to {recipient_email}: {str(e)}",
                 exc_info=True
             )
             return False

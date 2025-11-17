@@ -21,6 +21,7 @@ class JobType(str, Enum):
     VECTOR_STORAGE = "vector_storage"
     CLEANUP = "cleanup"
     PASSWORD_RESET_EMAIL = "password_reset_email"
+    PASSWORD_CHANGED_EMAIL = "password_changed_email"
 
 
 class Job(Base):
