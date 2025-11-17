@@ -433,6 +433,9 @@ async def handle_password_reset_request(
                 "error": "Failed to generate reset token. Please try again later."
             }
         
+        # Commit token to database
+        await session.commit()
+        
         # Queue password reset email job
         try:
             startup_controller = get_startup_controller()

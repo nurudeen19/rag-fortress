@@ -46,13 +46,14 @@ class DatabaseManager:
         if config["provider"] == "sqlite":
             engine_kwargs["connect_args"] = config.get("connect_args", {})
         
-        self.engine = create_engine(config["url"], **engine_kwargs)
+        # Build sync URL from config
+        url = self.settings._get_sync_database_url()
+        self.engine = create_engine(url, **engine_kwargs)
         return self.engine
     
     async def create_async_engine(self):
         """Create asynchronous SQLAlchemy engine."""
         config = self.settings.get_database_config()
-        url = self.settings.get_async_database_url()
         
         engine_kwargs = {
             "echo": config.get("echo", False),
@@ -74,6 +75,8 @@ class DatabaseManager:
         if config["provider"] == "sqlite":
             engine_kwargs["connect_args"] = config.get("connect_args", {})
         
+        # Build async URL from config
+        url = self.settings._get_async_database_url()
         self.async_engine = create_async_engine(url, **engine_kwargs)
         return self.async_engine
     

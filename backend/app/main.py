@@ -34,6 +34,10 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Startup failed: {e}", exc_info=True)
         raise
+    finally:
+        # Flush logs after startup (success or error)
+        for handler in logger.handlers:
+            handler.flush()
     
     yield
     
@@ -44,6 +48,10 @@ async def lifespan(app: FastAPI):
     
     await startup_controller.shutdown()
     logger.info("Application shutdown complete")
+    
+    # Final flush after shutdown
+    for handler in logger.handlers:
+        handler.flush()
 
 
 def create_app() -> FastAPI:

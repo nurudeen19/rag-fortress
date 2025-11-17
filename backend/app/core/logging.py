@@ -30,6 +30,18 @@ class ColoredFormatter(logging.Formatter):
         return super().format(record)
 
 
+class PlainFormatter(logging.Formatter):
+    """Plain formatter without colors for file output"""
+    
+    def format(self, record):
+        # Ensure no color codes in record
+        if '\033[' in record.levelname:
+            record.levelname = record.levelname.replace('\033[32m', '').replace('\033[33m', '').replace('\033[31m', '').replace('\033[35m', '').replace('\033[36m', '').replace('\033[0m', '').replace('\033[94m', '')
+        if '\033[' in record.name:
+            record.name = record.name.replace('\033[94m', '').replace('\033[0m', '')
+        return super().format(record)
+
+
 def setup_logging(
     name: Optional[str] = None,
     log_level: Optional[str] = None,
@@ -76,7 +88,7 @@ def setup_logging(
     console_handler.setFormatter(console_format)
     logger.addHandler(console_handler)
     
-    # File handler (rotating)
+    # File handler (rotating) - WITHOUT colors
     log_file_path = log_file or settings.LOG_FILE
     if log_file_path:
         # Create logs directory if it doesn't exist
@@ -92,8 +104,8 @@ def setup_logging(
         )
         file_handler.setLevel(logging.DEBUG)
         
-        # JSON-like format for file logs (easier to parse)
-        file_format = logging.Formatter(
+        # JSON-like format for file logs (easier to parse) - NO COLORS via PlainFormatter
+        file_format = PlainFormatter(
             '{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", '
             '"function": "%(funcName)s", "line": %(lineno)d, "message": "%(message)s"}',
             datefmt='%Y-%m-%d %H:%M:%S'
@@ -127,6 +139,10 @@ def get_logger(name: str) -> logging.Logger:
     # If no handlers, set up logging
     if not logger.handlers and not logging.getLogger().handlers:
         setup_logging()
+    
+    # Ensure logger propagates to root if it has no handlers
+    if not logger.handlers:
+        logger.propagate = True
     
     return logger
 

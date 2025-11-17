@@ -144,89 +144,98 @@ class DatabaseSettings(BaseSettings):
                 "This would delete all data."
             )
 
-    def get_database_url(self) -> str:
+    def _get_sync_database_url(self) -> str:
         """
-        Get SQLAlchemy database URL for the selected provider.
+        Get synchronous database URL (internal use only).
+        
+        Prefer using get_database_config() for explicit host/port/credentials.
+        This is primarily used internally for engine creation.
         
         Returns:
-            str: SQLAlchemy-compatible database URL
+            str: SQLAlchemy-compatible database URL with sync drivers
             
         Examples:
             PostgreSQL: postgresql://user:pass@localhost:5432/dbname
             MySQL: mysql+pymysql://user:pass@localhost:3306/dbname
             SQLite: sqlite:///./rag_fortress.db
         """
-        provider = self.DATABASE_PROVIDER.lower()
+        config = self.get_database_config()
+        provider = config["provider"]
         
         if provider == "postgresql":
-            password = f":{self.DB_PASSWORD}" if self.DB_PASSWORD else ""
-            port = self._get_port()
+            password = f":{config['password']}" if config['password'] else ""
             url = (
-                f"postgresql://{self.DB_USER}{password}"
-                f"@{self.DB_HOST}:{port}/{self.DB_NAME}"
+                f"postgresql://{config['user']}{password}"
+                f"@{config['host']}:{config['port']}/{config['database']}"
             )
-            
-            # Add SSL mode if not default
-            if self.POSTGRES_SSL_MODE != "prefer":
-                url += f"?sslmode={self.POSTGRES_SSL_MODE}"
-            
+            if config.get("ssl_mode") and config["ssl_mode"] != "prefer":
+                url += f"?sslmode={config['ssl_mode']}"
             return url
         
         elif provider == "mysql":
-            password = f":{self.DB_PASSWORD}" if self.DB_PASSWORD else ""
-            port = self._get_port()
+            password = f":{config['password']}" if config['password'] else ""
             url = (
-                f"mysql+pymysql://{self.DB_USER}{password}"
-                f"@{self.DB_HOST}:{port}/{self.DB_NAME}"
+                f"mysql+pymysql://{config['user']}{password}"
+                f"@{config['host']}:{config['port']}/{config['database']}"
             )
-            
-            # Add charset
-            url += f"?charset={self.MYSQL_CHARSET}"
-            
+            if config.get("charset"):
+                url += f"?charset={config['charset']}"
             return url
         
         elif provider == "sqlite":
-            # SQLite uses file path
-            return f"sqlite:///{self.SQLITE_PATH}"
+            return f"sqlite:///{config['path']}"
         
         else:
             raise ValueError(f"Unsupported database provider: {provider}")
 
     def get_database_config(self) -> dict:
         """
-        Get complete database configuration including connection pool settings.
+        Get complete database configuration using host-based connection details.
         
         Returns:
-            dict: Database configuration for SQLAlchemy engine
+            dict: Database configuration with host, port, user, password, and pool settings
         """
         provider = self.DATABASE_PROVIDER.lower()
         
         config = {
             "provider": provider,
-            "url": self.get_database_url(),
+            "host": self.DB_HOST,
+            "port": self._get_port(),
+            "user": self.DB_USER,
+            "password": self.DB_PASSWORD,
+            "database": self.DB_NAME,
             "echo": self.DB_ECHO,
         }
         
-        # Add connection pool settings for PostgreSQL and MySQL
-        if provider in {"postgresql", "mysql"}:
+        # Add provider-specific settings
+        if provider == "postgresql":
+            config["ssl_mode"] = self.POSTGRES_SSL_MODE
             config.update({
                 "pool_size": self.DB_POOL_SIZE,
                 "max_overflow": self.DB_MAX_OVERFLOW,
                 "pool_timeout": self.DB_POOL_TIMEOUT,
                 "pool_recycle": self.DB_POOL_RECYCLE,
             })
-        
-        # Add SQLite-specific settings
-        if provider == "sqlite":
-            config["connect_args"] = {
-                "check_same_thread": self.SQLITE_CHECK_SAME_THREAD
-            }
+        elif provider == "mysql":
+            config["charset"] = self.MYSQL_CHARSET
+            config.update({
+                "pool_size": self.DB_POOL_SIZE,
+                "max_overflow": self.DB_MAX_OVERFLOW,
+                "pool_timeout": self.DB_POOL_TIMEOUT,
+                "pool_recycle": self.DB_POOL_RECYCLE,
+            })
+        elif provider == "sqlite":
+            config["path"] = self.SQLITE_PATH
+            config["check_same_thread"] = self.SQLITE_CHECK_SAME_THREAD
         
         return config
 
-    def get_async_database_url(self) -> str:
+    def _get_async_database_url(self) -> str:
         """
-        Get async SQLAlchemy database URL for the selected provider.
+        Get async database URL (internal use only).
+        
+        Prefer using get_database_config() for explicit host/port/credentials.
+        This is primarily used internally for async engine creation.
         
         Returns:
             str: Async SQLAlchemy-compatible database URL
@@ -236,35 +245,31 @@ class DatabaseSettings(BaseSettings):
             MySQL: mysql+aiomysql://user:pass@localhost:3306/dbname
             SQLite: sqlite+aiosqlite:///./rag_fortress.db
         """
-        provider = self.DATABASE_PROVIDER.lower()
+        config = self.get_database_config()
+        provider = config["provider"]
         
         if provider == "postgresql":
-            password = f":{self.DB_PASSWORD}" if self.DB_PASSWORD else ""
-            port = self._get_port()
+            password = f":{config['password']}" if config['password'] else ""
             url = (
-                f"postgresql+asyncpg://{self.DB_USER}{password}"
-                f"@{self.DB_HOST}:{port}/{self.DB_NAME}"
+                f"postgresql+asyncpg://{config['user']}{password}"
+                f"@{config['host']}:{config['port']}/{config['database']}"
             )
-            
-            if self.POSTGRES_SSL_MODE != "prefer":
-                url += f"?sslmode={self.POSTGRES_SSL_MODE}"
-            
+            if config.get("ssl_mode") and config["ssl_mode"] != "prefer":
+                url += f"?sslmode={config['ssl_mode']}"
             return url
         
         elif provider == "mysql":
-            password = f":{self.DB_PASSWORD}" if self.DB_PASSWORD else ""
-            port = self._get_port()
+            password = f":{config['password']}" if config['password'] else ""
             url = (
-                f"mysql+aiomysql://{self.DB_USER}{password}"
-                f"@{self.DB_HOST}:{port}/{self.DB_NAME}"
+                f"mysql+aiomysql://{config['user']}{password}"
+                f"@{config['host']}:{config['port']}/{config['database']}"
             )
-            
-            url += f"?charset={self.MYSQL_CHARSET}"
-            
+            if config.get("charset"):
+                url += f"?charset={config['charset']}"
             return url
         
         elif provider == "sqlite":
-            return f"sqlite+aiosqlite:///{self.SQLITE_PATH}"
+            return f"sqlite+aiosqlite:///{config['path']}"
         
         else:
             raise ValueError(f"Unsupported database provider: {provider}")
