@@ -124,16 +124,28 @@
                     <button
                       @click="openSuspendModal(user)"
                       v-if="!user.is_suspended"
-                      class="px-3 py-1 text-xs bg-alert/10 text-alert hover:bg-alert/20 rounded transition-colors"
-                      title="Suspend user"
+                      :disabled="isCurrentUser(user.id)"
+                      :class="[
+                        'px-3 py-1 text-xs rounded transition-colors',
+                        isCurrentUser(user.id)
+                          ? 'bg-fortress-700 text-fortress-500 cursor-not-allowed opacity-50'
+                          : 'bg-alert/10 text-alert hover:bg-alert/20'
+                      ]"
+                      :title="isCurrentUser(user.id) ? 'Cannot suspend your own account' : 'Suspend user'"
                     >
                       Suspend
                     </button>
                     <button
                       @click="unsuspendUser(user.id)"
                       v-else
-                      class="px-3 py-1 text-xs bg-success/10 text-success hover:bg-success/20 rounded transition-colors"
-                      title="Unsuspend user"
+                      :disabled="isCurrentUser(user.id)"
+                      :class="[
+                        'px-3 py-1 text-xs rounded transition-colors',
+                        isCurrentUser(user.id)
+                          ? 'bg-fortress-700 text-fortress-500 cursor-not-allowed opacity-50'
+                          : 'bg-success/10 text-success hover:bg-success/20'
+                      ]"
+                      :title="isCurrentUser(user.id) ? 'Cannot unsuspend your own account' : 'Unsuspend user'"
                     >
                       Unsuspend
                     </button>
@@ -255,11 +267,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
+import { useAuthStore } from '../../stores/auth'
 import UserSuspendModal from '../../components/admin/UserSuspendModal.vue'
 import UserInviteModal from '../../components/admin/UserInviteModal.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
+const authStore = useAuthStore()
 const activeTab = ref('users')
 const searchQuery = ref('')
 const showInviteModal = ref(false)
@@ -271,6 +285,10 @@ const suspendModal = ref({
 const totalPages = computed(() => {
   return Math.ceil(adminStore.totalUsers / adminStore.pageSize)
 })
+
+function isCurrentUser(userId) {
+  return authStore.user?.id === userId
+}
 
 async function loadUsers() {
   const filters = {
@@ -313,6 +331,11 @@ function previousPage() {
 }
 
 function openSuspendModal(user) {
+  // Prevent admins from suspending their own account
+  if (isCurrentUser(user.id)) {
+    adminStore.error = 'You cannot suspend your own account'
+    return
+  }
   suspendModal.value = {
     show: true,
     user
@@ -326,6 +349,11 @@ async function confirmSuspend(reason) {
 }
 
 async function unsuspendUser(userId) {
+  // Prevent admins from unsuspending their own account
+  if (isCurrentUser(userId)) {
+    adminStore.error = 'You cannot unsuspend your own account'
+    return
+  }
   await adminStore.unsuspendUser(userId)
   await loadUsers()
 }

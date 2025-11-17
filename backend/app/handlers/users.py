@@ -178,6 +178,14 @@ async def handle_suspend_user(
         Dict with success status, or error
     """
     try:
+        # Prevent admin from suspending their own account
+        if admin_user.id == user_id:
+            logger.warning(f"Admin {admin_user.id} attempted to suspend their own account")
+            return {
+                "success": False,
+                "error": "You cannot suspend your own account"
+            }
+        
         logger.info(f"Suspending user {user_id} by admin {admin_user.id}")
         
         user_service = UserAccountService(session)
@@ -226,6 +234,14 @@ async def handle_unsuspend_user(
         Dict with success status, or error
     """
     try:
+        # Prevent admin from unsuspending their own account
+        if admin_user.id == user_id:
+            logger.warning(f"Admin {admin_user.id} attempted to unsuspend their own account")
+            return {
+                "success": False,
+                "error": "You cannot unsuspend your own account"
+            }
+        
         logger.info(f"Unsuspending user {user_id} by admin {admin_user.id}")
         
         user_service = UserAccountService(session)
