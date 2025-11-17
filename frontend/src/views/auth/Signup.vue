@@ -1,114 +1,141 @@
 <template>
-  <div class="min-h-screen bg-fortress-950 flex items-center justify-center px-4 py-8 md:py-12">
-    <div class="w-full max-w-md">
-      <div class="text-center mb-8 md:mb-12">
-        <div class="inline-block p-3 bg-secure/10 rounded-lg mb-4">
-          <svg class="w-12 h-12 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <div class="min-h-screen bg-gradient-to-br from-fortress-950 via-fortress-900 to-fortress-950 flex items-center justify-center px-4 py-8">
+    <div class="w-full max-w-2xl">
+      <!-- Header Section -->
+      <div class="text-center mb-12">
+        <div class="inline-flex p-4 bg-gradient-to-br from-secure/20 to-secure/10 rounded-2xl mb-6 border border-secure/30">
+          <svg class="w-10 h-10 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
                   d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
           </svg>
         </div>
-        <h1 class="text-3xl font-bold text-fortress-100">Complete Your Profile</h1>
-        <p class="text-fortress-400 mt-2">You've been invited to join. Set up your account.</p>
+        <h1 class="text-4xl font-bold text-fortress-100 mb-3">Create Your Account</h1>
+        <p class="text-fortress-400 text-base">Complete your profile to get started</p>
       </div>
 
-      <div class="card min-h-64">
-        <div class="card-body space-y-6 flex flex-col">
-          <!-- Loading state while verifying token -->
-          <div v-if="verifying" class="flex justify-center py-8 flex-1 items-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-secure"></div>
+      <!-- Main Card -->
+      <div class="bg-gradient-to-b from-fortress-900 to-fortress-950 rounded-2xl border border-fortress-800 shadow-2xl overflow-hidden">
+        <div class="px-10 py-12">
+          <!-- Loading State -->
+          <div v-if="verifying" class="flex justify-center items-center py-16">
+            <div class="space-y-4 text-center">
+              <div class="inline-block">
+                <div class="animate-spin rounded-full h-12 w-12 border-2 border-fortress-700 border-t-secure"></div>
+              </div>
+              <p class="text-fortress-400 text-sm">Verifying your invitation...</p>
+            </div>
           </div>
 
-          <!-- Token verification failed -->
-          <div v-else-if="tokenInvalid" class="space-y-4 flex-1 flex flex-col">
-            <div class="p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
-              {{ tokenError }}
+          <!-- Token Invalid State -->
+          <div v-else-if="tokenInvalid" class="space-y-6">
+            <div class="p-4 bg-alert/10 border border-alert/30 rounded-xl text-alert text-sm flex items-start gap-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+              </svg>
+              <div>
+                <p class="font-medium">Invalid Invitation</p>
+                <p class="text-xs mt-1">{{ tokenError }}</p>
+              </div>
             </div>
-            <div class="flex-1"></div>
             <router-link 
               to="/login" 
-              class="btn btn-primary w-full text-center"
+              class="btn btn-primary w-full text-center py-3"
             >
               Back to Login
             </router-link>
           </div>
 
-          <!-- Form for completing profile -->
-          <form v-else @submit.prevent="handleSignup" class="space-y-6 flex flex-col">
-            <div v-if="error" class="p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
-              {{ error }}
+          <!-- Form Section -->
+          <form v-else @submit.prevent="handleSignup" class="space-y-7">
+            <!-- Error Alert -->
+            <div v-if="error" class="p-4 bg-alert/10 border border-alert/30 rounded-xl text-alert text-sm flex items-start gap-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+              </svg>
+              <span>{{ error }}</span>
             </div>
 
-            <div v-if="success" class="p-4 bg-success/10 border border-success/30 rounded-lg text-success text-sm">
-              {{ successMessage }}
-            </div>
-
-            <div v-if="!success">
-              <!-- Email display (read-only from invitation) -->
+            <!-- Success Alert -->
+            <div v-if="success" class="p-4 bg-success/10 border border-success/30 rounded-xl text-success text-sm flex items-start gap-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              </svg>
               <div>
-                <label class="block text-sm font-medium text-fortress-300 mb-2">Email Address</label>
+                <p class="font-medium">Success!</p>
+                <p class="text-xs mt-1">{{ successMessage }}</p>
+              </div>
+            </div>
+
+            <!-- Form Fields Section -->
+            <div v-if="!success" class="space-y-6">
+              <!-- Email (Read-only) -->
+              <div class="space-y-2.5">
+                <label class="block text-sm font-semibold text-fortress-200">Email Address</label>
                 <input
                   v-model="email"
                   type="email"
-                  class="input bg-fortress-700"
+                  class="w-full px-4 py-3 bg-fortress-800/50 border border-fortress-700 rounded-lg text-fortress-100 disabled:opacity-60 disabled:cursor-not-allowed focus:border-secure focus:outline-none transition-colors"
                   disabled
                 />
-                <p class="mt-1 text-xs text-fortress-400">Invited to this email address</p>
+                <p class="text-xs text-fortress-500">Invited to this email address</p>
               </div>
 
-              <!-- First Name -->
-              <div>
-                <label class="block text-sm font-medium text-fortress-300 mb-2">First Name</label>
-                <input
-                  v-model="firstName"
-                  type="text"
-                  class="input"
-                  placeholder="Enter first name"
-                  required
-                />
-              </div>
+              <!-- Name Row -->
+              <div class="grid grid-cols-2 gap-6">
+                <!-- First Name -->
+                <div class="space-y-2.5">
+                  <label class="block text-sm font-semibold text-fortress-200">First Name</label>
+                  <input
+                    v-model="firstName"
+                    type="text"
+                    class="w-full px-4 py-3 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:border-secure focus:outline-none focus:ring-1 focus:ring-secure/30 transition-colors"
+                    placeholder="John"
+                    required
+                  />
+                </div>
 
-              <!-- Last Name -->
-              <div>
-                <label class="block text-sm font-medium text-fortress-300 mb-2">Last Name</label>
-                <input
-                  v-model="lastName"
-                  type="text"
-                  class="input"
-                  placeholder="Enter last name"
-                  required
-                />
+                <!-- Last Name -->
+                <div class="space-y-2.5">
+                  <label class="block text-sm font-semibold text-fortress-200">Last Name</label>
+                  <input
+                    v-model="lastName"
+                    type="text"
+                    class="w-full px-4 py-3 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:border-secure focus:outline-none focus:ring-1 focus:ring-secure/30 transition-colors"
+                    placeholder="Doe"
+                    required
+                  />
+                </div>
               </div>
 
               <!-- Username -->
-              <div>
-                <label class="block text-sm font-medium text-fortress-300 mb-2">Username</label>
+              <div class="space-y-2.5">
+                <label class="block text-sm font-semibold text-fortress-200">Username</label>
                 <input
                   v-model="username"
                   type="text"
-                  class="input"
-                  placeholder="Choose a username"
+                  class="w-full px-4 py-3 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:border-secure focus:outline-none focus:ring-1 focus:ring-secure/30 transition-colors"
+                  placeholder="johndoe123"
                   required
                   minlength="3"
                 />
-                <p class="mt-1 text-xs text-fortress-400">Alphanumeric and underscores only</p>
+                <p class="text-xs text-fortress-500">3+ characters, alphanumeric and underscores</p>
               </div>
 
               <!-- Password -->
-              <div>
-                <label class="block text-sm font-medium text-fortress-300 mb-2">Password</label>
+              <div class="space-y-2.5">
+                <label class="block text-sm font-semibold text-fortress-200">Password</label>
                 <div class="relative">
                   <input
                     v-model="password"
                     :type="showPassword ? 'text' : 'password'"
-                    class="input pr-10"
-                    placeholder="Create a strong password"
+                    class="w-full px-4 py-3 pr-12 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:border-secure focus:outline-none focus:ring-1 focus:ring-secure/30 transition-colors"
+                    placeholder="••••••••"
                     required
                     minlength="8"
                   />
                   <button
                     type="button"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-fortress-400 hover:text-fortress-300"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 text-fortress-500 hover:text-fortress-300 transition-colors"
                     @click="showPassword = !showPassword"
                   >
                     <svg v-if="showPassword" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -120,26 +147,24 @@
                     </svg>
                   </button>
                 </div>
-                <p class="mt-2 text-xs text-fortress-400">
-                  At least 8 characters, with uppercase, lowercase, number, and special character
-                </p>
+                <p class="text-xs text-fortress-500">8+ characters with uppercase, lowercase, numbers, and special chars</p>
               </div>
 
               <!-- Confirm Password -->
-              <div>
-                <label class="block text-sm font-medium text-fortress-300 mb-2">Confirm Password</label>
+              <div class="space-y-2.5">
+                <label class="block text-sm font-semibold text-fortress-200">Confirm Password</label>
                 <div class="relative">
                   <input
                     v-model="confirmPassword"
                     :type="showConfirmPassword ? 'text' : 'password'"
-                    class="input pr-10"
-                    placeholder="Confirm password"
+                    class="w-full px-4 py-3 pr-12 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:border-secure focus:outline-none focus:ring-1 focus:ring-secure/30 transition-colors"
+                    placeholder="••••••••"
                     required
                     minlength="8"
                   />
                   <button
                     type="button"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-fortress-400 hover:text-fortress-300"
+                    class="absolute right-4 top-1/2 -translate-y-1/2 text-fortress-500 hover:text-fortress-300 transition-colors"
                     @click="showConfirmPassword = !showConfirmPassword"
                   >
                     <svg v-if="showConfirmPassword" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -153,41 +178,56 @@
                 </div>
               </div>
 
-              <!-- Role Display -->
-              <div class="p-3 bg-fortress-800/50 rounded-lg">
-                <p class="text-xs text-fortress-400 mb-1">Your Role</p>
-                <p class="text-sm font-medium text-secure">{{ roleName }}</p>
+              <!-- Role Badge -->
+              <div class="p-5 bg-gradient-to-br from-secure/10 to-secure/5 border border-secure/30 rounded-xl">
+                <p class="text-xs font-medium text-fortress-500 uppercase tracking-wide mb-3">Your Role</p>
+                <div class="inline-flex items-center gap-2 px-3 py-2 bg-secure/20 border border-secure/40 rounded-full">
+                  <div class="w-2 h-2 bg-secure rounded-full"></div>
+                  <p class="text-sm font-semibold text-secure">{{ roleName }}</p>
+                </div>
               </div>
             </div>
 
-            <!-- Submit button -->
-            <button
-              v-if="!success"
-              type="submit"
-              class="btn btn-primary w-full"
-              :disabled="loading"
-            >
-              <span v-if="loading">Creating Account...</span>
-              <span v-else>Complete Setup</span>
-            </button>
+            <!-- Action Buttons -->
+            <div class="space-y-3 pt-7">
+              <button
+                v-if="!success"
+                type="submit"
+                class="btn btn-primary w-full py-3 font-semibold"
+                :disabled="loading"
+              >
+                <span v-if="loading" class="flex items-center justify-center gap-2">
+                  <div class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                  Creating Account...
+                </span>
+                <span v-else>Complete Setup</span>
+              </button>
 
-            <!-- Success redirect button -->
-            <router-link
-              v-else
-              to="/login"
-              class="btn btn-primary w-full text-center"
-            >
-              Go to Login
-            </router-link>
+              <router-link
+                v-else
+                to="/login"
+                class="btn btn-primary w-full py-3 font-semibold text-center"
+              >
+                Go to Login
+              </router-link>
+            </div>
           </form>
+        </div>
 
-          <div class="pt-4 border-t border-fortress-700 text-center text-sm text-fortress-400 mt-auto">
+        <!-- Footer -->
+        <div class="px-10 py-6 border-t border-fortress-800 bg-fortress-950/50">
+          <p class="text-center text-sm text-fortress-400">
             Already have an account?
-            <router-link to="/login" class="text-secure hover:text-secure/80 font-medium transition-colors">
+            <router-link to="/login" class="text-secure hover:text-secure/80 font-semibold transition-colors">
               Sign in
             </router-link>
-          </div>
+          </p>
         </div>
+      </div>
+
+      <!-- Footer Info -->
+      <div class="mt-10 text-center text-xs text-fortress-500">
+        <p>By signing up, you agree to our Terms of Service</p>
       </div>
     </div>
   </div>

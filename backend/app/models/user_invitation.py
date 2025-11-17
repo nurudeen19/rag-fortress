@@ -47,7 +47,13 @@ class UserInvitation(Base):
     
     def is_expired(self) -> bool:
         """Check if invitation has expired."""
-        return datetime.now(timezone.utc) > self.expires_at
+        # Ensure both datetimes are aware (UTC) for comparison
+        now = datetime.now(timezone.utc)
+        expires = self.expires_at
+        if expires.tzinfo is None:
+            # If expires_at is naive, assume UTC
+            expires = expires.replace(tzinfo=timezone.utc)
+        return now > expires
     
     def is_valid(self) -> bool:
         """Check if invitation is still valid for acceptance."""

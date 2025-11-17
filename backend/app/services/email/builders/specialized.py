@@ -214,7 +214,8 @@ class InvitationEmailBuilder(BaseEmailBuilder):
         inviter_name: str,
         organization_name: str,
         invitation_token: str,
-        custom_message: str = ""
+        custom_message: str = "",
+        invitation_link_template: str = None
     ) -> bool:
         """
         Build and send invitation email.
@@ -226,13 +227,21 @@ class InvitationEmailBuilder(BaseEmailBuilder):
             organization_name: Name of organization/team
             invitation_token: Invitation token
             custom_message: Optional custom message
+            invitation_link_template: Optional frontend-provided link template with {token} placeholder
             
         Returns:
             True if sent successfully
         """
         try:
-            # Build invitation URL - use FRONTEND_URL as base, frontend controls the path
-            invitation_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation_token}"
+            # Build invitation URL using template if provided, otherwise use default
+            if invitation_link_template and "{token}" in invitation_link_template:
+                # Frontend provided a link template - use it
+                invitation_url = invitation_link_template.replace("{token}", invitation_token)
+                logger.info(f"Using frontend-provided invitation link template for {recipient_email}")
+            else:
+                # Fallback to default - use FRONTEND_URL as base
+                invitation_url = f"{settings.FRONTEND_URL}/accept-invite?token={invitation_token}"
+                logger.info(f"Using default invitation link for {recipient_email}")
             
             # Render email
             subject, html_body = render_invitation_email(

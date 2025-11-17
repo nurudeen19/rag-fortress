@@ -839,7 +839,8 @@ async def handle_invite_user(
                 inviter_name=admin_user.full_name,
                 organization_name=organization_name,
                 invitation_token=invite_token,
-                custom_message=f"You have been invited to join {organization_name} with the role: {role.name}"
+                custom_message=f"You have been invited to join {organization_name} with the role: {role.name}",
+                invitation_link_template=invitation_link_template
             )
         except Exception as email_err:
             logger.error(f"Failed to send invitation email: {email_err}")
