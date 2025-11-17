@@ -112,15 +112,22 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function inviteUser(email, roleId) {
+  async function inviteUser(email, roleId, invitationLinkTemplate) {
     loading.value = true
     error.value = null
 
     try {
-      const response = await api.post('/v1/admin/users/invite', {
+      const payload = {
         email,
         role_id: roleId
-      })
+      }
+      
+      // Include invitation link template if provided
+      if (invitationLinkTemplate) {
+        payload.invitation_link_template = invitationLinkTemplate
+      }
+      
+      const response = await api.post('/v1/admin/users/invite', payload)
 
       return { success: true, message: response.message }
     } catch (err) {

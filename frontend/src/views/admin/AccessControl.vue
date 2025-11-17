@@ -359,8 +359,12 @@ async function unsuspendUser(userId) {
 }
 
 async function handleInviteUser(inviteData) {
-  // Call API to send invite
-  const result = await adminStore.inviteUser(inviteData.email, inviteData.roleId)
+  // Call API to send invite with the invitation link template
+  const result = await adminStore.inviteUser(
+    inviteData.email, 
+    inviteData.roleId,
+    inviteData.invitationLinkTemplate
+  )
   if (result.success) {
     showInviteModal.value = false
     await loadUsers()

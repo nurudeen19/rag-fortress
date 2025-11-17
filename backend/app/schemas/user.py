@@ -183,6 +183,30 @@ class UserInviteRequest(BaseModel):
     )
 
 
+class SignupWithInviteRequest(BaseModel):
+    """Schema for signing up with invitation token."""
+    
+    username: str = Field(..., min_length=3, max_length=255, description="Username")
+    first_name: str = Field(..., min_length=1, max_length=100, description="First name")
+    last_name: str = Field(..., min_length=1, max_length=100, description="Last name")
+    password: str = Field(..., min_length=8, description="Password")
+    invite_token: str = Field(..., description="Invitation token from email link")
+    
+    @validator('password')
+    def password_strong(cls, v):
+        """Validate password strength."""
+        has_upper = any(c.isupper() for c in v)
+        has_lower = any(c.islower() for c in v)
+        has_digit = any(c.isdigit() for c in v)
+        
+        if not (has_upper and has_lower and has_digit):
+            raise ValueError(
+                'Password must contain at least one uppercase letter, '
+                'one lowercase letter, and one digit'
+            )
+        return v
+
+
 class PermissionCheckResponse(BaseModel):
     """Response for permission check."""
     

@@ -30,6 +30,7 @@ from app.schemas.user import (
     UserResponse,
     UserProfileUpdateRequest,
     SuccessResponse,
+    SignupWithInviteRequest,
 )
 from app.models.user import User
 from app.core import get_logger
@@ -43,6 +44,8 @@ from app.handlers.auth import (
     handle_delete_account,
     handle_password_reset_request,
     handle_password_reset_confirm,
+    handle_signup_with_invite,
+    handle_verify_invitation_token,
 )
 
 
@@ -113,6 +116,89 @@ async def register(
         suspension_reason=user.get("suspension_reason"),
         suspended_at=user.get("suspended_at"),
     )
+
+
+@router.post("/signup", response_model=LoginResponse, status_code=201)
+async def signup_with_invite(
+    request: SignupWithInviteRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Complete user signup using invitation token.
+    
+    Invitation tokens are generated when an admin invites a user.
+    This endpoint allows the invited user to:
+    1. Set their username and password
+    2. Complete their profile (first_name, last_name)
+    3. Activate their account
+    
+    Returns:
+        JWT token for immediate login after successful signup
+    
+    Raises:
+        400 Bad Request: Invalid/expired token or validation errors
+    """
+    result = await handle_signup_with_invite(request, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to complete signup")
+        )
+    
+    user = result["user"]
+    return LoginResponse(
+        token=result["token"],
+        token_type="bearer",
+        expires_at=result["expires_at"],
+        user={
+            "id": user["id"],
+            "username": user["username"],
+            "email": user["email"],
+            "first_name": user["first_name"],
+            "last_name": user["last_name"],
+            "full_name": user["full_name"],
+            "is_active": user["is_active"],
+            "is_verified": user["is_verified"],
+            "is_suspended": user["is_suspended"],
+            "roles": user.get("roles", []),
+        }
+    )
+
+
+@router.get("/signup/verify-invite", response_model=dict)
+async def verify_invitation_token(
+    token: str,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Verify invitation token and return invitation details.
+    
+    Called by frontend when user lands on signup page to:
+    1. Verify token is valid and not expired
+    2. Pre-fill email address from invitation
+    3. Display role information
+    
+    Returns:
+        Dict with email and role information, or error
+    
+    Raises:
+        400 Bad Request: Invalid/expired token
+    """
+    result = await handle_verify_invitation_token(token, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to verify invitation token")
+        )
+    
+    return {
+        "success": True,
+        "email": result["email"],
+        "role_name": result["role_name"],
+        "expires_at": result.get("expires_at")
+    }
 
 
 @router.post("/logout", response_model=SuccessResponse, status_code=200)

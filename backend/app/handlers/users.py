@@ -758,14 +758,17 @@ async def handle_invite_user(
         Dict with success status and message
     """
     try:
-        from app.services.user.user_service import UserService
+        from sqlalchemy import select
+        from app.models.auth import Role
+        from app.services.user.user_service import UserAccountService
+        from app.services.user.role_permission_service import RolePermissionService
+        from app.services.user.password_service import PasswordService
         from app.services.email.builders.specialized import InvitationEmailBuilder
         
-        user_service = UserService(session)
-        
         # Check if role exists
-        role_result = await user_service._role_permission_service.get_role_by_id(role_id)
-        if not role_result:
+        result = await session.execute(select(Role).where(Role.id == role_id))
+        role = result.scalar_one_or_none()
+        if not role:
             logger.warning(f"Role {role_id} not found for invitation")
             return {
                 "success": False,
@@ -773,7 +776,8 @@ async def handle_invite_user(
             }
         
         # Check if email already exists
-        existing_user = await user_service.get_user_by_email(email)
+        result = await session.execute(select(User).where(User.email == email))
+        existing_user = result.scalar_one_or_none()
         if existing_user:
             logger.warning(f"User with email {email} already exists")
             return {
@@ -781,54 +785,69 @@ async def handle_invite_user(
                 "error": "A user with this email already exists"
             }
         
-        # Generate invitation token (reuse password reset mechanism)
-        from app.services.user.password_service import PasswordService
-        password_service = PasswordService(session)
+        # Create temporary user record with minimal data
+        user_account_service = UserAccountService(session)
         
-        # Create a temporary user record to generate token
-        # We'll create the actual user with proper data after they accept the invitation
-        new_user, created_error = await user_service.create_user(
+        new_user, created_error = await user_account_service.create_user(
             username=email.split('@')[0],  # Temporary username from email
             email=email,
             first_name="",
             last_name="",
-            password="temporary",  # Will be replaced on signup
+            password="TempPass123!@#",  # Temporary strong password
             department_id=None
         )
         
         if not new_user:
+            logger.warning(f"Failed to create user record for invite: {created_error}")
             return {
                 "success": False,
                 "error": created_error or "Failed to create user record"
             }
         
-        # Create password reset token to use as invitation token
+        # Generate invitation token using password reset mechanism
+        password_service = PasswordService(session)
         invite_token = await password_service.generate_reset_token(new_user.id)
         
-        # Send invitation email
-        email_builder = InvitationEmailBuilder()
-        
-        # Default frontend link if not provided
-        if not invitation_link_template:
-            invitation_link_template = "https://app.example.com/signup?token={token}"
-        
-        invitation_link = invitation_link_template.format(token=invite_token)
-        
-        await email_builder.build_and_send(
-            recipient_email=email,
-            invitation_link=invitation_link,
-            invited_by=admin_user.full_name,
-            role_name=role_result.name,
-            expires_in_days=7
-        )
-        
         # Assign role to new user
-        await user_service._role_permission_service.assign_role_to_user(
+        role_permission_service = RolePermissionService(session)
+        role_assigned, role_error = await role_permission_service.assign_role_to_user(
             user_id=new_user.id,
             role_id=role_id
         )
         
-        logger.info(f"Invitation sent to {email} by {admin_user.username} for role {role_result.name}")
+        if not role_assigned:
+            logger.warning(f"Failed to assign role {role_id} to invited user: {role_error}")
+            return {
+                "success": False,
+                "error": role_error or "Failed to assign role"
+            }
+        
+        # Send invitation email
+        try:
+            email_builder = InvitationEmailBuilder()
+            
+            # Default frontend link if not provided
+            if not invitation_link_template:
+                invitation_link_template = "http://localhost:3000/signup?token={token}"
+            
+            invitation_link = invitation_link_template.format(token=invite_token)
+            
+            await email_builder.build_and_send(
+                recipient_email=email,
+                invitation_link=invitation_link,
+                invited_by=admin_user.full_name,
+                role_name=role.name,
+                expires_in_days=7
+            )
+        except Exception as email_err:
+            logger.error(f"Failed to send invitation email: {email_err}")
+            # Don't fail the whole operation if email fails
+            # The user record and role assignment are done
+        
+        # Commit the session
+        await session.commit()
+        
+        logger.info(f"Invitation sent to {email} by {admin_user.username} for role {role.name}")
         
         return {
             "success": True,
@@ -838,6 +857,7 @@ async def handle_invite_user(
         
     except Exception as e:
         logger.error(f"Error handling invite user request: {str(e)}", exc_info=True)
+        await session.rollback()
         return {
             "success": False,
             "error": str(e)

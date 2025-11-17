@@ -116,9 +116,14 @@ async function handleInvite() {
 
   loading.value = true
   try {
+    // Build the frontend signup URL with token placeholder
+    const baseUrl = window.location.origin
+    const invitationLinkTemplate = `${baseUrl}/signup?token={token}`
+    
     emit('invite', {
       email: email.value,
-      roleId: parseInt(selectedRoleId.value)
+      roleId: parseInt(selectedRoleId.value),
+      invitationLinkTemplate
     })
   } finally {
     loading.value = false

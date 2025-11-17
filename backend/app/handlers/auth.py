@@ -22,6 +22,7 @@ from app.schemas.user import (
     PasswordResetRequestSchema,
     PasswordResetConfirmSchema,
     UserProfileUpdateRequest,
+    SignupWithInviteRequest,
 )
 from app.services.user import (
     AuthService,
@@ -620,3 +621,287 @@ async def handle_password_reset_confirm(
             "success": False,
             "error": str(e)
         }
+
+
+async def handle_verify_invitation_token(
+    token: str,
+    session: AsyncSession
+) -> dict:
+    """
+    Verify invitation token and return invitation details.
+    
+    Called by frontend when user lands on signup page to:
+    1. Verify token is valid and not expired
+    2. Pre-fill email address from invitation
+    3. Display role information
+    
+    Args:
+        token: Invitation token from URL query parameter
+        session: Database session
+        
+    Returns:
+        Dict with email, role_name, and expiry, or error
+    """
+    try:
+        from app.models.password_reset_token import PasswordResetToken
+        from app.models.user import User
+        from sqlalchemy import select
+        
+        logger.info(f"Verifying invitation token")
+        
+        # Query token record
+        result = await session.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.token == token
+            )
+        )
+        token_record = result.scalar_one_or_none()
+        
+        if not token_record:
+            logger.warning(f"Invalid invitation token provided")
+            return {
+                "success": False,
+                "error": "Invalid invitation token"
+            }
+        
+        # Check if already used
+        if token_record.is_used:
+            logger.warning(f"Invitation token already used (user: {token_record.user_id})")
+            return {
+                "success": False,
+                "error": "Invitation has already been used"
+            }
+        
+        # Check if expired
+        now = datetime.now(timezone.utc)
+        expires_at = token_record.expires_at
+        
+        # Handle both naive and aware datetimes
+        if expires_at.tzinfo is not None and now.tzinfo is not None:
+            is_expired = now > expires_at
+        else:
+            now_naive = now.replace(tzinfo=None)
+            expires_at_naive = expires_at.replace(tzinfo=None) if expires_at.tzinfo else expires_at
+            is_expired = now_naive > expires_at_naive
+        
+        if is_expired:
+            logger.warning(f"Invitation token expired (user: {token_record.user_id})")
+            return {
+                "success": False,
+                "error": "Invitation has expired"
+            }
+        
+        # Get user to fetch role information
+        user_result = await session.execute(
+            select(User).where(User.id == token_record.user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            logger.error(f"User not found for invitation token (user_id: {token_record.user_id})")
+            return {
+                "success": False,
+                "error": "User not found"
+            }
+        
+        # Get primary role if any
+        role_name = "User"
+        if user.roles and len(user.roles) > 0:
+            role_name = user.roles[0].name
+        
+        logger.info(f"Invitation token verified for user {token_record.user_id}")
+        
+        return {
+            "success": True,
+            "email": token_record.email,
+            "role_name": role_name,
+            "expires_at": expires_at.isoformat() if expires_at else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Error verifying invitation token: {str(e)}", exc_info=True)
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+async def handle_signup_with_invite(
+    request: SignupWithInviteRequest,
+    session: AsyncSession
+) -> dict:
+    """
+    Handle user signup using invitation token.
+    
+    Process:
+    1. Verify invitation token
+    2. Find temporary user by email from token
+    3. Update user with provided data
+    4. Activate user account
+    5. Return login token
+    
+    Args:
+        request: Signup data with invitation token
+        session: Database session
+        
+    Returns:
+        Dict with token and user data, or error
+    """
+    try:
+        logger.info(f"Signup attempt with invitation token for username: {request.username}")
+        
+        password_service = PasswordService(session)
+        user_account_service = UserAccountService(session)
+        auth_service = AuthService(session)
+        
+        # Verify invitation token and extract email
+        from app.models.password_reset_token import PasswordResetToken
+        from sqlalchemy import select
+        
+        result = await session.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.token == request.invite_token
+            )
+        )
+        token_record = result.scalar_one_or_none()
+        
+        if not token_record:
+            logger.warning(f"Invalid invitation token provided for signup")
+            return {
+                "success": False,
+                "error": "Invalid invitation token",
+                "token": None,
+                "user": None
+            }
+        
+        # Check if token already used
+        if token_record.is_used:
+            logger.warning(f"Invitation token already used (user: {token_record.user_id})")
+            return {
+                "success": False,
+                "error": "Invitation token has already been used",
+                "token": None,
+                "user": None
+            }
+        
+        # Check if token expired
+        now = datetime.now(timezone.utc)
+        expires_at = token_record.expires_at
+        
+        # Handle both naive and aware datetimes
+        if expires_at.tzinfo is not None and now.tzinfo is not None:
+            is_expired = now > expires_at
+        else:
+            now_naive = now.replace(tzinfo=None)
+            expires_at_naive = expires_at.replace(tzinfo=None) if expires_at.tzinfo else expires_at
+            is_expired = now_naive > expires_at_naive
+        
+        if is_expired:
+            logger.warning(f"Invitation token expired (user: {token_record.user_id})")
+            return {
+                "success": False,
+                "error": "Invitation token has expired",
+                "token": None,
+                "user": None
+            }
+        
+        # Email from token must match request
+        if token_record.email != request.email.lower():
+            logger.warning(f"Email mismatch for invitation token: {token_record.email} vs {request.email}")
+            return {
+                "success": False,
+                "error": "Email does not match invitation",
+                "token": None,
+                "user": None
+            }
+        
+        # Find temporary user created during invitation
+        from app.models.user import User
+        user_result = await session.execute(
+            select(User).where(User.id == token_record.user_id)
+        )
+        user = user_result.scalar_one_or_none()
+        
+        if not user:
+            logger.error(f"User not found for invitation token (user_id: {token_record.user_id})")
+            return {
+                "success": False,
+                "error": "User not found",
+                "token": None,
+                "user": None
+            }
+        
+        # Check username uniqueness (excluding current user)
+        username_exists = await user_account_service.check_user_exists(
+            username=request.username
+        )
+        if username_exists and user.username != request.username:
+            logger.warning(f"Username already taken: {request.username}")
+            return {
+                "success": False,
+                "error": "Username is already taken",
+                "token": None,
+                "user": None
+            }
+        
+        # Update user with signup data
+        user.username = request.username
+        user.first_name = request.first_name
+        user.last_name = request.last_name
+        user.password_hash = password_service.hash_password(request.password)
+        user.is_verified = True  # Mark as verified after signup
+        user.is_active = True  # Activate the account
+        
+        # Mark invitation token as used
+        token_record.is_used = True
+        token_record.used_at = now
+        
+        await session.flush()
+        await session.commit()
+        
+        logger.info(f"User {user.username} completed signup with invitation")
+        
+        # Generate JWT token for immediate login
+        token = create_access_token(user.id)
+        expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_at = datetime.now(timezone.utc) + expires_delta
+        
+        # Format roles
+        roles = [
+            {
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+                "is_system": role.is_system,
+            }
+            for role in (user.roles or [])
+        ]
+        
+        return {
+            "success": True,
+            "token": token,
+            "expires_at": expires_at.isoformat(),
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "full_name": f"{user.first_name} {user.last_name}".strip(),
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "is_suspended": user.is_suspended,
+                "roles": roles,
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error handling signup with invitation: {str(e)}", exc_info=True)
+        await session.rollback()
+        return {
+            "success": False,
+            "error": str(e),
+            "token": None,
+            "user": None
+        }
+
