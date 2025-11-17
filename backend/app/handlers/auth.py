@@ -643,79 +643,51 @@ async def handle_verify_invitation_token(
         Dict with email, role_name, and expiry, or error
     """
     try:
-        from app.models.password_reset_token import PasswordResetToken
-        from app.models.user import User
+        from app.models.user_invitation import UserInvitation
         from sqlalchemy import select
         
         logger.info(f"Verifying invitation token")
         
-        # Query token record
+        # Query invitation record
         result = await session.execute(
-            select(PasswordResetToken).where(
-                PasswordResetToken.token == token
+            select(UserInvitation).where(
+                UserInvitation.token == token
             )
         )
-        token_record = result.scalar_one_or_none()
+        invitation = result.scalar_one_or_none()
         
-        if not token_record:
+        if not invitation:
             logger.warning(f"Invalid invitation token provided")
             return {
                 "success": False,
                 "error": "Invalid invitation token"
             }
         
-        # Check if already used
-        if token_record.is_used:
-            logger.warning(f"Invitation token already used (user: {token_record.user_id})")
-            return {
-                "success": False,
-                "error": "Invitation has already been used"
-            }
+        # Check if invitation is valid
+        if not invitation.is_valid():
+            if invitation.status != "pending":
+                logger.warning(f"Invitation already used (status: {invitation.status})")
+                return {
+                    "success": False,
+                    "error": "Invitation has already been used"
+                }
+            else:
+                logger.warning(f"Invitation token expired")
+                return {
+                    "success": False,
+                    "error": "Invitation has expired"
+                }
         
-        # Check if expired
-        now = datetime.now(timezone.utc)
-        expires_at = token_record.expires_at
+        # Get role name from invitation (stored as string)
+        role_name = invitation.assigned_role or "User"
         
-        # Handle both naive and aware datetimes
-        if expires_at.tzinfo is not None and now.tzinfo is not None:
-            is_expired = now > expires_at
-        else:
-            now_naive = now.replace(tzinfo=None)
-            expires_at_naive = expires_at.replace(tzinfo=None) if expires_at.tzinfo else expires_at
-            is_expired = now_naive > expires_at_naive
-        
-        if is_expired:
-            logger.warning(f"Invitation token expired (user: {token_record.user_id})")
-            return {
-                "success": False,
-                "error": "Invitation has expired"
-            }
-        
-        # Get user to fetch role information
-        user_result = await session.execute(
-            select(User).where(User.id == token_record.user_id)
-        )
-        user = user_result.scalar_one_or_none()
-        
-        if not user:
-            logger.error(f"User not found for invitation token (user_id: {token_record.user_id})")
-            return {
-                "success": False,
-                "error": "User not found"
-            }
-        
-        # Get primary role if any
-        role_name = "User"
-        if user.roles and len(user.roles) > 0:
-            role_name = user.roles[0].name
-        
-        logger.info(f"Invitation token verified for user {token_record.user_id}")
+        logger.info(f"Invitation token verified for email {invitation.email}")
         
         return {
             "success": True,
-            "email": token_record.email,
+            "email": invitation.email,
             "role_name": role_name,
-            "expires_at": expires_at.isoformat() if expires_at else None
+            "expires_at": invitation.expires_at.isoformat() if invitation.expires_at else None
         }
         
     except Exception as e:
@@ -755,17 +727,18 @@ async def handle_signup_with_invite(
         auth_service = AuthService(session)
         
         # Verify invitation token and extract email
-        from app.models.password_reset_token import PasswordResetToken
+        from app.models.user_invitation import UserInvitation
+        from app.models.auth import Role
         from sqlalchemy import select
         
         result = await session.execute(
-            select(PasswordResetToken).where(
-                PasswordResetToken.token == request.invite_token
+            select(UserInvitation).where(
+                UserInvitation.token == request.invite_token
             )
         )
-        token_record = result.scalar_one_or_none()
+        invitation = result.scalar_one_or_none()
         
-        if not token_record:
+        if not invitation:
             logger.warning(f"Invalid invitation token provided for signup")
             return {
                 "success": False,
@@ -774,40 +747,28 @@ async def handle_signup_with_invite(
                 "user": None
             }
         
-        # Check if token already used
-        if token_record.is_used:
-            logger.warning(f"Invitation token already used (user: {token_record.user_id})")
-            return {
-                "success": False,
-                "error": "Invitation token has already been used",
-                "token": None,
-                "user": None
-            }
+        # Check if invitation is valid
+        if not invitation.is_valid():
+            if invitation.status != "pending":
+                logger.warning(f"Invitation already used (status: {invitation.status})")
+                return {
+                    "success": False,
+                    "error": "Invitation has already been used",
+                    "token": None,
+                    "user": None
+                }
+            else:
+                logger.warning(f"Invitation token expired")
+                return {
+                    "success": False,
+                    "error": "Invitation has expired",
+                    "token": None,
+                    "user": None
+                }
         
-        # Check if token expired
-        now = datetime.now(timezone.utc)
-        expires_at = token_record.expires_at
-        
-        # Handle both naive and aware datetimes
-        if expires_at.tzinfo is not None and now.tzinfo is not None:
-            is_expired = now > expires_at
-        else:
-            now_naive = now.replace(tzinfo=None)
-            expires_at_naive = expires_at.replace(tzinfo=None) if expires_at.tzinfo else expires_at
-            is_expired = now_naive > expires_at_naive
-        
-        if is_expired:
-            logger.warning(f"Invitation token expired (user: {token_record.user_id})")
-            return {
-                "success": False,
-                "error": "Invitation token has expired",
-                "token": None,
-                "user": None
-            }
-        
-        # Email from token must match request
-        if token_record.email != request.email.lower():
-            logger.warning(f"Email mismatch for invitation token: {token_record.email} vs {request.email}")
+        # Email from invitation must match request
+        if invitation.email != request.email.lower():
+            logger.warning(f"Email mismatch for invitation token: {invitation.email} vs {request.email}")
             return {
                 "success": False,
                 "error": "Email does not match invitation",
@@ -815,54 +776,70 @@ async def handle_signup_with_invite(
                 "user": None
             }
         
-        # Find temporary user created during invitation
-        from app.models.user import User
-        user_result = await session.execute(
-            select(User).where(User.id == token_record.user_id)
-        )
-        user = user_result.scalar_one_or_none()
+        # Verify assigned role exists
+        assigned_role = invitation.assigned_role
+        role_to_assign = None
+        if assigned_role:
+            result = await session.execute(
+                select(Role).where(Role.name == assigned_role)
+            )
+            role_to_assign = result.scalar_one_or_none()
+            
+            if not role_to_assign:
+                logger.error(f"Role {assigned_role} not found for invitation")
+                return {
+                    "success": False,
+                    "error": f"Role {assigned_role} is no longer available",
+                    "token": None,
+                    "user": None
+                }
         
-        if not user:
-            logger.error(f"User not found for invitation token (user_id: {token_record.user_id})")
+        # Now create the new user account
+        new_user, create_error = await user_account_service.create_user(
+            username=request.username,
+            email=request.email,
+            password=request.password,
+            first_name=request.first_name,
+            last_name=request.last_name
+        )
+        
+        if not new_user:
+            logger.warning(f"Failed to create user account during signup: {create_error}")
             return {
                 "success": False,
-                "error": "User not found",
+                "error": create_error or "Failed to create user account",
                 "token": None,
                 "user": None
             }
         
-        # Check username uniqueness (excluding current user)
-        username_exists = await user_account_service.check_user_exists(
-            username=request.username
-        )
-        if username_exists and user.username != request.username:
-            logger.warning(f"Username already taken: {request.username}")
-            return {
-                "success": False,
-                "error": "Username is already taken",
-                "token": None,
-                "user": None
-            }
+        # Assign role to new user if one was specified
+        if role_to_assign:
+            from app.services.user import RolePermissionService
+            role_service = RolePermissionService(session)
+            role_assigned, role_error = await role_service.assign_role_to_user(
+                user_id=new_user.id,
+                role_id=role_to_assign.id
+            )
+            
+            if not role_assigned:
+                logger.warning(f"Failed to assign role to user: {role_error}")
+                # Don't fail the signup if role assignment fails - continue anyway
         
-        # Update user with signup data
-        user.username = request.username
-        user.first_name = request.first_name
-        user.last_name = request.last_name
-        user.password_hash = password_service.hash_password(request.password)
-        user.is_verified = True  # Mark as verified after signup
-        user.is_active = True  # Activate the account
-        
-        # Mark invitation token as used
-        token_record.is_used = True
-        token_record.used_at = now
+        # Mark invitation as accepted
+        now = datetime.now(timezone.utc)
+        invitation.status = "accepted"
+        invitation.accepted_at = now
         
         await session.flush()
         await session.commit()
         
-        logger.info(f"User {user.username} completed signup with invitation")
+        logger.info(f"User {new_user.username} completed signup with invitation")
+        
+        # Refresh user to get assigned roles
+        await session.refresh(new_user)
         
         # Generate JWT token for immediate login
-        token = create_access_token(user.id)
+        token = create_access_token(new_user.id)
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         expires_at = datetime.now(timezone.utc) + expires_delta
         
@@ -874,7 +851,7 @@ async def handle_signup_with_invite(
                 "description": role.description,
                 "is_system": role.is_system,
             }
-            for role in (user.roles or [])
+            for role in (new_user.roles or [])
         ]
         
         return {
@@ -882,15 +859,15 @@ async def handle_signup_with_invite(
             "token": token,
             "expires_at": expires_at.isoformat(),
             "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "full_name": f"{user.first_name} {user.last_name}".strip(),
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "is_suspended": user.is_suspended,
+                "id": new_user.id,
+                "username": new_user.username,
+                "email": new_user.email,
+                "first_name": new_user.first_name,
+                "last_name": new_user.last_name,
+                "full_name": f"{new_user.first_name} {new_user.last_name}".strip(),
+                "is_active": new_user.is_active,
+                "is_verified": new_user.is_verified,
+                "is_suspended": new_user.is_suspended,
                 "roles": roles,
             }
         }

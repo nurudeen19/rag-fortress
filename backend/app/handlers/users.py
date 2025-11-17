@@ -12,11 +12,18 @@ Handlers manage business logic for:
 import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from datetime import datetime, timezone, timedelta
 
+from app.models.user import User
+from app.models.auth import Role
+from app.config.settings import settings
 from app.services.user import (
     UserAccountService,
     RolePermissionService,
+    PasswordService,
 )
+from app.services.email.builders.specialized import InvitationEmailBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -747,6 +754,9 @@ async def handle_invite_user(
     """
     Send invitation to new user.
     
+    Creates a UserInvitation record (not a user yet).
+    User account will be created during signup with the invitation token.
+    
     Args:
         email: Email address to invite
         role_id: Role to assign to invited user
@@ -758,12 +768,8 @@ async def handle_invite_user(
         Dict with success status and message
     """
     try:
-        from sqlalchemy import select
-        from app.models.auth import Role
-        from app.services.user.user_service import UserAccountService
-        from app.services.user.role_permission_service import RolePermissionService
-        from app.services.user.password_service import PasswordService
-        from app.services.email.builders.specialized import InvitationEmailBuilder
+        from app.models.user_invitation import UserInvitation
+        import secrets
         
         # Check if role exists
         result = await session.execute(select(Role).where(Role.id == role_id))
@@ -775,7 +781,7 @@ async def handle_invite_user(
                 "error": f"Role {role_id} not found"
             }
         
-        # Check if email already exists
+        # Check if email is already registered
         result = await session.execute(select(User).where(User.email == email))
         existing_user = result.scalar_one_or_none()
         if existing_user:
@@ -785,64 +791,59 @@ async def handle_invite_user(
                 "error": "A user with this email already exists"
             }
         
-        # Create temporary user record with minimal data
-        user_account_service = UserAccountService(session)
+        # Check if there's a pending invitation for this email
+        result = await session.execute(
+            select(UserInvitation).where(
+                UserInvitation.email == email,
+                UserInvitation.status == "pending"
+            )
+        )
+        pending_invitation = result.scalar_one_or_none()
+        if pending_invitation:
+            logger.warning(f"Pending invitation already exists for {email}")
+            return {
+                "success": False,
+                "error": "An invitation has already been sent to this email"
+            }
         
-        new_user, created_error = await user_account_service.create_user(
-            username=email.split('@')[0],  # Temporary username from email
+        # Generate invitation token
+        invite_token = secrets.token_urlsafe(32)
+        
+        # Calculate expiry using configured days from settings
+        expiry = datetime.now(timezone.utc) + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS)
+        
+        # Create invitation record (not a user)
+        invitation = UserInvitation(
+            token=invite_token,
             email=email,
-            first_name="",
-            last_name="",
-            password="TempPass123!@#",  # Temporary strong password
-            department_id=None
+            invited_by_id=admin_user.id,
+            status="pending",
+            expires_at=expiry,
+            assigned_role=role.name  # Store role name
         )
         
-        if not new_user:
-            logger.warning(f"Failed to create user record for invite: {created_error}")
-            return {
-                "success": False,
-                "error": created_error or "Failed to create user record"
-            }
-        
-        # Generate invitation token using password reset mechanism
-        password_service = PasswordService(session)
-        invite_token = await password_service.generate_reset_token(new_user.id)
-        
-        # Assign role to new user
-        role_permission_service = RolePermissionService(session)
-        role_assigned, role_error = await role_permission_service.assign_role_to_user(
-            user_id=new_user.id,
-            role_id=role_id
-        )
-        
-        if not role_assigned:
-            logger.warning(f"Failed to assign role {role_id} to invited user: {role_error}")
-            return {
-                "success": False,
-                "error": role_error or "Failed to assign role"
-            }
+        session.add(invitation)
+        await session.flush()
         
         # Send invitation email
         try:
+            from app.services.email.builders.specialized import InvitationEmailBuilder
             email_builder = InvitationEmailBuilder()
             
-            # Default frontend link if not provided
-            if not invitation_link_template:
-                invitation_link_template = "http://localhost:3000/signup?token={token}"
-            
-            invitation_link = invitation_link_template.format(token=invite_token)
+            # Get organization name from settings if available
+            organization_name = getattr(settings, 'APP_NAME', 'RAG Fortress')
             
             await email_builder.build_and_send(
                 recipient_email=email,
-                invitation_link=invitation_link,
-                invited_by=admin_user.full_name,
-                role_name=role.name,
-                expires_in_days=7
+                recipient_name=email.split('@')[0],  # Use email prefix as recipient name
+                inviter_name=admin_user.full_name,
+                organization_name=organization_name,
+                invitation_token=invite_token,
+                custom_message=f"You have been invited to join {organization_name} with the role: {role.name}"
             )
         except Exception as email_err:
             logger.error(f"Failed to send invitation email: {email_err}")
             # Don't fail the whole operation if email fails
-            # The user record and role assignment are done
         
         # Commit the session
         await session.commit()
@@ -852,7 +853,7 @@ async def handle_invite_user(
         return {
             "success": True,
             "message": f"Invitation sent to {email}",
-            "user_id": new_user.id
+            "invitation_id": invitation.id
         }
         
     except Exception as e:

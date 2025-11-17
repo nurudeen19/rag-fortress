@@ -34,6 +34,20 @@
       <button @click="adminStore.clearError()" class="ml-2 hover:underline">×</button>
     </div>
 
+    <!-- Success/Error Notification -->
+    <div 
+      v-if="notification.show" 
+      :class="[
+        'mb-4 p-4 rounded-lg text-sm transition-all',
+        notification.type === 'success'
+          ? 'bg-secure/10 border border-secure/30 text-secure'
+          : 'bg-alert/10 border border-alert/30 text-alert'
+      ]"
+    >
+      {{ notification.message }}
+      <button @click="notification.show = false" class="ml-2 hover:underline">×</button>
+    </div>
+
     <!-- Users Tab -->
     <div v-if="activeTab === 'users'" class="flex-1 flex flex-col gap-4">
       <!-- Header with Filters and Actions -->
@@ -277,6 +291,11 @@ const authStore = useAuthStore()
 const activeTab = ref('users')
 const searchQuery = ref('')
 const showInviteModal = ref(false)
+const notification = ref({
+  show: false,
+  type: 'success', // 'success' or 'error'
+  message: ''
+})
 const suspendModal = ref({
   show: false,
   user: null
@@ -366,8 +385,23 @@ async function handleInviteUser(inviteData) {
     inviteData.invitationLinkTemplate
   )
   if (result.success) {
+    notification.value = {
+      show: true,
+      type: 'success',
+      message: `Invitation sent to ${inviteData.email}`
+    }
+    // Auto-hide notification after 3 seconds
+    setTimeout(() => {
+      notification.value.show = false
+    }, 3000)
     showInviteModal.value = false
     await loadUsers()
+  } else {
+    notification.value = {
+      show: true,
+      type: 'error',
+      message: result.error || 'Failed to send invitation'
+    }
   }
 }
 
