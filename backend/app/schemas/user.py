@@ -30,6 +30,22 @@ class LoginResponse(BaseModel):
     is_active: bool
     token: str = Field(..., description="JWT access token")
     token_type: str = Field(default="bearer")
+    expires_at: str = Field(..., description="Token expiration timestamp (ISO 8601)")
+    user: Optional[dict] = Field(default=None, description="Full user data including roles")
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None,
+        }
+
+
+class RoleResponse(BaseModel):
+    """Response schema for role data."""
+    
+    id: int
+    name: str
+    description: Optional[str]
+    is_system: bool
 
 
 class PasswordChangeRequest(BaseModel):
@@ -121,15 +137,6 @@ class UserDetailResponse(UserResponse):
     """Detailed user response including roles."""
     
     roles: List['RoleResponse'] = Field(default_factory=list)
-
-
-class RoleResponse(BaseModel):
-    """Response schema for role data."""
-    
-    id: int
-    name: str
-    description: Optional[str]
-    is_system: bool
 
 
 class PermissionResponse(BaseModel):

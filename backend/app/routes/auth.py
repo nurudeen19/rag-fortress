@@ -75,6 +75,7 @@ async def login(
     return LoginResponse(
         token=result["token"],
         token_type="bearer",
+        expires_at=result["expires_at"],
         user_id=result["user"]["id"],
         username=result["user"]["username"],
         email=result["user"]["email"],
@@ -83,6 +84,7 @@ async def login(
         full_name=result["user"]["full_name"],
         is_verified=result["user"]["is_verified"],
         is_active=result["user"]["is_active"],
+        user=result["user"],
     )
 
 
