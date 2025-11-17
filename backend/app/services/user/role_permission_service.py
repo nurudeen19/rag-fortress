@@ -431,7 +431,10 @@ class RolePermissionService:
             List of Role objects
         """
         try:
-            result = await self.session.execute(select(Role))
+            from sqlalchemy.orm import selectinload
+            result = await self.session.execute(
+                select(Role).options(selectinload(Role.permissions))
+            )
             return result.scalars().all()
         
         except Exception as e:

@@ -185,7 +185,13 @@ class UserListResponse(BaseModel):
     total: int
     limit: int
     offset: int
-    users: List[UserResponse]
+    users: List['UserDetailResponse']
+
+
+class RoleListResponse(BaseModel):
+    """Response for role list."""
+    
+    roles: List['RoleDetailResponse']
 
 
 class CreateRoleRequest(BaseModel):

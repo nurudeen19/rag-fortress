@@ -119,7 +119,7 @@ export const useAdminStore = defineStore('admin', () => {
 
     try {
       const response = await api.get('/v1/admin/roles')
-      roles.value = response || []
+      roles.value = response.roles || []
       return { success: true }
     } catch (err) {
       error.value = err.response?.data?.detail || 'Failed to fetch roles'

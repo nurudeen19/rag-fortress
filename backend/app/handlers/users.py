@@ -70,6 +70,15 @@ async def handle_list_users(
                 "is_verified": u.is_verified,
                 "is_suspended": u.is_suspended,
                 "suspension_reason": u.suspension_reason,
+                "roles": [
+                    {
+                        "id": role.id,
+                        "name": role.name,
+                        "description": role.description,
+                        "is_system": role.is_system,
+                    }
+                    for role in (u.roles or [])
+                ],
             }
             for u in users
         ]

@@ -26,9 +26,11 @@ from app.core.database import get_session
 from app.core.security import get_current_user, require_role
 from app.schemas.user import (
     UserResponse,
+    UserDetailResponse,
     UserListResponse,
     RoleResponse,
     RoleDetailResponse,
+    RoleListResponse,
     PermissionResponse,
     RoleAssignRequest,
     RoleRevokeRequest,
@@ -98,7 +100,7 @@ async def list_users(
         total=result["total"],
         limit=limit,
         offset=offset,
-        users=[UserResponse(**u) for u in result["users"]]
+        users=[UserDetailResponse(**u) for u in result["users"]]
     )
 
 
@@ -236,7 +238,7 @@ async def revoke_role_from_user(
     return SuccessResponse(message=result.get("message", "Role revoked"))
 
 
-@router.get("/roles", response_model=list[RoleDetailResponse])
+@router.get("/roles", response_model=RoleListResponse)
 async def list_roles(
     admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
@@ -250,16 +252,18 @@ async def list_roles(
             detail=result.get("error", "Failed to list roles")
         )
     
-    return [
-        RoleDetailResponse(
-            id=r["id"],
-            name=r["name"],
-            description=r["description"],
-            is_system=r["is_system"],
-            permissions=[PermissionResponse(**p) for p in r.get("permissions", [])]
-        )
-        for r in result["roles"]
-    ]
+    return RoleListResponse(
+        roles=[
+            RoleDetailResponse(
+                id=r["id"],
+                name=r["name"],
+                description=r["description"],
+                is_system=r["is_system"],
+                permissions=[PermissionResponse(**p) for p in r.get("permissions", [])]
+            )
+            for r in result["roles"]
+        ]
+    )
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=201)

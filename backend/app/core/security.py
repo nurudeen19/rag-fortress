@@ -181,7 +181,13 @@ async def get_current_user(
     Raises:
         HTTPException if user not found or account locked
     """
-    user = await session.get(User, user_id)
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+    
+    result = await session.execute(
+        select(User).where(User.id == user_id).options(selectinload(User.roles))
+    )
+    user = result.scalar_one_or_none()
     
     if not user:
         raise HTTPException(

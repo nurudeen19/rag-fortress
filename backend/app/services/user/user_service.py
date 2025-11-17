@@ -257,7 +257,8 @@ class UserAccountService:
             List of User objects
         """
         try:
-            query = select(User)
+            from sqlalchemy.orm import selectinload
+            query = select(User).options(selectinload(User.roles))
             
             if active_only:
                 query = query.where(User.is_active == True)
