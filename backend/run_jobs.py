@@ -62,12 +62,12 @@ async def retry_pending_jobs():
         
         # Recover and schedule pending jobs
         count = await startup_controller.job_integration.recover_and_schedule_pending()
-        print(f"✓ Successfully scheduled {count} pending jobs")
+        print(f"[OK] Successfully scheduled {count} pending jobs")
         return count > 0
     
     except Exception as e:
         logger.error(f"Error retrying pending jobs: {e}", exc_info=True)
-        print(f"✗ Error: {e}")
+        print(f"[ERROR] {e}")
         return False
 
 
@@ -88,12 +88,12 @@ async def clear_failed_jobs():
             )
             await session.commit()
             
-            print(f"✓ Deleted {count_before} failed jobs")
+            print(f"[OK] Deleted {count_before} failed jobs")
             return True
     
     except Exception as e:
         logger.error(f"Error clearing failed jobs: {e}", exc_info=True)
-        print(f"✗ Error: {e}")
+        print(f"[ERROR] {e}")
         return False
 
 
@@ -118,6 +118,13 @@ async def main():
     if len(sys.argv) < 2:
         print(__doc__)
         sys.exit(1)
+    
+    # Initialize database manager asynchronously within the event loop
+    from app.core.database import _initialize_db_manager
+    from app.core.email_client import init_email_client
+    
+    await _initialize_db_manager()
+    init_email_client()
     
     command = sys.argv[1].lower()
     

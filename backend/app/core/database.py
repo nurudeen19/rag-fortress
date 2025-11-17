@@ -221,6 +221,16 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         await session.close()
 
 
+async def _initialize_db_manager():
+    """Initialize the database manager asynchronously."""
+    global db_manager
+    if db_manager is None:
+        settings = DatabaseSettings()
+        db_manager = DatabaseManager(settings)
+        await db_manager.create_async_engine()
+    return db_manager
+
+
 def get_async_session_factory():
     """
     Get the async session factory for direct use.
@@ -228,20 +238,39 @@ def get_async_session_factory():
     Note: This is primarily for use in background jobs and CLI tools.
     For FastAPI route handlers, use the get_session() dependency instead.
     
-    This will lazily initialize the database manager if needed.
+    For CLI usage, call initialize_db_manager_sync() first before using this.
     """
     global db_manager
     
     if db_manager is None:
-        # Lazy initialization for CLI/background job usage
+        raise RuntimeError(
+            "Database manager not initialized. "
+            "In async contexts, call _initialize_db_manager() first. "
+            "In sync contexts, call initialize_db_manager_sync() first."
+        )
+    
+    return db_manager.get_session_factory()
+
+
+def initialize_db_manager_sync():
+    """
+    Initialize database manager in a sync context (for CLI tools).
+    
+    This should be called once at the start of CLI commands.
+    """
+    global db_manager
+    
+    if db_manager is None:
         settings = DatabaseSettings()
         db_manager = DatabaseManager(settings)
         
-        # For CLI/background jobs, we need to create the async engine synchronously
-        # This is a bit hacky but necessary because we're in a sync context
+        # Create event loop for initialization
         import asyncio
         try:
             loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
         except RuntimeError:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
@@ -249,4 +278,4 @@ def get_async_session_factory():
         # Create the async engine
         loop.run_until_complete(db_manager.create_async_engine())
     
-    return db_manager.get_session_factory()
+    return db_manager

@@ -52,11 +52,13 @@ class EmailClient:
     def is_configured(self) -> bool:
         """
         Check if email client is properly configured.
-        
+
         Returns:
-            True if SMTP credentials are configured
+            True if SMTP server is configured
         """
-        return bool(settings.SMTP_USERNAME and settings.SMTP_PASSWORD)
+        # Email is configured if we have a server and port
+        # Credentials are optional (e.g., MailHog doesn't require authentication)
+        return bool(self._config.MAIL_SERVER and self._config.MAIL_PORT)
     
     async def send_email(
         self,
