@@ -491,29 +491,48 @@ async def handle_password_reset_confirm(
     Handle password reset confirmation (verify token and reset password).
     
     Args:
-        request: Email, reset token, and new password
+        request: Email (optional if we can get from token), reset token, and new password
         session: Database session
         
     Returns:
         Dict with success status, or error
     """
     try:
-        logger.info(f"Password reset confirmation for {request.email}")
-        
         user_service = UserAccountService(session)
         password_service = PasswordService(session)
         
-        # Verify reset token
+        # First, look up the token to get the email and user_id
+        from sqlalchemy import select
+        from app.models.password_reset_token import PasswordResetToken
+        
+        result = await session.execute(
+            select(PasswordResetToken).where(
+                PasswordResetToken.token == request.reset_token
+            )
+        )
+        token_record = result.scalar_one_or_none()
+        
+        if not token_record:
+            logger.warning(f"Invalid reset token: token not found")
+            return {
+                "success": False,
+                "error": "Invalid reset token"
+            }
+        
+        email = token_record.email
+        logger.info(f"Password reset confirmation for {email}")
+        
+        # Verify reset token with the email from token record
         user_id, error = await password_service.verify_reset_token(
             token=request.reset_token,
-            email=request.email
+            email=email
         )
         
         if error or not user_id:
-            logger.warning(f"Invalid reset token for {request.email}: {error}")
+            logger.warning(f"Invalid reset token for {email}: {error}")
             return {
                 "success": False,
-                "error": "Invalid or expired reset token"
+                "error": error or "Invalid or expired reset token"
             }
         
         # Reset password
@@ -529,6 +548,9 @@ async def handle_password_reset_confirm(
                 "error": error or "Failed to reset password"
             }
         
+        # Commit the password change to database
+        await session.commit()
+        
         logger.info(f"Password reset successful for user {user_id}")
         
         return {
@@ -538,6 +560,7 @@ async def handle_password_reset_confirm(
         
     except Exception as e:
         logger.error(f"Error handling password reset confirmation: {str(e)}", exc_info=True)
+        await session.rollback()
         return {
             "success": False,
             "error": str(e)

@@ -60,10 +60,10 @@ class PasswordResetRequestSchema(BaseModel):
 class PasswordResetConfirmSchema(BaseModel):
     """Schema for confirming password reset."""
     
-    email: EmailStr = Field(...)
-    reset_token: str = Field(...)
-    new_password: str = Field(..., min_length=8)
-    confirm_password: str = Field(..., min_length=8)
+    email: Optional[EmailStr] = Field(None, description="Email address (optional, can be extracted from token)")
+    reset_token: str = Field(..., description="Password reset token from email link")
+    new_password: str = Field(..., min_length=8, description="New password")
+    confirm_password: str = Field(..., min_length=8, description="Password confirmation")
     
     @validator('confirm_password')
     def passwords_match(cls, v, values):

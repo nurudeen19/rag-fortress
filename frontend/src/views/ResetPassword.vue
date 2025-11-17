@@ -191,6 +191,7 @@ const handleResetPassword = async () => {
   loading.value = true
 
   try {
+    console.log('Submitting password reset with token:', token.value)
     await authStore.confirmPasswordReset(token.value, newPassword.value, confirmPassword.value)
     success.value = true
     successMessage.value = 'Password reset successful! Redirecting to login...'
@@ -200,7 +201,8 @@ const handleResetPassword = async () => {
       router.push('/login')
     }, 2000)
   } catch (err) {
-    error.value = err.response?.data?.detail || 'Failed to reset password'
+    console.error('Password reset error caught:', err)
+    error.value = err.response?.data?.detail || authStore.error || 'Failed to reset password'
   } finally {
     loading.value = false
   }

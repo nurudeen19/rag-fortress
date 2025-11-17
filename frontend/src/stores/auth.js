@@ -183,7 +183,25 @@ export const useAuthStore = defineStore('auth', () => {
       })
       return { success: true, message: response.message }
     } catch (err) {
-      error.value = err.response?.data?.detail || 'Password reset failed'
+      // Handle different error response formats
+      let errorMessage = 'Password reset failed'
+      
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail
+      } else if (err.response?.data?.error) {
+        errorMessage = err.response.data.error
+      } else if (err.response?.data?.message) {
+        errorMessage = err.response.data.message
+      } else if (err.message) {
+        errorMessage = err.message
+      }
+      
+      error.value = errorMessage
+      console.error('Password reset error:', {
+        status: err.response?.status,
+        data: err.response?.data,
+        message: errorMessage
+      })
       throw err
     } finally {
       loading.value = false

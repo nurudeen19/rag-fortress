@@ -288,9 +288,21 @@ class PasswordService:
             
             # Check if expired
             now = datetime.now(timezone.utc)
-            if now > reset_token.expires_at:
-                logger.warning(f"Reset token expired (email: {email})")
-                return None, "Reset token has expired"
+            
+            # Make both naive for comparison if needed
+            expires_at = reset_token.expires_at
+            if expires_at.tzinfo is not None and now.tzinfo is not None:
+                # Both aware - compare directly
+                if now > expires_at:
+                    logger.warning(f"Reset token expired (email: {email})")
+                    return None, "Reset token has expired"
+            else:
+                # At least one is naive - make both naive
+                now_naive = now.replace(tzinfo=None)
+                expires_at_naive = expires_at.replace(tzinfo=None) if expires_at.tzinfo else expires_at
+                if now_naive > expires_at_naive:
+                    logger.warning(f"Reset token expired (email: {email})")
+                    return None, "Reset token has expired"
             
             # Mark as used
             reset_token.is_used = True
@@ -334,11 +346,23 @@ class PasswordService:
                 logger.debug(f"Reset token already used (user: {reset_token.user_id})")
                 return False
             
-            # Check if expired
+            # Check if expired (handle both naive and aware datetimes)
             now = datetime.now(timezone.utc)
-            if now > reset_token.expires_at:
-                logger.debug(f"Reset token expired (user: {reset_token.user_id})")
-                return False
+            expires_at = reset_token.expires_at
+            
+            # Make both naive for comparison if needed
+            if expires_at.tzinfo is not None and now.tzinfo is not None:
+                # Both aware - compare directly
+                if now > expires_at:
+                    logger.debug(f"Reset token expired (user: {reset_token.user_id})")
+                    return False
+            else:
+                # At least one is naive - make both naive
+                now_naive = now.replace(tzinfo=None)
+                expires_at_naive = expires_at.replace(tzinfo=None) if expires_at.tzinfo else expires_at
+                if now_naive > expires_at_naive:
+                    logger.debug(f"Reset token expired (user: {reset_token.user_id})")
+                    return False
             
             logger.debug(f"Reset token is valid (user: {reset_token.user_id})")
             return True
