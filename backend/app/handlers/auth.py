@@ -423,6 +423,9 @@ async def handle_password_reset_request(
                 "message": "If email exists, password reset link will be sent"
             }
         
+        # Delete any existing unused tokens for this user to prevent accumulation
+        await password_service.delete_unused_reset_tokens(user.id)
+        
         # Generate reset token
         reset_token, error = await password_service.create_reset_token(user.id)
         

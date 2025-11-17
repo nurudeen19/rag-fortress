@@ -202,6 +202,45 @@ class PasswordService:
         """Verify plain text password against hash."""
         return self.pwd_context.verify(plain_password, password_hash)
     
+    async def delete_unused_reset_tokens(self, user_id: int) -> int:
+        """
+        Delete all unused password reset tokens for a user.
+        
+        Cleans up old tokens before creating a new one to prevent
+        accumulation and improve efficiency.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Number of tokens deleted
+        """
+        try:
+            # Query unused tokens for this user
+            result = await self.session.execute(
+                select(PasswordResetToken).where(
+                    PasswordResetToken.user_id == user_id,
+                    PasswordResetToken.is_used == False
+                )
+            )
+            unused_tokens = result.scalars().all()
+            count = len(unused_tokens)
+            
+            # Delete them
+            for token in unused_tokens:
+                await self.session.delete(token)
+            
+            await self.session.flush()
+            
+            if count > 0:
+                logger.info(f"Deleted {count} unused reset tokens for user {user_id}")
+            
+            return count
+            
+        except Exception as e:
+            logger.error(f"Error deleting unused reset tokens for user {user_id}: {e}")
+            return 0
+    
     async def create_reset_token(self, user_id: int) -> Tuple[Optional[str], Optional[str]]:
         """
         Create a password reset token for a user.
