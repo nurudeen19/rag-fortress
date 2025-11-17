@@ -96,6 +96,17 @@ router.beforeEach((to, from, next) => {
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
   const isPublic = to.matched.some(record => record.meta.public)
 
+  // Wait for auth initialization
+  if (!authStore.initialized) {
+    // If we have a token and user in localStorage, we're ready
+    if (authStore.token && authStore.user) {
+      authStore.initialized = true
+    } else if (!authStore.token) {
+      // No token, no need to wait
+      authStore.initialized = true
+    }
+  }
+
   // Check if route requires authentication
   if (requiresAuth && !authStore.isAuthenticated) {
     // Redirect to login with return URL

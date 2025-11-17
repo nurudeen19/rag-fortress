@@ -4,10 +4,11 @@ import api from '../services/api'
 
 export const useAuthStore = defineStore('auth', () => {
   // State
-  const user = ref(null)
+  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
   const token = ref(localStorage.getItem('token') || null)
   const loading = ref(false)
   const error = ref(null)
+  const initialized = ref(false)
 
   // Getters
   const isAuthenticated = computed(() => !!token.value && !!user.value)
@@ -44,8 +45,9 @@ export const useAuthStore = defineStore('auth', () => {
         is_active: response.is_active,
       }
       
-      // Persist token
+      // Persist token and user
       localStorage.setItem('token', response.token)
+      localStorage.setItem('user', JSON.stringify(user.value))
       
       // Fetch full user profile (with roles)
       await fetchProfile()
@@ -92,6 +94,8 @@ export const useAuthStore = defineStore('auth', () => {
         ...user.value,
         ...response,
       }
+      // Persist updated user data
+      localStorage.setItem('user', JSON.stringify(user.value))
     } catch (err) {
       console.error('Failed to fetch profile:', err)
       // Token might be invalid, logout
@@ -113,6 +117,8 @@ export const useAuthStore = defineStore('auth', () => {
       })
       
       user.value = { ...user.value, ...response }
+      // Persist updated user data
+      localStorage.setItem('user', JSON.stringify(user.value))
       return { success: true }
     } catch (err) {
       error.value = err.response?.data?.detail || 'Update failed'
@@ -223,6 +229,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = null
       user.value = null
       localStorage.removeItem('token')
+      localStorage.removeItem('user')
       loading.value = false
     }
   }
@@ -233,7 +240,11 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Initialize: fetch profile if token exists
   if (token.value) {
-    fetchProfile()
+    fetchProfile().finally(() => {
+      initialized.value = true
+    })
+  } else {
+    initialized.value = true
   }
 
   return {
@@ -242,6 +253,7 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     loading,
     error,
+    initialized,
     // Getters
     isAuthenticated,
     isAdmin,
