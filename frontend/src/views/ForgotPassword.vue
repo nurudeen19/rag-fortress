@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-screen bg-fortress-950 flex items-center justify-center p-4">
+  <div class="min-h-screen bg-fortress-950 flex items-center justify-center px-4 py-8 md:py-12">
     <div class="w-full max-w-md">
-      <div class="text-center mb-8">
+      <div class="text-center mb-8 md:mb-12">
         <div class="inline-block p-3 bg-warning/10 rounded-lg mb-4">
           <svg class="w-12 h-12 text-warning" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
@@ -13,41 +13,43 @@
       </div>
 
       <div class="card">
-        <div v-if="success" class="p-4 bg-success/10 border border-success/30 rounded-lg text-success text-sm mb-4">
-          Password reset instructions have been sent to your email.
-        </div>
-
-        <form v-else @submit.prevent="handleReset" class="space-y-4">
-          <div v-if="error" class="p-3 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
-            {{ error }}
+        <div class="card-body space-y-6">
+          <div v-if="success" class="p-4 bg-success/10 border border-success/30 rounded-lg text-success text-sm">
+            {{ successMessage }}
           </div>
 
-          <div>
-            <label class="block text-sm font-medium text-fortress-300 mb-1">Email Address</label>
-            <input
-              v-model="email"
-              type="email"
-              class="input"
-              placeholder="your@email.com"
-              required
-            />
+          <form v-else @submit.prevent="handleReset" class="space-y-6">
+            <div v-if="error" class="p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
+              {{ error }}
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-fortress-300 mb-2">Email Address</label>
+              <input
+                v-model="email"
+                type="email"
+                class="input"
+                placeholder="your@email.com"
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              class="btn btn-primary w-full"
+              :disabled="loading"
+            >
+              <span v-if="loading">Sending...</span>
+              <span v-else>Send Reset Link</span>
+            </button>
+          </form>
+
+          <div class="pt-4 border-t border-fortress-700 text-center text-sm text-fortress-400">
+            Remember your password?
+            <router-link to="/login" class="text-secure hover:text-secure/80 font-medium transition-colors">
+              Back to login
+            </router-link>
           </div>
-
-          <button
-            type="submit"
-            class="btn btn-primary w-full"
-            :disabled="loading"
-          >
-            <span v-if="loading">Sending...</span>
-            <span v-else>Send Reset Link</span>
-          </button>
-        </form>
-
-        <div class="mt-6 text-center text-sm text-fortress-400">
-          Remember your password?
-          <router-link to="/login" class="text-secure hover:text-secure/80 font-medium">
-            Back to login
-          </router-link>
         </div>
       </div>
     </div>
@@ -64,14 +66,17 @@ const email = ref('')
 const loading = ref(false)
 const error = ref('')
 const success = ref(false)
+const successMessage = ref('')
 
 const handleReset = async () => {
   error.value = ''
+  successMessage.value = ''
   loading.value = true
 
   try {
-    await authStore.requestPasswordReset(email.value)
+    const result = await authStore.requestPasswordReset(email.value)
     success.value = true
+    successMessage.value = result.message || 'If email exists, password reset link will be sent'
   } catch (err) {
     error.value = err.response?.data?.detail || 'Failed to send reset email'
   } finally {
