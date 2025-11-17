@@ -13,22 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from passlib.context import CryptContext
 
 from app.models.user import User
+from app.models.password_reset_token import PasswordResetToken
 from app.core import get_logger
 
 
 logger = get_logger(__name__)
-
-
-class PasswordResetTokenStatus(str, Enum):
-    """Status of password reset token."""
-    VALID = "valid"
-    EXPIRED = "expired"
-    INVALID = "invalid"
-    ALREADY_USED = "already_used"
-
-
-# Simple in-memory token store (use Redis or DB in production)
-_reset_tokens = {}
 
 
 class PasswordService:
@@ -217,6 +206,8 @@ class PasswordService:
         """
         Create a password reset token for a user.
         
+        Creates a new token record in the database with email and expiry.
+        
         Args:
             user_id: User ID
         
@@ -231,15 +222,22 @@ class PasswordService:
             # Generate secure token
             token = secrets.token_urlsafe(32)
             
-            # Store token with expiry (in-memory for now, use Redis in production)
+            # Calculate expiry (24 hours from now)
             expiry = datetime.now(timezone.utc) + timedelta(hours=self.RESET_TOKEN_EXPIRY_HOURS)
-            _reset_tokens[token] = {
-                "user_id": user_id,
-                "email": user.email,
-                "expiry": expiry
-            }
             
-            logger.info(f"Reset token created for user {user_id}")
+            # Create token record in database
+            reset_token = PasswordResetToken(
+                user_id=user_id,
+                email=user.email,
+                token=token,
+                expires_at=expiry,
+                is_used=False
+            )
+            
+            self.session.add(reset_token)
+            await self.session.flush()
+            
+            logger.info(f"Reset token created for user {user_id} (email: {user.email})")
             return token, None
         
         except Exception as e:
@@ -252,7 +250,15 @@ class PasswordService:
         email: str
     ) -> Tuple[Optional[int], Optional[str]]:
         """
-        Verify a password reset token.
+        Verify a password reset token from the database.
+        
+        Checks:
+        - Token exists in database
+        - Token matches the provided email
+        - Token has not expired
+        - Token has not been used
+        
+        On success, marks token as used.
         
         Args:
             token: Reset token
@@ -262,27 +268,74 @@ class PasswordService:
             Tuple of (user_id, error_message)
         """
         try:
-            if token not in _reset_tokens:
+            # Query for valid token
+            result = await self.session.execute(
+                select(PasswordResetToken).where(
+                    PasswordResetToken.token == token,
+                    PasswordResetToken.email == email
+                )
+            )
+            reset_token = result.scalar_one_or_none()
+            
+            if not reset_token:
+                logger.warning(f"Invalid reset token attempted (email: {email})")
                 return None, "Invalid reset token"
             
-            token_data = _reset_tokens[token]
+            # Check if already used
+            if reset_token.is_used:
+                logger.warning(f"Reset token already used (email: {email})")
+                return None, "Reset token has already been used"
             
-            # Check expiry
-            if datetime.now(timezone.utc) > token_data["expiry"]:
-                del _reset_tokens[token]
+            # Check if expired
+            now = datetime.now(timezone.utc)
+            if now > reset_token.expires_at:
+                logger.warning(f"Reset token expired (email: {email})")
                 return None, "Reset token has expired"
             
-            # Verify email matches
-            if token_data["email"] != email:
-                return None, "Email does not match token"
+            # Mark as used
+            reset_token.is_used = True
+            reset_token.used_at = now
+            await self.session.flush()
             
-            user_id = token_data["user_id"]
-            # Consume token (delete it)
-            del _reset_tokens[token]
-            
-            logger.info(f"Reset token verified for user {user_id}")
-            return user_id, None
+            logger.info(f"Reset token verified and consumed for user {reset_token.user_id}")
+            return reset_token.user_id, None
         
         except Exception as e:
             logger.error(f"Verify reset token error: {e}")
             return None, "Failed to verify reset token"
+    
+    async def cleanup_expired_tokens(self) -> int:
+        """
+        Delete expired password reset tokens from database.
+        
+        This can be run periodically (e.g., daily) to clean up old tokens.
+        
+        Returns:
+            Number of tokens deleted
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            
+            # Query expired tokens
+            result = await self.session.execute(
+                select(PasswordResetToken).where(
+                    PasswordResetToken.expires_at < now
+                )
+            )
+            expired_tokens = result.scalars().all()
+            count = len(expired_tokens)
+            
+            # Delete them
+            for token in expired_tokens:
+                await self.session.delete(token)
+            
+            await self.session.flush()
+            
+            if count > 0:
+                logger.info(f"Cleaned up {count} expired password reset tokens")
+            
+            return count
+        
+        except Exception as e:
+            logger.error(f"Cleanup expired tokens error: {e}")
+            return 0
