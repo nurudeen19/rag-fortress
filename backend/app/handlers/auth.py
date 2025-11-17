@@ -9,9 +9,12 @@ Handlers manage business logic for:
 """
 
 import logging
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
+from jose import jwt
 
 from app.core.security import create_access_token, hash_password
+from app.config.settings import settings
 from app.schemas.user import (
     LoginRequest,
     UserCreateRequest,
@@ -68,11 +71,27 @@ async def handle_login(
         # Generate JWT token
         token = create_access_token(user.id)
         
+        # Calculate token expiry timestamp
+        expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_at = datetime.now(timezone.utc) + expires_delta
+        
+        # Format roles
+        roles = [
+            {
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+                "is_system": role.is_system,
+            }
+            for role in (user.roles or [])
+        ]
+        
         logger.info(f"User {user.username} logged in successfully")
         
         return {
             "success": True,
             "token": token,
+            "expires_at": expires_at.isoformat(),
             "user": {
                 "id": user.id,
                 "username": user.username,
@@ -82,6 +101,7 @@ async def handle_login(
                 "full_name": f"{user.first_name} {user.last_name}".strip(),
                 "is_active": user.is_active,
                 "is_verified": user.is_verified,
+                "roles": roles,
             }
         }
         

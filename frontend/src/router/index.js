@@ -96,6 +96,14 @@ router.beforeEach((to, from, next) => {
   const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
   const isPublic = to.matched.some(record => record.meta.public)
 
+  console.log(`[Router Guard] Navigating to: ${to.path} (name: ${to.name})`, {
+    requiresAuth,
+    requiresAdmin,
+    isPublic,
+    isAuthenticated: authStore.isAuthenticated,
+    isAdmin: authStore.isAdmin,
+  })
+
   // Wait for auth initialization
   if (!authStore.initialized) {
     // If we have a token and user in localStorage, we're ready
@@ -110,6 +118,7 @@ router.beforeEach((to, from, next) => {
   // Check if route requires authentication
   if (requiresAuth && !authStore.isAuthenticated) {
     // Redirect to login with return URL
+    console.log(`[Router Guard] Not authenticated, redirecting to login`)
     next({ name: 'login', query: { redirect: to.fullPath } })
     return
   }
@@ -117,17 +126,25 @@ router.beforeEach((to, from, next) => {
   // Check if route requires admin
   if (requiresAdmin && !authStore.isAdmin) {
     // Redirect to dashboard if not admin
+    console.log(`[Router Guard] Not admin, redirecting to dashboard. isAdmin: ${authStore.isAdmin}`)
     next({ name: 'dashboard' })
     return
   }
 
   // If logged in and trying to access public route, redirect to dashboard
   if (isPublic && authStore.isAuthenticated) {
+    console.log(`[Router Guard] Logged in, redirecting from public route to dashboard`)
     next({ name: 'dashboard' })
     return
   }
 
+  console.log(`[Router Guard] Allowing navigation`)
   next()
+})
+
+// Error handler for navigation failures
+router.onError((error) => {
+  console.error('[Router Error]', error)
 })
 
 export default router

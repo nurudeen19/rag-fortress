@@ -109,10 +109,10 @@
           <router-link
             v-for="item in navigation"
             :key="item.name"
-            :to="item.path"
+            :to="{ name: item.routeName }"
             :class="[
               'flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200',
-              $route.path === item.path
+              $route.name === item.routeName
                 ? 'bg-secure/10 text-secure border border-secure/30'
                 : 'text-fortress-400 hover:text-fortress-100 hover:bg-fortress-800'
             ]"
@@ -186,32 +186,38 @@ const navigation = [
   {
     name: 'Dashboard',
     path: '/dashboard',
+    routeName: 'dashboard',
     icon: 'dashboard',
   },
   {
     name: 'Chat',
     path: '/chat',
+    routeName: 'chat',
     icon: 'chat',
     badge: '2',
   },
   {
     name: 'Documents',
     path: '/documents',
+    routeName: 'documents',
     icon: 'documents',
   },
   {
     name: 'Users',
     path: '/access-control',
+    routeName: 'access-control',
     icon: 'users',
   },
   {
     name: 'Configuration',
     path: '/configuration',
+    routeName: 'configuration',
     icon: 'settings',
   },
   {
     name: 'Activity Logs',
     path: '/logs',
+    routeName: 'logs',
     icon: 'logs',
   },
 ]

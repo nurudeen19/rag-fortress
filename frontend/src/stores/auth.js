@@ -6,12 +6,20 @@ export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
   const token = ref(localStorage.getItem('token') || null)
+  const tokenExpiresAt = ref(localStorage.getItem('tokenExpiresAt') || null)
   const loading = ref(false)
   const error = ref(null)
   const initialized = ref(false)
 
   // Getters
-  const isAuthenticated = computed(() => !!token.value && !!user.value)
+  const isTokenExpired = computed(() => {
+    if (!tokenExpiresAt.value) return true
+    return new Date() > new Date(tokenExpiresAt.value)
+  })
+  
+  const isAuthenticated = computed(() => {
+    return !!token.value && !!user.value && !isTokenExpired.value
+  })
   const isAdmin = computed(() => {
     if (!user.value) return false
     // Check if user has admin role
@@ -33,24 +41,27 @@ export const useAuthStore = defineStore('auth', () => {
         password: credentials.password
       })
       
-      // Store token and user data
+      // Store token and expiry
       token.value = response.token
+      tokenExpiresAt.value = response.expires_at
+      
+      // Store user data with roles
       user.value = {
-        id: response.user_id,
-        username: response.username,
-        email: response.email,
-        first_name: response.first_name,
-        last_name: response.last_name,
-        is_verified: response.is_verified,
-        is_active: response.is_active,
+        id: response.user.id,
+        username: response.user.username,
+        email: response.user.email,
+        first_name: response.user.first_name,
+        last_name: response.user.last_name,
+        full_name: response.user.full_name,
+        is_verified: response.user.is_verified,
+        is_active: response.user.is_active,
+        roles: response.user.roles || [],
       }
       
-      // Persist token and user
+      // Persist token, expiry, and user
       localStorage.setItem('token', response.token)
+      localStorage.setItem('tokenExpiresAt', response.expires_at)
       localStorage.setItem('user', JSON.stringify(user.value))
-      
-      // Fetch full user profile (with roles)
-      await fetchProfile()
       
       return { success: true }
     } catch (err) {
@@ -228,8 +239,10 @@ export const useAuthStore = defineStore('auth', () => {
       // Clear local state regardless of API call result
       token.value = null
       user.value = null
+      tokenExpiresAt.value = null
       localStorage.removeItem('token')
       localStorage.removeItem('user')
+      localStorage.removeItem('tokenExpiresAt')
       loading.value = false
     }
   }
@@ -251,10 +264,12 @@ export const useAuthStore = defineStore('auth', () => {
     // State
     user,
     token,
+    tokenExpiresAt,
     loading,
     error,
     initialized,
     // Getters
+    isTokenExpired,
     isAuthenticated,
     isAdmin,
     fullName,
