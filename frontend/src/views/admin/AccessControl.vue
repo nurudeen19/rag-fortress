@@ -60,7 +60,7 @@
             v-for="user in adminStore.users"
             :key="user.id"
             class="p-4 bg-fortress-800/50 rounded-lg hover:bg-fortress-800 cursor-pointer transition-colors"
-            @click="selectUser(user.id)"
+            @click="navigateToUser(user.id)"
           >
             <div class="flex items-center justify-between">
               <div class="flex-1">
@@ -164,24 +164,18 @@
       </div>
     </div>
 
-    <!-- User Detail Modal -->
-    <UserDetailModal
-      v-if="selectedUserId"
-      :user-id="selectedUserId"
-      @close="adminStore.clearSelection()"
-      @refresh="loadUsers"
-    />
+    <!-- User Detail Page - removed modal, now using dedicated route -->
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useAdminStore } from '../stores/admin'
-import UserDetailModal from '../components/UserDetailModal.vue'
+import { useRouter } from 'vue-router'
+import { useAdminStore } from '../../stores/admin'
 
+const router = useRouter()
 const adminStore = useAdminStore()
 const activeTab = ref('users')
-const selectedUserId = ref(null)
 const searchQuery = ref('')
 
 const totalPages = computed(() => {
@@ -210,8 +204,8 @@ function resetFilters() {
   loadUsers()
 }
 
-function selectUser(userId) {
-  selectedUserId.value = userId
+function navigateToUser(userId) {
+  router.push({ name: 'user-detail', params: { userId } })
 }
 
 function nextPage() {

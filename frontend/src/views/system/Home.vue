@@ -1,3 +1,4 @@
+```vue
 <template>
   <div class="home">
     <h1>Welcome to RAG Fortress</h1>
@@ -92,3 +93,4 @@ h1 {
   background-color: #3aa876;
 }
 </style>
+```

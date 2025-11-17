@@ -8,19 +8,19 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: () => import('../views/Login.vue'),
+      component: () => import('../views/auth/Login.vue'),
       meta: { public: true }
     },
     {
       path: '/forgot-password',
       name: 'forgot-password',
-      component: () => import('../views/ForgotPassword.vue'),
+      component: () => import('../views/auth/ForgotPassword.vue'),
       meta: { public: true }
     },
     {
       path: '/reset-password',
       name: 'reset-password',
-      component: () => import('../views/ResetPassword.vue'),
+      component: () => import('../views/auth/ResetPassword.vue'),
       meta: { public: true }
     },
 
@@ -37,45 +37,51 @@ const router = createRouter({
         {
           path: 'dashboard',
           name: 'dashboard',
-          component: () => import('../views/Dashboard.vue')
+          component: () => import('../views/system/Dashboard.vue')
         },
         {
           path: 'chat',
           name: 'chat',
-          component: () => import('../views/Chat.vue')
+          component: () => import('../views/content/Chat.vue')
         },
         {
           path: 'documents',
           name: 'documents',
-          component: () => import('../views/Documents.vue')
+          component: () => import('../views/content/Documents.vue')
         },
         {
           path: 'access-control',
           name: 'access-control',
-          component: () => import('../views/AccessControl.vue'),
+          component: () => import('../views/admin/AccessControl.vue'),
+          meta: { requiresAdmin: true }
+        },
+        {
+          path: 'access-control/user/:userId',
+          name: 'user-detail',
+          component: () => import('../views/admin/UserDetail.vue'),
           meta: { requiresAdmin: true }
         },
         {
           path: 'configuration',
           name: 'configuration',
-          component: () => import('../views/Configuration.vue'),
+          component: () => import('../views/admin/Configuration.vue'),
           meta: { requiresAdmin: true }
         },
         {
           path: 'logs',
           name: 'logs',
-          component: () => import('../views/ActivityLogs.vue'),
+          component: () => import('../views/system/ActivityLogs.vue'),
           meta: { requiresAdmin: true }
         },
         {
           path: 'profile',
           name: 'profile',
-          component: () => import('../views/Profile.vue')
+          component: () => import('../views/users/Profile.vue')
         },
         {
           path: 'settings',
           name: 'settings',
-          component: () => import('../views/Settings.vue')
+          component: () => import('../views/users/Settings.vue')
         }
       ]
     },
@@ -84,7 +90,7 @@ const router = createRouter({
     {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
-      component: () => import('../views/NotFound.vue')
+      component: () => import('../views/system/NotFound.vue')
     }
   ]
 })

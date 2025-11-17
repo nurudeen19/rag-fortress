@@ -1,19 +1,21 @@
+```vue
 <template>
   <div class="h-full flex flex-col">
-    <h1 class="text-2xl font-bold text-fortress-100 mb-6">Document Management</h1>
+    <h1 class="text-2xl font-bold text-fortress-100 mb-6">Profile Settings</h1>
     
     <div class="card flex-1 flex items-center justify-center">
       <div class="text-center text-fortress-400">
         <svg class="w-16 h-16 mx-auto mb-4 text-fortress-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
         </svg>
-        <p class="text-lg">Document management coming soon...</p>
+        <p class="text-lg">Profile settings coming soon...</p>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-// Document management interface will be implemented
+// Profile settings interface will be implemented
 </script>
+```

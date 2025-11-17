@@ -1,3 +1,4 @@
+```vue
 <template>
   <div>
     <!-- Page Header -->
@@ -230,7 +231,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../../stores/auth'
 
 const authStore = useAuthStore()
 
@@ -266,3 +267,4 @@ const topTopics = ref([
   { name: 'Marketing Materials', count: 98, percentage: 35, color: 'bg-purple-500' },
 ])
 </script>
+```

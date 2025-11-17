@@ -1,3 +1,4 @@
+```vue
 <template>
   <div class="h-full flex flex-col">
     <h1 class="text-2xl font-bold text-fortress-100 mb-6">System Configuration</h1>
@@ -18,3 +19,4 @@
 <script setup>
 // System configuration interface will be implemented
 </script>
+```
