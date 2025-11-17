@@ -183,12 +183,15 @@ export const useAuthStore = defineStore('auth', () => {
       })
       return { success: true, message: response.message }
     } catch (err) {
-      // Handle different error response formats
+      // Extract error message from structured response format
+      // Backend returns: { error: { type, message, details } }
       let errorMessage = 'Password reset failed'
       
-      if (err.response?.data?.detail) {
+      if (err.response?.data?.error?.message) {
+        errorMessage = err.response.data.error.message
+      } else if (err.response?.data?.detail) {
         errorMessage = err.response.data.detail
-      } else if (err.response?.data?.error) {
+      } else if (err.response?.data?.error && typeof err.response.data.error === 'string') {
         errorMessage = err.response.data.error
       } else if (err.response?.data?.message) {
         errorMessage = err.response.data.message
@@ -200,7 +203,7 @@ export const useAuthStore = defineStore('auth', () => {
       console.error('Password reset error:', {
         status: err.response?.status,
         data: err.response?.data,
-        message: errorMessage
+        extractedMessage: errorMessage
       })
       throw err
     } finally {

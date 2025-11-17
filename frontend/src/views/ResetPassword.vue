@@ -12,18 +12,19 @@
         <p class="text-fortress-400 mt-2">Enter your new password below</p>
       </div>
 
-      <div class="card">
-        <div class="card-body space-y-6">
+      <div class="card min-h-64">
+        <div class="card-body space-y-6 flex flex-col">
           <!-- Loading state while verifying token -->
-          <div v-if="verifying" class="flex justify-center py-8">
+          <div v-if="verifying" class="flex justify-center py-8 flex-1 items-center">
             <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-secure"></div>
           </div>
 
           <!-- Token verification failed -->
-          <div v-else-if="tokenInvalid" class="space-y-4">
+          <div v-else-if="tokenInvalid" class="space-y-4 flex-1 flex flex-col">
             <div class="p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
               {{ tokenError }}
             </div>
+            <div class="flex-1"></div>
             <router-link 
               to="/forgot-password" 
               class="btn btn-primary w-full text-center"
@@ -33,7 +34,7 @@
           </div>
 
           <!-- Form for entering new password -->
-          <form v-else @submit.prevent="handleResetPassword" class="space-y-6">
+          <form v-else @submit.prevent="handleResetPassword" class="space-y-6 flex flex-col">
             <div v-if="error" class="p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
               {{ error }}
             </div>
@@ -122,7 +123,7 @@
             </router-link>
           </form>
 
-          <div class="pt-4 border-t border-fortress-700 text-center text-sm text-fortress-400">
+          <div class="pt-4 border-t border-fortress-700 text-center text-sm text-fortress-400 mt-auto">
             Remember your password?
             <router-link to="/login" class="text-secure hover:text-secure/80 font-medium transition-colors">
               Back to login
@@ -175,7 +176,15 @@ onMounted(async () => {
     console.error('Token verification error:', err)
     verifying.value = false
     tokenInvalid.value = true
-    tokenError.value = err.response?.data?.detail || 'Invalid or expired reset token'
+    // Extract error message from structured response
+    // Backend returns: { error: { type, message, details } }
+    let errorMessage = 'Invalid or expired reset token'
+    if (err.response?.data?.error?.message) {
+      errorMessage = err.response.data.error.message
+    } else if (err.response?.data?.detail) {
+      errorMessage = err.response.data.detail
+    }
+    tokenError.value = errorMessage
   }
 })
 
@@ -202,7 +211,17 @@ const handleResetPassword = async () => {
     }, 2000)
   } catch (err) {
     console.error('Password reset error caught:', err)
-    error.value = err.response?.data?.detail || authStore.error || 'Failed to reset password'
+    // Extract error message from structured response
+    // Backend returns: { error: { type, message, details } }
+    let errorMessage = authStore.error || 'Failed to reset password'
+    
+    if (err.response?.data?.error?.message) {
+      errorMessage = err.response.data.error.message
+    } else if (err.response?.data?.detail) {
+      errorMessage = err.response.data.detail
+    }
+    
+    error.value = errorMessage
   } finally {
     loading.value = false
   }
