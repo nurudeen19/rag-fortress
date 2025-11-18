@@ -410,6 +410,8 @@ const supportedFormats = {
     'application/pdf': 'pdf',
     'text/plain': 'txt',
     'text/markdown': 'md',
+    'text/x-markdown': 'md',
+    'application/x-markdown': 'md',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
     'application/msword': 'doc'
   }
@@ -456,6 +458,17 @@ const getAllowedMimeTypes = () => {
     ...Object.keys(supportedFormats.structured),
     ...Object.keys(supportedFormats.text)
   ]
+}
+
+// Extension-based detection as fallback (some browsers don't report MIME types correctly)
+const getExtensionFromFilename = (filename) => {
+  return filename.split('.').pop()?.toLowerCase() || ''
+}
+
+const isFileExtensionSupported = (filename) => {
+  const supportedExtensions = ['json', 'csv', 'xlsx', 'xls', 'pdf', 'txt', 'md', 'docx', 'doc']
+  const ext = getExtensionFromFilename(filename)
+  return supportedExtensions.includes(ext)
 }
 
 const extractFieldsFromFile = (file) => {
@@ -522,9 +535,12 @@ const validateAndSetFile = (file) => {
     return
   }
 
-  // Check file type
+  // Check file type - allow by MIME type OR file extension
   const allowedMimeTypes = getAllowedMimeTypes()
-  if (!allowedMimeTypes.includes(file.type)) {
+  const isSupportedByMime = allowedMimeTypes.includes(file.type)
+  const isSupportedByExtension = isFileExtensionSupported(file.name)
+  
+  if (!isSupportedByMime && !isSupportedByExtension) {
     fileError.value = `File type not supported. Allowed types: JSON, CSV, Excel, PDF, Word, Text, Markdown`
     return
   }
