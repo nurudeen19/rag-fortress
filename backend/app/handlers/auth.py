@@ -860,6 +860,22 @@ async def handle_signup_with_invite(
                 logger.warning(f"Failed to assign role to user: {role_error}")
                 # Don't fail the signup if role assignment fails - continue anyway
         
+        # Assign department if specified in invitation
+        if invitation.department_id:
+            new_user.department_id = invitation.department_id
+            logger.info(f"Assigned user {new_user.username} to department {invitation.department_id}")
+            
+            # Set as manager if specified
+            if invitation.is_manager:
+                from app.models.department import Department
+                dept_result = await session.execute(
+                    select(Department).where(Department.id == invitation.department_id)
+                )
+                department = dept_result.scalar_one_or_none()
+                if department:
+                    department.manager_id = new_user.id
+                    logger.info(f"Set user {new_user.username} as manager of department {invitation.department_id}")
+        
         # Mark invitation as accepted and verify user (user verified through invitation)
         now = datetime.now(timezone.utc)
         invitation.status = "accepted"

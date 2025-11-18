@@ -1,7 +1,7 @@
 """
 UserInvitation model for tracking user invitations.
 """
-from sqlalchemy import String, Text, ForeignKey, DateTime, Index
+from sqlalchemy import String, Text, ForeignKey, DateTime, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -29,6 +29,13 @@ class UserInvitation(Base):
     invitation_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     assigned_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
+    # New fields for department and manager assignment during onboarding
+    department_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("departments.id", ondelete="SET NULL"),
+        nullable=True
+    )
+    is_manager: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    
     invited_by: Mapped[Optional["User"]] = relationship(
         "User",
         back_populates="invitations_sent",
@@ -40,6 +47,7 @@ class UserInvitation(Base):
         Index("idx_invitation_token", "token"),
         Index("idx_invitation_status", "status"),
         Index("idx_invitation_expires_at", "expires_at"),
+        Index("idx_invitation_department", "department_id"),
     )
     
     def __repr__(self) -> str:

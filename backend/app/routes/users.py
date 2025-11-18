@@ -178,11 +178,14 @@ async def invite_user(
     admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
-    """Send invitation to new user. Requires admin role."""
+    """Send invitation to new user with optional department assignment. Requires admin role."""
     result = await handle_invite_user(
         email=request.email,
         role_id=request.role_id,
         admin_user=admin,
+        invitation_message=request.invitation_message,
+        department_id=request.department_id,
+        is_manager=request.is_manager,
         invitation_link_template=request.invitation_link_template,
         session=session
     )

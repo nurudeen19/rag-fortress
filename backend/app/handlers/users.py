@@ -750,10 +750,13 @@ async def handle_invite_user(
     role_id: int,
     admin_user: User,
     invitation_link_template: Optional[str],
-    session: AsyncSession
+    invitation_message: Optional[str] = None,
+    department_id: Optional[int] = None,
+    is_manager: bool = False,
+    session: AsyncSession = None
 ) -> dict:
     """
-    Send invitation to new user.
+    Send invitation to new user with optional department assignment.
     
     Delegates to InvitationService for all business logic.
     
@@ -762,6 +765,9 @@ async def handle_invite_user(
         role_id: Role to assign to invited user
         admin_user: Admin user sending the invitation
         invitation_link_template: Optional frontend link template
+        invitation_message: Optional custom message for invitation
+        department_id: Optional department to assign user to
+        is_manager: Whether to make user a manager of the department
         session: Database session
     
     Returns:
@@ -775,12 +781,15 @@ async def handle_invite_user(
             logger.warning(f"Role {role_id} not found for invitation by admin {admin_user.id}")
             return {"success": False, "error": "The specified role does not exist"}
         
-        # Create invitation via service
+        # Create invitation via service with new fields
         service = InvitationService(session)
         invitation, error = await service.create_invitation(
             email=email,
             inviter_id=admin_user.id,
             role_name=role.name,
+            custom_message=invitation_message,
+            department_id=department_id,
+            is_manager=is_manager,
             invitation_link_template=invitation_link_template,
         )
         

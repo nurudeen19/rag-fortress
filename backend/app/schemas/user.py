@@ -187,10 +187,24 @@ class UserSuspendRequest(BaseModel):
 
 
 class UserInviteRequest(BaseModel):
-    """Schema for inviting new user."""
+    """Schema for inviting new user with optional department and manager assignment."""
     
     email: EmailStr = Field(..., description="Email address to invite")
     role_id: int = Field(..., gt=0, description="Role to assign to the invited user")
+    invitation_message: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Optional custom message to include in invitation"
+    )
+    department_id: Optional[int] = Field(
+        None,
+        gt=0,
+        description="Optional department ID to assign user to during onboarding"
+    )
+    is_manager: bool = Field(
+        False,
+        description="Whether to make user a manager of the assigned department"
+    )
     invitation_link_template: Optional[str] = Field(
         None,
         description="Frontend invitation link template with {token} placeholder. "

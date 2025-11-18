@@ -34,6 +34,8 @@ class InvitationService:
         inviter_id: int,
         role_name: Optional[str] = None,
         custom_message: Optional[str] = None,
+        department_id: Optional[int] = None,
+        is_manager: bool = False,
         invitation_link_template: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
@@ -44,6 +46,8 @@ class InvitationService:
             inviter_id: User ID of the inviter (admin)
             role_name: Optional role to assign
             custom_message: Optional custom message for invitation
+            department_id: Optional department to assign user to during onboarding
+            is_manager: Whether to make user a manager of the assigned department
             invitation_link_template: Optional frontend signup link template with {token} placeholder
         
         Returns:
@@ -59,6 +63,16 @@ class InvitationService:
             if not inviter:
                 logger.error(f"Inviter {inviter_id} not found when creating invitation for {email}")
                 return None, "Unable to process invitation at this time"
+            
+            # Validate department if provided
+            if department_id:
+                from app.models.department import Department
+                dept_result = await self.session.execute(
+                    select(Department).where(Department.id == department_id)
+                )
+                if not dept_result.scalar_one_or_none():
+                    logger.warning(f"Department {department_id} not found for invitation")
+                    return None, f"Department with ID {department_id} not found"
             
             # Check if email is already invited or registered
             result = await self.session.execute(
@@ -86,13 +100,15 @@ class InvitationService:
                 days=settings.INVITE_TOKEN_EXPIRE_DAYS
             )
             
-            # Create invitation record
+            # Create invitation record with new fields
             invitation = UserInvitation(
                 token=token,
                 email=email.lower(),
                 invited_by_id=inviter_id,
                 assigned_role=role_name,
                 invitation_message=custom_message,
+                department_id=department_id,
+                is_manager=is_manager,
                 expires_at=expiry,
                 status="pending",
             )
@@ -360,4 +376,8 @@ class InvitationService:
             if invitation.invited_by
             else None,
             "created_at": invitation.created_at.isoformat(),
+            # New fields
+            "invitation_message": invitation.invitation_message,
+            "department_id": invitation.department_id,
+            "is_manager": invitation.is_manager,
         }
