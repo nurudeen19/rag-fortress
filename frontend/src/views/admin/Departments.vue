@@ -73,13 +73,6 @@
                   Edit
                 </button>
                 <button
-                  @click="setManagerModal(dept)"
-                  class="text-fortress-400 hover:text-fortress-300 transition-colors"
-                  title="Set Manager"
-                >
-                  Set Manager
-                </button>
-                <button
                   @click="deptToDelete = dept; showDeleteConfirmation = true"
                   class="text-alert hover:text-alert/80 transition-colors"
                   title="Delete"
@@ -229,49 +222,6 @@
         </div>
       </div>
 
-      <!-- Set Manager Modal -->
-      <div v-if="showManagerModal && managerDept" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-        <div class="bg-fortress-900 rounded-lg max-w-md w-full border border-fortress-700">
-          <div class="p-6 border-b border-fortress-700">
-            <h3 class="text-xl font-bold text-fortress-100">Set Manager for {{ managerDept.name }}</h3>
-          </div>
-          <div class="p-6 space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-fortress-300 mb-2">
-                Select Manager
-              </label>
-              <select
-                v-model="selectedManagerId"
-                class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:border-secure outline-none transition-colors"
-              >
-                <option value="">Remove Manager</option>
-                <option
-                  v-for="user in availableUsers"
-                  :key="user.id"
-                  :value="user.id"
-                >
-                  {{ user.email }}
-                </option>
-              </select>
-            </div>
-          </div>
-          <div class="p-6 border-t border-fortress-700 flex justify-end gap-2">
-            <button
-              @click="showManagerModal = false; managerDept = null"
-              class="btn btn-secondary"
-            >
-              Cancel
-            </button>
-            <button
-              @click="setManager"
-              class="btn btn-primary"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
-
       <!-- Members Modal -->
       <div v-if="showMembersModal && selectedDept" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
         <div class="bg-fortress-900 rounded-lg max-w-2xl w-full border border-fortress-700 max-h-[80vh] overflow-y-auto">
@@ -354,7 +304,6 @@ const deptMembers = ref([])
 const loading = ref(false)
 const showCreateForm = ref(false)
 const showEditForm = ref(false)
-const showManagerModal = ref(false)
 const showMembersModal = ref(false)
 const showDeleteConfirmation = ref(false)
 const deptToDelete = ref(null)
@@ -362,12 +311,9 @@ const notification = ref({ show: false, message: '', type: 'success' })
 const formData = ref({})
 const editDept = ref({})
 const selectedDept = ref(null)
-const managerDept = ref(null)
-const selectedManagerId = ref('')
 
 onMounted(async () => {
   await loadDepartments()
-  await loadUsers()
 })
 
 async function loadDepartments() {
@@ -379,15 +325,6 @@ async function loadDepartments() {
     showNotification('Failed to load departments', 'error')
   } finally {
     loading.value = false
-  }
-}
-
-async function loadUsers() {
-  try {
-    const response = await api.get('/v1/admin/users?limit=1000')
-    availableUsers.value = response.users || []
-  } catch (err) {
-    console.error('Failed to load users:', err)
   }
 }
 
@@ -435,30 +372,6 @@ async function confirmDelete() {
     await loadDepartments()
   } catch (err) {
     showNotification(err.response?.data?.detail || 'Failed to delete department', 'error')
-  }
-}
-
-function setManagerModal(dept) {
-  managerDept.value = dept
-  selectedManagerId.value = dept.manager_id || ''
-  showManagerModal.value = true
-}
-
-async function setManager() {
-  try {
-    if (selectedManagerId.value) {
-      await api.post(`/v1/admin/departments/${managerDept.value.id}/manager`, {
-        user_id: parseInt(selectedManagerId.value)
-      })
-    } else {
-      await api.delete(`/v1/admin/departments/${managerDept.value.id}/manager`)
-    }
-    showNotification('Manager updated successfully', 'success')
-    showManagerModal.value = false
-    managerDept.value = null
-    await loadDepartments()
-  } catch (err) {
-    showNotification(err.response?.data?.detail || 'Failed to update manager', 'error')
   }
 }
 
