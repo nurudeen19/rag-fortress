@@ -159,9 +159,11 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useRoleAccess } from '../composables/useRoleAccess'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { getAvailableNav } = useRoleAccess()
 
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
@@ -173,6 +175,9 @@ const userInitials = computed(() => {
   const last = authStore.user.last_name?.[0] || ''
   return (first + last).toUpperCase()
 })
+
+// Get navigation items based on user roles
+const navigation = computed(() => getAvailableNav())
 
 // SVG path maps for icons
 const svgPaths = {
@@ -191,59 +196,6 @@ function getSvgPath(iconName) {
     template: `<svg class="w-full h-full" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">${path}</svg>`
   }
 }
-
-// Navigation items
-const navigation = [
-  {
-    name: 'Dashboard',
-    path: '/dashboard',
-    routeName: 'dashboard',
-    icon: 'dashboard',
-  },
-  {
-    name: 'Chat',
-    path: '/chat',
-    routeName: 'chat',
-    icon: 'chat',
-    badge: '2',
-  },
-  {
-    name: 'Documents',
-    path: '/documents',
-    routeName: 'documents',
-    icon: 'documents',
-  },
-  {
-    name: 'Users',
-    path: '/access-control',
-    routeName: 'access-control',
-    icon: 'users',
-  },
-  {
-    name: 'Invitations',
-    path: '/invitations',
-    routeName: 'invitations',
-    icon: 'invitations',
-  },
-  {
-    name: 'Departments',
-    path: '/departments',
-    routeName: 'departments',
-    icon: 'settings',
-  },
-  {
-    name: 'Configuration',
-    path: '/configuration',
-    routeName: 'configuration',
-    icon: 'settings',
-  },
-  {
-    name: 'Activity Logs',
-    path: '/logs',
-    routeName: 'logs',
-    icon: 'logs',
-  },
-]
 
 const handleLogout = async () => {
   await authStore.logout()

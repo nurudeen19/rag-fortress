@@ -43,63 +43,68 @@ const router = createRouter({
         {
           path: 'dashboard',
           name: 'dashboard',
-          component: () => import('../views/system/Dashboard.vue')
+          component: () => import('../views/system/Dashboard.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
           path: 'chat',
           name: 'chat',
-          component: () => import('../views/content/Chat.vue')
+          component: () => import('../views/content/Chat.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
           path: 'documents',
           name: 'documents',
-          component: () => import('../views/content/Documents.vue')
+          component: () => import('../views/content/Documents.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
           path: 'access-control',
           name: 'access-control',
           component: () => import('../views/admin/AccessControl.vue'),
-          meta: { requiresAdmin: true }
+          meta: { requiresRoles: ['manager', 'admin'] }
         },
         {
           path: 'access-control/user/:userId',
           name: 'user-detail',
           component: () => import('../views/admin/UserDetail.vue'),
-          meta: { requiresAdmin: true }
+          meta: { requiresRoles: ['manager', 'admin'] }
         },
         {
           path: 'invitations',
           name: 'invitations',
           component: () => import('../views/admin/Invitations.vue'),
-          meta: { requiresAdmin: true }
+          meta: { requiresRoles: ['manager', 'admin'] }
         },
         {
           path: 'departments',
           name: 'departments',
           component: () => import('../views/admin/Departments.vue'),
-          meta: { requiresAdmin: true }
+          meta: { requiresRoles: ['manager', 'admin'] }
         },
         {
           path: 'configuration',
           name: 'configuration',
           component: () => import('../views/admin/Configuration.vue'),
-          meta: { requiresAdmin: true }
+          meta: { requiresRoles: ['admin'] }
         },
         {
-          path: 'logs',
-          name: 'logs',
+          path: 'activity-logs',
+          name: 'activity-logs',
           component: () => import('../views/system/ActivityLogs.vue'),
-          meta: { requiresAdmin: true }
+          meta: { requiresRoles: ['admin'] }
         },
         {
           path: 'profile',
           name: 'profile',
-          component: () => import('../views/users/Profile.vue')
+          component: () => import('../views/users/Profile.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
           path: 'settings',
           name: 'settings',
-          component: () => import('../views/users/Settings.vue')
+          component: () => import('../views/users/Settings.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
         }
       ]
     },
@@ -113,46 +118,48 @@ const router = createRouter({
   ]
 })
 
-// Navigation guard
+// Navigation guard for role-based access control
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  const requiresAdmin = to.matched.some(record => record.meta.requiresAdmin)
+  const requiresRoles = to.matched.find(record => record.meta.requiresRoles)?.meta?.requiresRoles
   const isPublic = to.matched.some(record => record.meta.public)
 
-  console.log(`[Router Guard] Navigating to: ${to.path} (name: ${to.name})`, {
+  console.log(`[Router Guard] Navigating to: ${to.path}`, {
     requiresAuth,
-    requiresAdmin,
+    requiresRoles,
     isPublic,
     isAuthenticated: authStore.isAuthenticated,
-    isAdmin: authStore.isAdmin,
+    userRoles: authStore.user?.roles?.map(r => r.name) || [],
   })
 
   // Wait for auth initialization
   if (!authStore.initialized) {
-    // If we have a token and user in localStorage, we're ready
     if (authStore.token && authStore.user) {
       authStore.initialized = true
     } else if (!authStore.token) {
-      // No token, no need to wait
       authStore.initialized = true
     }
   }
 
   // Check if route requires authentication
   if (requiresAuth && !authStore.isAuthenticated) {
-    // Redirect to login with return URL
     console.log(`[Router Guard] Not authenticated, redirecting to login`)
     next({ name: 'login', query: { redirect: to.fullPath } })
     return
   }
 
-  // Check if route requires admin
-  if (requiresAdmin && !authStore.isAdmin) {
-    // Redirect to dashboard if not admin
-    console.log(`[Router Guard] Not admin, redirecting to dashboard. isAdmin: ${authStore.isAdmin}`)
-    next({ name: 'dashboard' })
-    return
+  // Check if route requires specific roles
+  if (requiresRoles && requiresRoles.length > 0) {
+    const userRoles = authStore.user?.roles?.map(r => r.name) || []
+    const hasRequiredRole = requiresRoles.some(requiredRole => userRoles.includes(requiredRole))
+
+    if (!hasRequiredRole) {
+      console.log(`[Router Guard] Insufficient role privileges. Required: ${requiresRoles}, User has: ${userRoles}`)
+      // Redirect to dashboard if user doesn't have required role
+      next({ name: 'dashboard' })
+      return
+    }
   }
 
   // If logged in and trying to access public route, redirect to dashboard
@@ -162,7 +169,7 @@ router.beforeEach((to, from, next) => {
     return
   }
 
-  console.log(`[Router Guard] Allowing navigation`)
+  console.log(`[Router Guard] Access granted`)
   next()
 })
 
