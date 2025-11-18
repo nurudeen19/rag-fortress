@@ -103,8 +103,15 @@ class UserProfileUpdateRequest(BaseModel):
     about: Optional[str] = Field(None)
 
 
+class DepartmentResponse(BaseModel):
+    """Response schema for department data."""
+    
+    id: int
+    name: str
+
+
 class UserResponse(BaseModel):
-    """Response schema for user data."""
+    """Response schema for user data with extended profile information."""
     
     id: int
     username: str
@@ -112,12 +119,20 @@ class UserResponse(BaseModel):
     first_name: str
     last_name: str
     full_name: str
-    department_id: Optional[int]
+    department: Optional[DepartmentResponse] = None
+    department_id: Optional[int] = None
     is_active: bool
     is_verified: bool
     is_suspended: bool
-    suspension_reason: Optional[str]
-    suspended_at: Optional[datetime]
+    suspension_reason: Optional[str] = None
+    suspended_at: Optional[datetime] = None
+    roles: List[RoleResponse] = Field(default_factory=list)
+    # Extended profile fields
+    phone_number: Optional[str] = None
+    location: Optional[str] = None
+    job_title: Optional[str] = None
+    about: Optional[str] = None
+    avatar_url: Optional[str] = None
     
     class Config:
         json_encoders = {

@@ -303,10 +303,11 @@ async def confirm_password_reset(
 
 @router.get("/me", response_model=UserResponse)
 async def get_profile(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
 ):
-    """Get current user profile."""
-    result = await handle_get_profile(current_user)
+    """Get current user profile with extended profile information."""
+    result = await handle_get_profile(current_user, session)
     
     if not result.get("success"):
         raise HTTPException(
@@ -322,12 +323,19 @@ async def get_profile(
         first_name=user["first_name"],
         last_name=user["last_name"],
         full_name=user.get("full_name", f"{user['first_name']} {user['last_name']}".strip()),
+        department=user.get("department"),
         department_id=user.get("department_id"),
         is_active=user["is_active"],
         is_verified=user["is_verified"],
         is_suspended=user.get("is_suspended", False),
         suspension_reason=user.get("suspension_reason"),
         suspended_at=user.get("suspended_at"),
+        roles=user.get("roles", []),
+        phone_number=user.get("phone_number"),
+        location=user.get("location"),
+        job_title=user.get("job_title"),
+        about=user.get("about"),
+        avatar_url=user.get("avatar_url"),
     )
 
 
@@ -355,12 +363,19 @@ async def update_profile(
         first_name=user["first_name"],
         last_name=user["last_name"],
         full_name=user.get("full_name", f"{user['first_name']} {user['last_name']}".strip()),
+        department=user.get("department"),
         department_id=user.get("department_id"),
         is_active=user["is_active"],
         is_verified=user["is_verified"],
         is_suspended=user.get("is_suspended", False),
         suspension_reason=user.get("suspension_reason"),
         suspended_at=user.get("suspended_at"),
+        roles=user.get("roles", []),
+        phone_number=user.get("phone_number"),
+        location=user.get("location"),
+        job_title=user.get("job_title"),
+        about=user.get("about"),
+        avatar_url=user.get("avatar_url"),
     )
 
 

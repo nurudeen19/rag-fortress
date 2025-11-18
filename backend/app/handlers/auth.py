@@ -219,40 +219,55 @@ async def handle_logout(session: AsyncSession) -> dict:
         }
 
 
-async def handle_get_profile(user) -> dict:
+async def handle_get_profile(user, session: AsyncSession) -> dict:
     """
     Handle get user profile request.
+    Returns comprehensive profile information including extended profile data.
     
     Args:
         user: Current authenticated user
+        session: Database session
         
     Returns:
         Dict with user profile data
     """
     try:
+        from app.services.user import UserProfileService
+        
         logger.info(f"Getting profile for user {user.id}")
+        
+        service = UserProfileService(session)
+        profile, error = await service.get_user_profile(user.id)
+        
+        if error:
+            logger.warning(f"Failed to retrieve full profile for user {user.id}: {error}")
+            # Fall back to basic user data
+            return {
+                "success": True,
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "email": user.email,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "full_name": user.full_name,
+                    "is_active": user.is_active,
+                    "is_verified": user.is_verified,
+                    "is_suspended": user.is_suspended,
+                    "department_id": user.department_id,
+                }
+            }
         
         return {
             "success": True,
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "full_name": f"{user.first_name} {user.last_name}".strip(),
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "is_suspended": user.is_suspended,
-                "department_id": user.department_id,
-            }
+            "user": profile
         }
         
     except Exception as e:
         logger.error(f"Error handling get profile request: {str(e)}", exc_info=True)
         return {
             "success": False,
-            "error": str(e),
+            "error": "Failed to retrieve profile. Please try again.",
             "user": None
         }
 
@@ -264,6 +279,7 @@ async def handle_update_profile(
 ) -> dict:
     """
     Handle update user profile request.
+    Updates both core user info and extended profile information.
     
     Args:
         request: Profile update data
@@ -271,22 +287,47 @@ async def handle_update_profile(
         session: Database session
         
     Returns:
-        Dict with updated user data, or error
+        Dict with updated profile data, or error
     """
     try:
+        from app.services.user import UserProfileService
+        
         logger.info(f"Updating profile for user {user.id}")
         
-        user_service = UserAccountService(session)
+        service = UserProfileService(session)
         
-        # Update user profile
-        updated_user, error = await user_service.update_user_profile(
-            user_id=user.id,
-            first_name=request.first_name,
-            last_name=request.last_name,
-            department_id=request.department_id
-        )
+        # Prepare update data from request
+        update_data = {}
         
-        if error or not updated_user:
+        # Core user fields (only updatable fields)
+        if request.first_name:
+            update_data["first_name"] = request.first_name
+        if request.last_name:
+            update_data["last_name"] = request.last_name
+        
+        # Extended profile fields
+        if hasattr(request, "phone_number") and request.phone_number is not None:
+            update_data["phone_number"] = request.phone_number
+        if hasattr(request, "location") and request.location is not None:
+            update_data["location"] = request.location
+        if hasattr(request, "job_title") and request.job_title is not None:
+            update_data["job_title"] = request.job_title
+        if hasattr(request, "about") and request.about is not None:
+            update_data["about"] = request.about
+        if hasattr(request, "avatar_url") and request.avatar_url is not None:
+            update_data["avatar_url"] = request.avatar_url
+        
+        if not update_data:
+            logger.warning(f"User {user.id} attempted profile update with no valid fields")
+            return {
+                "success": False,
+                "error": "No valid fields to update",
+                "user": None
+            }
+        
+        success, error = await service.update_user_profile(user.id, update_data)
+        
+        if error or not success:
             logger.warning(f"Profile update failed for user {user.id}: {error}")
             return {
                 "success": False,
@@ -294,27 +335,21 @@ async def handle_update_profile(
                 "user": None
             }
         
+        # Retrieve updated profile
+        profile, _ = await service.get_user_profile(user.id)
+        
         logger.info(f"Profile updated for user {user.id}")
         
         return {
             "success": True,
-            "user": {
-                "id": updated_user.id,
-                "username": updated_user.username,
-                "email": updated_user.email,
-                "first_name": updated_user.first_name,
-                "last_name": updated_user.last_name,
-                "full_name": f"{updated_user.first_name} {updated_user.last_name}".strip(),
-                "is_active": updated_user.is_active,
-                "department_id": updated_user.department_id,
-            }
+            "user": profile
         }
         
     except Exception as e:
         logger.error(f"Error handling profile update request: {str(e)}", exc_info=True)
         return {
             "success": False,
-            "error": str(e),
+            "error": "Failed to update profile. Please try again.",
             "user": None
         }
 
