@@ -189,6 +189,58 @@
               </button>
             </div>
           </div>
+
+          <!-- Department Manager Roles -->
+          <div class="card p-6">
+            <h3 class="text-lg font-semibold text-fortress-100 mb-4">Manager Roles</h3>
+            <div v-if="userManagedDepartments.length > 0" class="space-y-2">
+              <div
+                v-for="dept in userManagedDepartments"
+                :key="dept.id"
+                class="p-3 bg-fortress-800/50 rounded-lg flex items-center justify-between"
+              >
+                <div>
+                  <div class="font-medium text-fortress-100">{{ dept.name }}</div>
+                  <p class="text-xs text-fortress-400 mt-1">{{ dept.code }}</p>
+                </div>
+                <button
+                  @click="removeManager(dept.id)"
+                  class="ml-2 p-2 hover:bg-alert/20 text-alert rounded transition-colors"
+                  title="Remove as manager"
+                >
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div v-else class="text-fortress-400 text-sm">
+              Not a manager of any departments
+            </div>
+            <div v-if="availableDepartments.length > 0" class="mt-4 pt-4 border-t border-fortress-700">
+              <p class="text-xs uppercase text-fortress-500 mb-2">Add as Manager</p>
+              <select
+                v-model="selectedDeptToManage"
+                class="w-full input text-sm mb-2"
+              >
+                <option value="">Select a department...</option>
+                <option
+                  v-for="dept in availableDepartments"
+                  :key="dept.id"
+                  :value="dept.id"
+                >
+                  {{ dept.name }}
+                </option>
+              </select>
+              <button
+                @click="setAsManager"
+                :disabled="!selectedDeptToManage"
+                class="w-full px-4 py-2 bg-secure hover:bg-secure/80 disabled:bg-fortress-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium"
+              >
+                Set as Manager
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -207,6 +259,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
+import api from '../../services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -214,6 +267,14 @@ const adminStore = useAdminStore()
 
 const userId = parseInt(route.params.userId)
 const selectedRoleToAssign = ref('')
+const selectedDeptToManage = ref('')
+const departments = ref([])
+const userManagedDepartments = computed(() => {
+  return departments.value.filter(d => d.manager_id === userId)
+})
+const availableDepartments = computed(() => {
+  return departments.value.filter(d => d.manager_id !== userId)
+})
 const user = computed(() => adminStore.selectedUser)
 
 const availableRoles = computed(() => {
@@ -227,6 +288,15 @@ async function loadUserDetails() {
   await adminStore.fetchUserDetails(userId)
   if (!adminStore.roles || adminStore.roles.length === 0) {
     await adminStore.fetchRoles()
+  }
+}
+
+async function loadDepartments() {
+  try {
+    const response = await api.get('/v1/admin/departments')
+    departments.value = response.departments || []
+  } catch (err) {
+    console.error('Failed to load departments:', err)
   }
 }
 
@@ -246,6 +316,31 @@ async function revokeRole(roleId) {
   const result = await adminStore.revokeRoleFromUser(userId, roleId)
   if (result.success) {
     await loadUserDetails()
+  }
+}
+
+async function setAsManager() {
+  if (!selectedDeptToManage.value) return
+  
+  try {
+    await api.post(`/v1/admin/departments/${selectedDeptToManage.value}/manager`, {
+      user_id: userId
+    })
+    selectedDeptToManage.value = ''
+    await loadDepartments()
+  } catch (err) {
+    console.error('Failed to set as manager:', err)
+  }
+}
+
+async function removeManager(deptId) {
+  if (!confirm('Are you sure you want to remove this user as manager?')) return
+  
+  try {
+    await api.delete(`/v1/admin/departments/${deptId}/manager`)
+    await loadDepartments()
+  } catch (err) {
+    console.error('Failed to remove manager:', err)
   }
 }
 
@@ -270,6 +365,7 @@ async function unsuspendUser() {
 
 onMounted(() => {
   loadUserDetails()
+  loadDepartments()
 })
 </script>
 ```

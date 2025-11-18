@@ -80,7 +80,7 @@
                   Set Manager
                 </button>
                 <button
-                  @click="deleteDept(dept.id)"
+                  @click="deptToDelete = dept; showDeleteConfirmation = true"
                   class="text-alert hover:text-alert/80 transition-colors"
                   title="Delete"
                 >
@@ -309,6 +309,37 @@
           </div>
         </div>
       </div>
+
+      <!-- Delete Confirmation Modal -->
+      <div v-if="showDeleteConfirmation && deptToDelete" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div class="bg-fortress-900 rounded-lg max-w-md w-full border border-fortress-700">
+          <div class="p-6 border-b border-fortress-700">
+            <h3 class="text-xl font-bold text-fortress-100">Delete Department</h3>
+          </div>
+          <div class="p-6">
+            <p class="text-fortress-300 mb-2">
+              Are you sure you want to delete <span class="font-semibold text-fortress-100">{{ deptToDelete.name }}</span>?
+            </p>
+            <p class="text-sm text-fortress-400">
+              This action cannot be undone. If this department has members or a manager, you should reassign them first.
+            </p>
+          </div>
+          <div class="p-6 border-t border-fortress-700 flex justify-end gap-2">
+            <button
+              @click="showDeleteConfirmation = false; deptToDelete = null"
+              class="btn btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              @click="confirmDelete"
+              class="btn bg-alert hover:bg-alert/80 text-fortress-100 transition-colors"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -325,6 +356,8 @@ const showCreateForm = ref(false)
 const showEditForm = ref(false)
 const showManagerModal = ref(false)
 const showMembersModal = ref(false)
+const showDeleteConfirmation = ref(false)
+const deptToDelete = ref(null)
 const notification = ref({ show: false, message: '', type: 'success' })
 const formData = ref({})
 const editDept = ref({})
@@ -391,12 +424,14 @@ async function updateDept() {
   }
 }
 
-async function deleteDept(deptId) {
-  if (!confirm('Are you sure you want to delete this department?')) return
+async function confirmDelete() {
+  if (!deptToDelete.value) return
   
   try {
-    await api.delete(`/v1/admin/departments/${deptId}`)
+    await api.delete(`/v1/admin/departments/${deptToDelete.value.id}`)
     showNotification('Department deleted successfully', 'success')
+    showDeleteConfirmation.value = false
+    deptToDelete.value = null
     await loadDepartments()
   } catch (err) {
     showNotification(err.response?.data?.detail || 'Failed to delete department', 'error')
