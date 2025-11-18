@@ -4,7 +4,7 @@ import os
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.file_upload_service import FileUploadService
+from app.services.file_upload import FileUploadService, FileStorage
 from app.schemas.file_upload import FileUploadCreate, FileUploadApproveRequest, FileUploadRejectRequest
 from app.models.user import User
 from app.core import get_logger
@@ -233,7 +233,12 @@ async def handle_delete_file(
         if file_upload.uploaded_by_id != user.id and not is_admin:
             return {"success": False, "error": "Permission denied"}
         
-        deleted_file = await service.delete(file_id, delete_file=True)
+        # Delete physical file from disk
+        storage = FileStorage()
+        await storage.delete_file(file_upload.file_path)
+        
+        # Mark as deleted in database
+        deleted_file = await service.delete(file_id)
         await session.commit()
         
         logger.info(f"File {file_id} deleted by user {user.id}")

@@ -3,7 +3,7 @@ Example: Using FileUploadService with form data from frontend.
 Demonstrates how the service handles file uploads with all fields.
 """
 
-from app.services.file_upload_service import FileUploadService, FileUploadData
+from app.services.file_upload import FileUploadService, FileValidator, StructuredDataParser, FileStorage
 from app.models.file_upload import SecurityLevel
 
 

@@ -1,9 +1,10 @@
 """File upload endpoints."""
 
 import os
+import json
 import tempfile
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -29,13 +30,11 @@ from app.handlers.file_upload import (
     handle_reject_file,
     handle_delete_file,
 )
+from app.services.file_upload import FileValidator, FileStorage, StructuredDataParser
 
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/files", tags=["files"])
-
-UPLOAD_DIR = os.getenv("UPLOAD_DIR", "data/uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 
 @router.post("/upload", response_model=FileUploadResponse, status_code=201)
@@ -45,10 +44,13 @@ async def upload_file(
     security_level: SecurityLevelEnum = Query(SecurityLevelEnum.GENERAL),
     is_department_only: bool = Query(False),
     department_id: Optional[int] = Query(None),
+    field_selection: Optional[str] = Query(None),  # JSON string of selected fields
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
     """Upload file and create database record."""
+    storage = FileStorage()
+    
     try:
         if not file.filename:
             raise HTTPException(
@@ -56,51 +58,74 @@ async def upload_file(
                 detail="File name is required"
             )
         
-        # Get file extension
-        file_parts = file.filename.rsplit(".", 1)
-        if len(file_parts) != 2:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File must have an extension"
-            )
-        
-        file_name, file_ext = file_parts
-        file_ext = file_ext.lower()
-        
         # Read file content
         content = await file.read()
         file_size = len(content)
         
-        # Validate file size (100MB max)
-        if file_size > 100 * 1024 * 1024:
+        # Validate file
+        is_valid, error_msg, file_type = FileValidator.validate_file(
+            file.filename,
+            file_size,
+            file.content_type
+        )
+        
+        if not is_valid:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail="File exceeds 100MB limit"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_msg
             )
         
         # Save file to disk
-        file_path = os.path.join(UPLOAD_DIR, file.filename)
-        with open(file_path, "wb") as f:
-            f.write(content)
+        file_path = await storage.save_file(file.filename, content)
+        
+        # Calculate file hash
+        file_hash = await FileStorage.calculate_hash(file_path)
+        
+        # Parse field_selection from query param
+        selected_fields = []
+        if field_selection:
+            try:
+                selected_fields = json.loads(field_selection)
+                if not isinstance(selected_fields, list):
+                    selected_fields = []
+            except json.JSONDecodeError:
+                logger.warning(f"Invalid field_selection JSON: {field_selection}")
+                selected_fields = []
+        
+        # Extract fields from structured data if applicable
+        available_fields = []
+        if file_type in ("json", "csv", "excel"):
+            try:
+                available_fields = StructuredDataParser.extract_fields(file_path, file_type)
+                
+                # Validate selected fields exist in file
+                if selected_fields:
+                    selected_fields = StructuredDataParser.validate_field_selection(
+                        available_fields,
+                        selected_fields
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to extract fields from {file.filename}: {e}")
+                available_fields = []
         
         # Create upload request
         upload_request = FileUploadCreate(
-            file_name=file_name,
-            file_type=file_ext,
+            file_name=file.filename,
+            file_type=file_type,
             file_size=file_size,
             uploaded_by_id=user.id,
             file_purpose=file_purpose,
             security_level=security_level,
             is_department_only=is_department_only,
             department_id=department_id,
+            field_selection=selected_fields if selected_fields else None,
         )
         
         # Call handler
         result = await handle_upload_file(file_path, upload_request, user, session)
         
         if not result.get("success"):
-            if os.path.exists(file_path):
-                os.remove(file_path)
+            await storage.delete_file(file_path)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=result.get("error", "Upload failed")
