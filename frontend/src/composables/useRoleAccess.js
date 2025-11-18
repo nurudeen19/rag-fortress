@@ -82,6 +82,14 @@ export function useRoleAccess() {
         roles: ['user', 'manager', 'admin'],
         group: 'main',
       },
+      {
+        name: 'Knowledge Base',
+        path: '/knowledge-base',
+        routeName: 'knowledge-base',
+        icon: 'knowledge',
+        roles: ['user', 'manager', 'admin'],
+        group: 'main',
+      },
     ]
 
     // Manager/Admin only navigation

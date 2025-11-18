@@ -105,6 +105,12 @@ const router = createRouter({
           name: 'settings',
           component: () => import('../views/users/Settings.vue'),
           meta: { requiresRoles: ['user', 'manager', 'admin'] }
+        },
+        {
+          path: 'knowledge-base',
+          name: 'knowledge-base',
+          component: () => import('../views/admin/KnowledgeBase.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
         }
       ]
     },
