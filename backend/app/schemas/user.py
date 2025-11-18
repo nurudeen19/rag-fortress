@@ -304,5 +304,39 @@ class SuccessResponse(BaseModel):
     data: Optional[dict] = None
 
 
+class InviterInfo(BaseModel):
+    """Schema for invitation creator info."""
+    
+    id: int
+    username: str
+    full_name: str
+
+
+class InvitationResponse(BaseModel):
+    """Response schema for single invitation."""
+    
+    id: int
+    email: str
+    assigned_role: Optional[str] = None
+    status: str
+    is_expired: bool
+    expires_at: str
+    accepted_at: Optional[str] = None
+    created_at: str
+    invited_by: Optional[InviterInfo] = None
+    invitation_message: Optional[str] = None
+    department_id: Optional[int] = None
+    is_manager: bool
+
+
+class InvitationsListResponse(BaseModel):
+    """Response schema for list of invitations."""
+    
+    total: int
+    limit: int
+    offset: int
+    invitations: List[InvitationResponse] = Field(default_factory=list)
+
+
 # Update forward references for nested models
 UserDetailResponse.update_forward_refs()

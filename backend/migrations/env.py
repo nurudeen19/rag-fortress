@@ -37,7 +37,7 @@ from app.config.database_settings import DatabaseSettings
 target_metadata = Base.metadata
 
 # Override sqlalchemy.url with environment variable if set
-# Priority: SQLALCHEMY_URL > DATABASE_URL > DatabaseSettings.get_database_url()
+# Priority: SQLALCHEMY_URL > DATABASE_URL > DatabaseSettings._get_sync_database_url()
 if os.getenv("SQLALCHEMY_URL"):
     db_url = os.getenv("SQLALCHEMY_URL")
 elif os.getenv("DATABASE_URL"):
@@ -45,7 +45,7 @@ elif os.getenv("DATABASE_URL"):
 else:
     # Use DatabaseSettings to construct URL from environment variables
     db_settings = DatabaseSettings()
-    db_url = db_settings.get_database_url()
+    db_url = db_settings._get_sync_database_url()
 
 config.set_main_option("sqlalchemy.url", db_url)
 

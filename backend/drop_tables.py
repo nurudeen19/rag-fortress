@@ -12,9 +12,9 @@ load_dotenv(env_path)
 
 db = DatabaseSettings()
 print(f"Using database provider: {db.DATABASE_PROVIDER}")
-print(f"Database URL: {db.get_database_url()[:50]}...")
+print(f"Database URL: {db._get_sync_database_url()[:50]}...")
 
-engine = create_engine(db.get_database_url())
+engine = create_engine(db._get_sync_database_url())
 
 # Get all tables
 inspector = inspect(engine)
@@ -22,7 +22,7 @@ tables = inspector.get_table_names()
 
 with engine.connect() as conn:
     # Handle MySQL foreign key checks
-    if 'mysql' in db.get_database_url().lower():
+    if 'mysql' in db._get_sync_database_url().lower():
         print("Disabling foreign key checks for MySQL...")
         conn.execute(text('SET FOREIGN_KEY_CHECKS = 0'))
     
@@ -32,7 +32,7 @@ with engine.connect() as conn:
         conn.execute(text(f'DROP TABLE IF EXISTS `{table}`'))
     
     # Re-enable foreign key checks for MySQL
-    if 'mysql' in db.get_database_url().lower():
+    if 'mysql' in db._get_sync_database_url().lower():
         print("Re-enabling foreign key checks...")
         conn.execute(text('SET FOREIGN_KEY_CHECKS = 1'))
     

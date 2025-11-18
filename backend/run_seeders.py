@@ -51,7 +51,7 @@ async def run_seeders(seeder_names: list = None) -> int:
         db_settings = DatabaseSettings()
         app_settings = AppSettings()
         
-        logger.info(f"Database: {db_settings.get_database_url()}")
+        logger.info(f"Database: {db_settings._get_sync_database_url()}")
         logger.info(f"Seeders to run: {', '.join(seeder_names)}")
         
         # Setup database

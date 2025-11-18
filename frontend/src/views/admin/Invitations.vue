@@ -270,17 +270,14 @@ const loadInvitations = async () => {
     }
     
     if (statusFilter.value) {
-      params.status = statusFilter.value
+      params.status_filter = statusFilter.value
     }
     
     const response = await api.get('/v1/admin/invitations', { params })
     
-    if (response.success) {
-      invitations.value = response.invitations
-      total.value = response.total
-    } else {
-      error.value = response.error || 'Failed to load invitations'
-    }
+    // Response is InvitationsListResponse with {total, limit, offset, invitations}
+    invitations.value = response.invitations || []
+    total.value = response.total || 0
   } catch (err) {
     error.value = err.response?.data?.detail || 'Failed to load invitations'
   } finally {
@@ -342,7 +339,10 @@ const handleInviteUser = async (inviteData) => {
   const result = await adminStore.inviteUser(
     inviteData.email, 
     inviteData.roleId,
-    inviteData.invitationLinkTemplate
+    inviteData.invitationLinkTemplate,
+    inviteData.invitationMessage,
+    inviteData.departmentId,
+    inviteData.isManager
   )
   
   if (result.success) {

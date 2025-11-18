@@ -112,17 +112,24 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function inviteUser(email, roleId, invitationLinkTemplate) {
+  async function inviteUser(email, roleId, invitationLinkTemplate, invitationMessage = null, departmentId = null, isManager = false) {
     loading.value = true
     error.value = null
 
     try {
       const payload = {
         email,
-        role_id: roleId
+        role_id: roleId,
+        is_manager: isManager
       }
       
-      // Include invitation link template if provided
+      // Include optional fields if provided
+      if (invitationMessage) {
+        payload.invitation_message = invitationMessage
+      }
+      if (departmentId) {
+        payload.department_id = departmentId
+      }
       if (invitationLinkTemplate) {
         payload.invitation_link_template = invitationLinkTemplate
       }

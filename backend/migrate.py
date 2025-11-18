@@ -36,7 +36,7 @@ def get_alembic_config() -> Config:
     
     # Set the database URL from settings
     settings = DatabaseSettings()
-    db_url = settings.get_database_url()
+    db_url = settings._get_sync_database_url()
     config.set_main_option("sqlalchemy.url", db_url)
     
     return config

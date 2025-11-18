@@ -41,6 +41,7 @@ from app.schemas.user import (
     AssignPermissionToRoleRequest,
     RevokePermissionFromRoleRequest,
     SuccessResponse,
+    InvitationsListResponse,
 )
 from app.models.user import User
 from app.core import get_logger
@@ -420,9 +421,9 @@ async def revoke_permission_from_role(
 # INVITATION MANAGEMENT ENDPOINTS
 # ============================================================================
 
-@router.get("/invitations", response_model=dict)
+@router.get("/invitations", response_model=InvitationsListResponse)
 async def list_invitations(
-    status: Optional[str] = Query(None, description="Filter by status: pending, accepted, expired"),
+    status_filter: Optional[str] = Query(None, description="Filter by status: pending, accepted, expired"),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     admin: User = Depends(require_role("admin")),
@@ -434,7 +435,7 @@ async def list_invitations(
     Requires admin role.
     
     Query Parameters:
-    - status: Filter by invitation status (pending, accepted, expired)
+    - status_filter: Filter by invitation status (pending, accepted, expired)
     - limit: Number of results per page (1-100, default: 10)
     - offset: Pagination offset (default: 0)
     
@@ -444,7 +445,7 @@ async def list_invitations(
     from app.handlers.users import handle_list_invitations
     
     result = await handle_list_invitations(
-        status_filter=status,
+        status_filter=status_filter,
         limit=limit,
         offset=offset,
         session=session
@@ -456,7 +457,12 @@ async def list_invitations(
             detail=result.get("error", "Failed to list invitations")
         )
     
-    return result
+    return InvitationsListResponse(
+        total=result.get("total", 0),
+        limit=result.get("limit", limit),
+        offset=result.get("offset", offset),
+        invitations=result.get("invitations", [])
+    )
 
 
 @router.post("/invitations/{invitation_id}/resend", response_model=SuccessResponse)

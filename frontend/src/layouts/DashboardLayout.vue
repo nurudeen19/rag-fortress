@@ -216,6 +216,12 @@ const navigation = [
     icon: 'invitations',
   },
   {
+    name: 'Departments',
+    path: '/departments',
+    routeName: 'departments',
+    icon: 'settings',
+  },
+  {
     name: 'Configuration',
     path: '/configuration',
     routeName: 'configuration',
