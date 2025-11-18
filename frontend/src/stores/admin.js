@@ -168,7 +168,7 @@ export const useAdminStore = defineStore('admin', () => {
 
     try {
       const response = await api.post(`/v1/admin/users/${userId}/roles`, {
-        role_id: roleId
+        role_id: parseInt(roleId, 10)
       })
       return { success: true, message: response.message }
     } catch (err) {

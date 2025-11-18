@@ -13,6 +13,7 @@ import logging
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone, timedelta
 
 from app.models.user import User
@@ -129,8 +130,13 @@ async def handle_get_user(
     try:
         logger.info(f"Getting user {user_id}")
         
-        user_service = UserAccountService(session)
-        user = await user_service.get_user(user_id)
+        # Fetch user with eager-loaded roles
+        result = await session.execute(
+            select(User)
+            .where(User.id == user_id)
+            .options(selectinload(User.roles))
+        )
+        user = result.scalar_one_or_none()
         
         if not user:
             logger.warning(f"User not found: {user_id}")
@@ -139,6 +145,17 @@ async def handle_get_user(
                 "error": "User not found",
                 "user": None
             }
+        
+        # Convert roles to response format
+        roles = [
+            {
+                "id": role.id,
+                "name": role.name,
+                "description": role.description,
+                "is_system": role.is_system,
+            }
+            for role in (user.roles or [])
+        ]
         
         return {
             "success": True,
@@ -155,6 +172,7 @@ async def handle_get_user(
                 "is_suspended": user.is_suspended,
                 "suspension_reason": user.suspension_reason,
                 "suspended_at": user.suspended_at,
+                "roles": roles,
             }
         }
         

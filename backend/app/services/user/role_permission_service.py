@@ -7,6 +7,7 @@ from typing import Optional, List, Tuple
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.auth import Role, Permission
@@ -49,17 +50,27 @@ class RolePermissionService:
             if not role:
                 return False, "Role not found"
             
+            # Use a query-based approach to avoid greenlet issues
+            user_result = await self.session.execute(
+                select(User).where(User.id == user_id).options(selectinload(User.roles))
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                return False, "User not found"
+            
             # Check if user already has this role
             if role in user.roles:
                 return True, None  # Already assigned
             
             user.roles.append(role)
-            await self.session.flush()
+            await self.session.commit()
             
             logger.info(f"Role '{role.name}' assigned to user '{user.username}'")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Assign role error: {e}")
             return False, "Failed to assign role"
     
@@ -79,7 +90,11 @@ class RolePermissionService:
             Tuple of (success, error_message)
         """
         try:
-            user = await self.session.get(User, user_id)
+            user_result = await self.session.execute(
+                select(User).where(User.id == user_id).options(selectinload(User.roles))
+            )
+            user = user_result.scalar_one_or_none()
+            
             if not user:
                 return False, "User not found"
             
@@ -92,12 +107,13 @@ class RolePermissionService:
                 return True, None  # Not assigned
             
             user.roles.remove(role)
-            await self.session.flush()
+            await self.session.commit()
             
             logger.info(f"Role '{role.name}' revoked from user '{user.username}'")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Revoke role error: {e}")
             return False, "Failed to revoke role"
     
@@ -117,7 +133,11 @@ class RolePermissionService:
             Tuple of (success, error_message)
         """
         try:
-            user = await self.session.get(User, user_id)
+            user_result = await self.session.execute(
+                select(User).where(User.id == user_id).options(selectinload(User.roles))
+            )
+            user = user_result.scalar_one_or_none()
+            
             if not user:
                 return False, "User not found"
             
@@ -132,13 +152,14 @@ class RolePermissionService:
             
             # Replace roles
             user.roles = roles
-            await self.session.flush()
+            await self.session.commit()
             
             role_names = ", ".join([r.name for r in roles])
             logger.info(f"Roles assigned to user '{user.username}': {role_names}")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Assign roles error: {e}")
             return False, "Failed to assign roles"
     
@@ -244,7 +265,10 @@ class RolePermissionService:
             Tuple of (success, error_message)
         """
         try:
-            role = await self.session.get(Role, role_id)
+            role_result = await self.session.execute(
+                select(Role).where(Role.id == role_id).options(selectinload(Role.permissions))
+            )
+            role = role_result.scalar_one_or_none()
             if not role:
                 return False, "Role not found"
             
@@ -257,12 +281,13 @@ class RolePermissionService:
                 return True, None  # Already assigned
             
             role.permissions.append(permission)
-            await self.session.flush()
+            await self.session.commit()
             
             logger.info(f"Permission '{permission.code}' assigned to role '{role.name}'")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Assign permission error: {e}")
             return False, "Failed to assign permission"
     
@@ -282,7 +307,10 @@ class RolePermissionService:
             Tuple of (success, error_message)
         """
         try:
-            role = await self.session.get(Role, role_id)
+            role_result = await self.session.execute(
+                select(Role).where(Role.id == role_id).options(selectinload(Role.permissions))
+            )
+            role = role_result.scalar_one_or_none()
             if not role:
                 return False, "Role not found"
             
@@ -295,12 +323,13 @@ class RolePermissionService:
                 return True, None  # Not assigned
             
             role.permissions.remove(permission)
-            await self.session.flush()
+            await self.session.commit()
             
             logger.info(f"Permission '{permission.code}' revoked from role '{role.name}'")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Revoke permission error: {e}")
             return False, "Failed to revoke permission"
     
