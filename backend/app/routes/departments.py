@@ -156,6 +156,7 @@ async def update_department(
     result = await handle_update_department(
         department_id=department_id,
         name=request.name,
+        code=request.code,
         description=request.description,
         is_active=request.is_active,
         session=session

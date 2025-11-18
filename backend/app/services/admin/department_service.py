@@ -159,7 +159,7 @@ class DepartmentService:
         """
         Update department information.
         
-        Updatable fields: name, description, is_active
+        Updatable fields: name, code, description, is_active
         Manager is updated via set_manager method.
         
         Args:
@@ -180,7 +180,7 @@ class DepartmentService:
                 return None, "Department not found"
             
             # Allowed updatable fields
-            updatable_fields = {"name", "description", "is_active"}
+            updatable_fields = {"name", "code", "description", "is_active"}
             
             updates = {}
             for field in updatable_fields:

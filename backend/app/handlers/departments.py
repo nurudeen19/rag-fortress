@@ -164,6 +164,7 @@ async def handle_list_departments(
 async def handle_update_department(
     department_id: int,
     name: str = None,
+    code: str = None,
     description: str = None,
     is_active: bool = None,
     session: AsyncSession = None
@@ -174,6 +175,7 @@ async def handle_update_department(
     Args:
         department_id: ID of department
         name: New name
+        code: New code
         description: New description
         is_active: Active status
         session: Database session
@@ -188,6 +190,7 @@ async def handle_update_department(
         department, error = await service.update_department(
             department_id,
             name=name,
+            code=code,
             description=description,
             is_active=is_active
         )
