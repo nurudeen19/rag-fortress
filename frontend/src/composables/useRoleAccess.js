@@ -75,14 +75,6 @@ export function useRoleAccess() {
         badge: '2',
       },
       {
-        name: 'Documents',
-        path: '/documents',
-        routeName: 'documents',
-        icon: 'documents',
-        roles: ['user', 'manager', 'admin'],
-        group: 'main',
-      },
-      {
         name: 'Knowledge Base',
         path: '/knowledge-base',
         routeName: 'knowledge-base',

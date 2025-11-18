@@ -156,18 +156,26 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoleAccess } from '../composables/useRoleAccess'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const { getAvailableNav } = useRoleAccess()
 
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 const notificationsOpen = ref(false)
+
+// Close sidebar and menus on route change
+watch(() => route.path, () => {
+  sidebarOpen.value = false
+  userMenuOpen.value = false
+  notificationsOpen.value = false
+})
 
 const userInitials = computed(() => {
   if (!authStore.user) return '?'

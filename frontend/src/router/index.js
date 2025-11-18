@@ -53,9 +53,9 @@ const router = createRouter({
           meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
-          path: 'documents',
-          name: 'documents',
-          component: () => import('../views/content/Documents.vue'),
+          path: 'document-upload',
+          name: 'document-upload',
+          component: () => import('../views/content/DocumentUpload.vue'),
           meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
