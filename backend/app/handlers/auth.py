@@ -825,18 +825,25 @@ async def handle_signup_with_invite(
                 logger.warning(f"Failed to assign role to user: {role_error}")
                 # Don't fail the signup if role assignment fails - continue anyway
         
-        # Mark invitation as accepted
+        # Mark invitation as accepted and verify user (user verified through invitation)
         now = datetime.now(timezone.utc)
         invitation.status = "accepted"
         invitation.accepted_at = now
+        
+        # Set user as verified since they completed invitation signup
+        new_user.is_verified = True
         
         await session.flush()
         await session.commit()
         
         logger.info(f"User {new_user.username} completed signup with invitation")
         
-        # Refresh user to get assigned roles
-        await session.refresh(new_user)
+        # Load user roles explicitly from database (avoid lazy loading in async context)
+        from sqlalchemy import select
+        roles_result = await session.execute(
+            select(Role).join(Role.users).where(Role.users.any(User.id == new_user.id))
+        )
+        user_roles = roles_result.scalars().all()
         
         # Generate JWT token for immediate login
         token = create_access_token(new_user.id)
@@ -851,7 +858,7 @@ async def handle_signup_with_invite(
                 "description": role.description,
                 "is_system": role.is_system,
             }
-            for role in (new_user.roles or [])
+            for role in user_roles
         ]
         
         return {
@@ -875,9 +882,14 @@ async def handle_signup_with_invite(
     except Exception as e:
         logger.error(f"Error handling signup with invitation: {str(e)}", exc_info=True)
         await session.rollback()
+        
+        # Don't expose detailed error messages to frontend - use generic message
+        # Log the real error for debugging, but return safe message to client
+        error_message = "Failed to complete signup. Please try again or contact support."
+        
         return {
             "success": False,
-            "error": str(e),
+            "error": error_message,
             "token": None,
             "user": None
         }

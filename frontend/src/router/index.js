@@ -68,6 +68,12 @@ const router = createRouter({
           meta: { requiresAdmin: true }
         },
         {
+          path: 'invitations',
+          name: 'invitations',
+          component: () => import('../views/admin/Invitations.vue'),
+          meta: { requiresAdmin: true }
+        },
+        {
           path: 'configuration',
           name: 'configuration',
           component: () => import('../views/admin/Configuration.vue'),

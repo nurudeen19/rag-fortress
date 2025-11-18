@@ -22,6 +22,7 @@ from app.services.user import (
     UserAccountService,
     RolePermissionService,
     PasswordService,
+    InvitationService,
 )
 from app.services.email.builders.specialized import InvitationEmailBuilder
 
@@ -754,8 +755,7 @@ async def handle_invite_user(
     """
     Send invitation to new user.
     
-    Creates a UserInvitation record (not a user yet).
-    User account will be created during signup with the invitation token.
+    Delegates to InvitationService for all business logic.
     
     Args:
         email: Email address to invite
@@ -768,99 +768,115 @@ async def handle_invite_user(
         Dict with success status and message
     """
     try:
-        from app.models.user_invitation import UserInvitation
-        import secrets
-        
-        # Check if role exists
+        # Get role name
         result = await session.execute(select(Role).where(Role.id == role_id))
         role = result.scalar_one_or_none()
         if not role:
-            logger.warning(f"Role {role_id} not found for invitation")
-            return {
-                "success": False,
-                "error": f"Role {role_id} not found"
-            }
+            logger.warning(f"Role {role_id} not found for invitation by admin {admin_user.id}")
+            return {"success": False, "error": "The specified role does not exist"}
         
-        # Check if email is already registered
-        result = await session.execute(select(User).where(User.email == email))
-        existing_user = result.scalar_one_or_none()
-        if existing_user:
-            logger.warning(f"User with email {email} already exists")
-            return {
-                "success": False,
-                "error": "A user with this email already exists"
-            }
-        
-        # Check if there's a pending invitation for this email
-        result = await session.execute(
-            select(UserInvitation).where(
-                UserInvitation.email == email,
-                UserInvitation.status == "pending"
-            )
-        )
-        pending_invitation = result.scalar_one_or_none()
-        if pending_invitation:
-            logger.warning(f"Pending invitation already exists for {email}")
-            return {
-                "success": False,
-                "error": "An invitation has already been sent to this email"
-            }
-        
-        # Generate invitation token
-        invite_token = secrets.token_urlsafe(32)
-        
-        # Calculate expiry using configured days from settings
-        expiry = datetime.now(timezone.utc) + timedelta(days=settings.INVITE_TOKEN_EXPIRE_DAYS)
-        
-        # Create invitation record (not a user)
-        invitation = UserInvitation(
-            token=invite_token,
+        # Create invitation via service
+        service = InvitationService(session)
+        invitation, error = await service.create_invitation(
             email=email,
-            invited_by_id=admin_user.id,
-            status="pending",
-            expires_at=expiry,
-            assigned_role=role.name  # Store role name
+            inviter_id=admin_user.id,
+            role_name=role.name,
+            invitation_link_template=invitation_link_template,
         )
         
-        session.add(invitation)
-        await session.flush()
+        if error:
+            logger.warning(f"Failed to create invitation for {email}: {error}")
+            # Return user-friendly error message
+            if "already exists" in error.lower():
+                return {"success": False, "error": "This email is already registered or has a pending invitation"}
+            return {"success": False, "error": "Could not send invitation. Please try again."}
         
-        # Send invitation email
-        try:
-            from app.services.email.builders.specialized import InvitationEmailBuilder
-            email_builder = InvitationEmailBuilder()
-            
-            # Get organization name from settings if available
-            organization_name = getattr(settings, 'APP_NAME', 'RAG Fortress')
-            
-            await email_builder.build_and_send(
-                recipient_email=email,
-                recipient_name=email.split('@')[0],  # Use email prefix as recipient name
-                inviter_name=admin_user.full_name,
-                organization_name=organization_name,
-                invitation_token=invite_token,
-                custom_message=f"You have been invited to join {organization_name} with the role: {role.name}",
-                invitation_link_template=invitation_link_template
-            )
-        except Exception as email_err:
-            logger.error(f"Failed to send invitation email: {email_err}")
-            # Don't fail the whole operation if email fails
-        
-        # Commit the session
-        await session.commit()
-        
-        logger.info(f"Invitation sent to {email} by {admin_user.username} for role {role.name}")
-        
+        logger.info(f"Invitation sent to {email} by admin {admin_user.id} for role {role.name}")
         return {
             "success": True,
             "message": f"Invitation sent to {email}",
-            "invitation_id": invitation.id
+            "invitation_id": invitation["id"],
         }
-        
     except Exception as e:
-        logger.error(f"Error handling invite user request: {str(e)}", exc_info=True)
-        await session.rollback()
+        logger.error(f"Error creating invitation for {email}: {str(e)}", exc_info=True)
+        return {"success": False, "error": "An unexpected error occurred. Please try again."}
+
+
+async def handle_list_invitations(
+    status_filter: Optional[str],
+    limit: int,
+    offset: int,
+    session: AsyncSession
+) -> dict:
+    """
+    Handle list user invitations request.
+    
+    Delegates to InvitationService for all business logic.
+    
+    Args:
+        status_filter: Filter by invitation status (pending, accepted, expired)
+        limit: Pagination limit
+        offset: Pagination offset
+        session: Database session
+        
+    Returns:
+        Dict with invitations list and total count
+    """
+    try:
+        service = InvitationService(session)
+        result, error = await service.list_invitations(status_filter, limit, offset)
+        
+        if error:
+            logger.error(f"Error listing invitations: {error}")
+            return {"success": False, "error": "Could not retrieve invitations. Please try again."}
+        
         return {
-            "success": False,
-            "error": str(e)
+            "success": True,
+            "total": result.get("total", 0),
+            "limit": result.get("limit", limit),
+            "offset": result.get("offset", offset),
+            "invitations": result.get("invitations", [])
         }
+    except Exception as e:
+        logger.error(f"Error handling list invitations: {str(e)}", exc_info=True)
+        return {"success": False, "error": "Could not retrieve invitations. Please try again."}
+
+
+async def handle_resend_invitation(
+    invitation_id: int,
+    session: AsyncSession
+) -> dict:
+    """
+    Handle resending invitation email.
+    
+    Delegates to InvitationService for all business logic.
+    
+    Args:
+        invitation_id: Invitation ID to resend
+        session: Database session
+        
+    Returns:
+        Dict with success/error status
+    """
+    try:
+        service = InvitationService(session)
+        success, error = await service.resend_invitation(invitation_id)
+        
+        if error:
+            # Provide user-friendly error messages
+            if "not found" in error.lower():
+                logger.warning(f"Attempt to resend non-existent invitation {invitation_id}")
+                return {"success": False, "error": "Invitation not found"}
+            elif "expired" in error.lower():
+                logger.info(f"Attempt to resend expired invitation {invitation_id}")
+                return {"success": False, "error": "Invitation has expired. Please create a new one."}
+            else:
+                logger.warning(f"Failed to resend invitation {invitation_id}: {error}")
+                return {"success": False, "error": "Could not resend invitation. Please try again."}
+        
+        logger.info(f"Successfully resent invitation {invitation_id}")
+        return {"success": True, "message": "Invitation resent successfully"}
+    except Exception as e:
+        logger.error(f"Error resending invitation {invitation_id}: {str(e)}", exc_info=True)
+        return {"success": False, "error": "An unexpected error occurred. Please try again."}
+

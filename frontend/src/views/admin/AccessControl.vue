@@ -63,9 +63,6 @@
           <button @click="handleSearch" class="btn btn-primary">Search</button>
           <button @click="resetFilters" class="btn btn-secondary">Reset</button>
         </div>
-        <button @click="showInviteModal = true" class="btn btn-primary">
-          + Invite User
-        </button>
       </div>
 
       <!-- Users Table -->
@@ -216,14 +213,6 @@
       @close="suspendModal.show = false"
     />
 
-    <!-- Invite Modal -->
-    <UserInviteModal
-      v-if="showInviteModal"
-      :roles="adminStore.roles"
-      @invite="handleInviteUser"
-      @close="showInviteModal = false"
-    />
-
     <!-- Roles Tab -->
     <div v-if="activeTab === 'roles'" class="flex-1 card overflow-auto">
       <div v-if="!adminStore.isLoading" class="space-y-4">
@@ -283,14 +272,12 @@ import { useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
 import { useAuthStore } from '../../stores/auth'
 import UserSuspendModal from '../../components/admin/UserSuspendModal.vue'
-import UserInviteModal from '../../components/admin/UserInviteModal.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
 const authStore = useAuthStore()
 const activeTab = ref('users')
 const searchQuery = ref('')
-const showInviteModal = ref(false)
 const notification = ref({
   show: false,
   type: 'success', // 'success' or 'error'
@@ -375,34 +362,6 @@ async function unsuspendUser(userId) {
   }
   await adminStore.unsuspendUser(userId)
   await loadUsers()
-}
-
-async function handleInviteUser(inviteData) {
-  // Call API to send invite with the invitation link template
-  const result = await adminStore.inviteUser(
-    inviteData.email, 
-    inviteData.roleId,
-    inviteData.invitationLinkTemplate
-  )
-  if (result.success) {
-    notification.value = {
-      show: true,
-      type: 'success',
-      message: `Invitation sent to ${inviteData.email}`
-    }
-    // Auto-hide notification after 3 seconds
-    setTimeout(() => {
-      notification.value.show = false
-    }, 3000)
-    showInviteModal.value = false
-    await loadUsers()
-  } else {
-    notification.value = {
-      show: true,
-      type: 'error',
-      message: result.error || 'Failed to send invitation'
-    }
-  }
 }
 
 onMounted(async () => {

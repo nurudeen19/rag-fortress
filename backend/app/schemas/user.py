@@ -187,6 +187,7 @@ class SignupWithInviteRequest(BaseModel):
     """Schema for signing up with invitation token."""
     
     username: str = Field(..., min_length=3, max_length=255, description="Username")
+    email: str = Field(..., description="Email address")
     first_name: str = Field(..., min_length=1, max_length=100, description="First name")
     last_name: str = Field(..., min_length=1, max_length=100, description="Last name")
     password: str = Field(..., min_length=8, description="Password")

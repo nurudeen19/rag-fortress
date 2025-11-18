@@ -47,27 +47,16 @@
 
           <!-- Form Section -->
           <form v-else @submit.prevent="handleSignup" class="space-y-7">
-            <!-- Error Alert -->
-            <div v-if="error" class="p-4 bg-alert/10 border border-alert/30 rounded-xl text-alert text-sm flex items-start gap-3">
-              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-              </svg>
-              <span>{{ error }}</span>
-            </div>
-
-            <!-- Success Alert -->
-            <div v-if="success" class="p-4 bg-success/10 border border-success/30 rounded-xl text-success text-sm flex items-start gap-3">
-              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-              </svg>
-              <div>
-                <p class="font-medium">Success!</p>
-                <p class="text-xs mt-1">{{ successMessage }}</p>
-              </div>
-            </div>
-
             <!-- Form Fields Section -->
             <div v-if="!success" class="space-y-6">
+              <!-- Error Alert -->
+              <div v-if="error" class="p-4 bg-alert/10 border border-alert/30 rounded-xl text-alert text-sm flex items-start gap-3">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+                </svg>
+                <span>{{ error }}</span>
+              </div>
+
               <!-- Email (Read-only) -->
               <div class="space-y-2.5">
                 <label class="block text-sm font-semibold text-fortress-200">Email Address</label>
@@ -188,28 +177,46 @@
               </div>
             </div>
 
+            <!-- Success Alert -->
+            <div v-else class="p-4 bg-success/10 border border-success/30 rounded-xl text-success text-sm flex items-start gap-3">
+              <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+              </svg>
+              <div>
+                <p class="font-medium">Success!</p>
+                <p class="text-xs mt-1">{{ successMessage }}</p>
+              </div>
+            </div>
+
             <!-- Action Buttons -->
-            <div class="space-y-3 pt-7">
+            <div class="space-y-3 pt-4 border-t border-fortress-700/50">
               <button
                 v-if="!success"
                 type="submit"
-                class="btn btn-primary w-full py-3 font-semibold"
+                class="w-full px-4 py-3 bg-gradient-to-r from-secure to-secure/80 hover:from-secure/90 hover:to-secure/70 disabled:opacity-60 disabled:cursor-not-allowed text-fortress-950 font-bold rounded-lg transition-all duration-200 flex items-center justify-center gap-2"
                 :disabled="loading"
               >
-                <span v-if="loading" class="flex items-center justify-center gap-2">
-                  <div class="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                  Creating Account...
-                </span>
-                <span v-else>Complete Setup</span>
+                <svg v-if="loading" class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {{ loading ? 'Creating Account...' : 'Create Account' }}
               </button>
 
               <router-link
                 v-else
                 to="/login"
-                class="btn btn-primary w-full py-3 font-semibold text-center"
+                class="block w-full px-4 py-3 bg-gradient-to-r from-secure to-secure/80 hover:from-secure/90 hover:to-secure/70 text-fortress-950 font-bold rounded-lg transition-all duration-200 text-center"
               >
-                Go to Login
+                Proceed to Login
               </router-link>
+
+              <p v-if="!success" class="text-xs text-center text-fortress-500">
+                Already have an account?
+                <router-link to="/login" class="text-secure hover:text-secure/80 font-medium transition-colors">
+                  Log In
+                </router-link>
+              </p>
             </div>
           </form>
         </div>

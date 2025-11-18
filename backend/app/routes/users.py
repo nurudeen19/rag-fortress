@@ -59,6 +59,8 @@ from app.handlers.users import (
     handle_create_permission,
     handle_assign_permission_to_role,
     handle_revoke_permission_from_role,
+    handle_list_invitations,
+    handle_resend_invitation,
 )
 
 
@@ -409,3 +411,80 @@ async def revoke_permission_from_role(
         )
     
     return SuccessResponse(message=result.get("message", "Permission revoked"))
+
+
+# ============================================================================
+# INVITATION MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/invitations", response_model=dict)
+async def list_invitations(
+    status: Optional[str] = Query(None, description="Filter by status: pending, accepted, expired"),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    List all user invitations with filtering and pagination.
+    
+    Requires admin role.
+    
+    Query Parameters:
+    - status: Filter by invitation status (pending, accepted, expired)
+    - limit: Number of results per page (1-100, default: 10)
+    - offset: Pagination offset (default: 0)
+    
+    Returns:
+        Paginated list of invitations with their details
+    """
+    from app.handlers.users import handle_list_invitations
+    
+    result = await handle_list_invitations(
+        status_filter=status,
+        limit=limit,
+        offset=offset,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to list invitations")
+        )
+    
+    return result
+
+
+@router.post("/invitations/{invitation_id}/resend", response_model=SuccessResponse)
+async def resend_invitation(
+    invitation_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Resend invitation email for a pending invitation.
+    
+    Requires admin role.
+    
+    Path Parameters:
+    - invitation_id: ID of the invitation to resend
+    
+    Returns:
+        Success message or error
+    """
+    from app.handlers.users import handle_resend_invitation
+    
+    result = await handle_resend_invitation(
+        invitation_id=invitation_id,
+        session=session
+    )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.get("error", "Failed to resend invitation")
+        )
+    
+    return SuccessResponse(message=result.get("message", "Invitation resent"))
+

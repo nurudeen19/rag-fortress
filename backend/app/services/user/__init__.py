@@ -6,6 +6,7 @@ Modular services for handling all user-related operations:
 - Password management (changes, resets, validation)
 - Account management (creation, activation, suspension)
 - Role and permission management (assignment, checking)
+- Invitation management (creation, sending, verification)
 
 All services follow a simple pattern:
 1. Take AsyncSession as constructor parameter
@@ -18,10 +19,13 @@ from app.services.user.auth_service import AuthService
 from app.services.user.password_service import PasswordService
 from app.services.user.user_service import UserAccountService
 from app.services.user.role_permission_service import RolePermissionService
+from app.services.user.invitation_service import InvitationService
 
 __all__ = [
     "AuthService",
     "PasswordService",
     "UserAccountService",
     "RolePermissionService",
+    "InvitationService",
 ]
+
