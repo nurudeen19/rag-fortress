@@ -273,8 +273,9 @@ const loadDocuments = async () => {
   try {
     // Fetch user's own documents
     const statusFilter = currentStatus.value === 'all' ? null : currentStatus.value
-    const response = await api.get('/v1/files/list/my-uploads', {
+    const response = await api.get('/v1/files/list', {
       params: {
+        view: 'my-uploads',
         status_filter: statusFilter,
         limit: pagination.value.limit,
         offset: pagination.value.offset

@@ -93,7 +93,7 @@ class FileUploadResponse(BaseModel):
     is_department_only: bool
     department_id: Optional[int]
     
-    uploaded_by_id: int
+    uploaded_by_id: Optional[int] = None
     file_purpose: Optional[str]
     
     created_at: datetime

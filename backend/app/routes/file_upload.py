@@ -262,6 +262,55 @@ async def delete_file(
     return SuccessResponse(message=result.get("message", "File deleted"))
 
 
+@router.get("/list", response_model=FileUploadListWithCountsResponse)
+async def list_files(
+    view: str = Query("my-uploads", description="View type: 'admin' or 'my-uploads'"),
+    status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
+    limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    List files with status counts and pagination.
+    
+    Query Parameters:
+    - view: 'admin' (all files, requires admin role) or 'my-uploads' (user's files)
+    - status_filter: Filter by status (pending, approved, rejected, processed, failed, or null for all)
+    - limit: Number of items per page (1-200)
+    - offset: Pagination offset
+    """
+    # Check admin role if admin view requested
+    if view == "admin":
+        if user.role.value != "admin":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required to view all files"
+            )
+        result = await handle_list_admin_files(status_filter, limit, offset, session)
+    elif view == "my-uploads":
+        result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid view parameter. Must be 'admin' or 'my-uploads'"
+        )
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Failed to list files")
+        )
+    
+    return FileUploadListWithCountsResponse(
+        counts=result["counts"],
+        total=result["total"],
+        limit=result["limit"],
+        offset=result["offset"],
+        items=[FileUploadResponse(**f) for f in result["files"]]
+    )
+
+
 @router.get("/list/admin", response_model=FileUploadListWithCountsResponse)
 async def list_admin_files(
     status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
@@ -270,7 +319,7 @@ async def list_admin_files(
     admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
-    """List all files for admin with status counts and pagination."""
+    """List all files for admin with status counts and pagination. [DEPRECATED - use /list?view=admin]"""
     result = await handle_list_admin_files(status_filter, limit, offset, session)
     
     if not result.get("success"):
@@ -296,8 +345,14 @@ async def list_my_uploads(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """List user's files with status counts and pagination."""
+    """List user's files with status counts and pagination. [DEPRECATED - use /list?view=my-uploads]"""
     result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Failed to list files")
+        )
     
     if not result.get("success"):
         raise HTTPException(
