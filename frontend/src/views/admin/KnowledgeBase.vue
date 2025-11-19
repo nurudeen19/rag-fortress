@@ -5,6 +5,15 @@
       <div class="flex items-center justify-between mb-2">
         <h1 class="text-3xl font-bold text-fortress-100">Knowledge Base</h1>
         <div class="flex gap-2">
+          <router-link
+            to="/document-upload"
+            class="px-4 py-2 rounded-lg font-medium transition-colors bg-secure hover:bg-secure/90 text-white flex items-center gap-2"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+            Upload Document
+          </router-link>
           <button
             @click="refreshDocuments"
             :disabled="loading"

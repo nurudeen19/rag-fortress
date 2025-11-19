@@ -337,25 +337,29 @@ const loadCSV = async (blob) => {
     
     const text = await blob.text()
     
-    const results = Papa.parse(text, {
-      header: false,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.data && results.data.length > 0) {
-          excelHeaders.value = results.data[0] || []
-          excelRows.value = results.data.slice(1) || []
+    // Use a promise to properly wait for Papa.parse callback
+    return new Promise((resolve, reject) => {
+      Papa.parse(text, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results) => {
+          try {
+            if (results.data && results.data.length > 0) {
+              excelHeaders.value = results.data[0] || []
+              excelRows.value = results.data.slice(1) || []
+            } else {
+              error.value = 'No data found in CSV file'
+            }
+            resolve()
+          } catch (e) {
+            reject(e)
+          }
+        },
+        error: (err) => {
+          reject(err)
         }
-      },
-      error: (error) => {
-        throw error
-      }
+      })
     })
-
-    // If parser doesn't trigger complete callback immediately
-    if (results.data && results.data.length > 0) {
-      excelHeaders.value = results.data[0] || []
-      excelRows.value = results.data.slice(1) || []
-    }
   } catch (err) {
     console.error('CSV loading error:', err)
     error.value = 'Failed to load CSV file'
