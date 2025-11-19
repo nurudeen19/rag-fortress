@@ -74,15 +74,28 @@ export function useRoleAccess() {
         group: 'main',
         badge: '2',
       },
-      {
+    ]
+
+    // Documents view - show Knowledge Base for admins, My Uploads for regular users
+    if (isAdmin.value) {
+      nav.push({
         name: 'Knowledge Base',
         path: '/knowledge-base',
         routeName: 'knowledge-base',
         icon: 'knowledge',
-        roles: ['user', 'manager', 'admin'],
+        roles: ['admin'],
         group: 'main',
-      },
-    ]
+      })
+    } else {
+      nav.push({
+        name: 'My Uploads',
+        path: '/my-uploads',
+        routeName: 'my-uploads',
+        icon: 'documents',
+        roles: ['user', 'manager'],
+        group: 'main',
+      })
+    }
 
     // Manager/Admin only navigation
     if (isManager.value) {

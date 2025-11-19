@@ -193,7 +193,7 @@ const handleLogin = async () => {
   const result = await authStore.login(credentials.value)
   
   if (result.success) {
-    // Redirect to dashboard
+    // Redirect to dashboard (main entry point)
     router.push('/dashboard')
   } else {
     console.log('Login result:', result)

@@ -3,24 +3,21 @@
     <!-- Header -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-2">
-        <h1 class="text-3xl font-bold text-fortress-100">Knowledge Base</h1>
-        <div class="flex gap-2">
-          <button
-            @click="refreshDocuments"
-            :disabled="loading"
-            class="px-4 py-2 rounded-lg font-medium transition-colors bg-fortress-800 hover:bg-fortress-700 disabled:opacity-50 text-fortress-300 flex items-center gap-2"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh
-          </button>
-        </div>
+        <h1 class="text-3xl font-bold text-fortress-100">My Uploads</h1>
+        <router-link
+          to="/document-upload"
+          class="bg-secure hover:bg-secure/90 px-4 py-2 rounded-lg text-white font-medium transition-colors flex items-center space-x-2"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+          </svg>
+          <span>Upload Document</span>
+        </router-link>
       </div>
-      <p class="text-fortress-400">Manage all documents in the knowledge base (Admin only)</p>
+      <p class="text-fortress-400">Manage your uploaded documents</p>
     </div>
 
-    <!-- Status Filter - Ordered with Pending first -->
+    <!-- Status Filter -->
     <div class="mb-6 flex gap-2 flex-wrap">
       <button
         v-for="status in statuses"
@@ -49,7 +46,7 @@
         <svg class="w-8 h-8 animate-spin mx-auto text-secure mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        <p class="text-fortress-400">Loading documents...</p>
+        <p class="text-fortress-400">Loading your documents...</p>
       </div>
 
       <div v-else-if="filteredDocuments.length === 0" class="p-12 text-center">
@@ -64,7 +61,6 @@
           <thead>
             <tr class="border-b border-fortress-700 bg-fortress-900/50">
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">File Name</th>
-              <th class="text-left px-6 py-4 font-semibold text-fortress-100">Uploaded By</th>
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">Size</th>
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">Status</th>
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">Security</th>
@@ -89,7 +85,6 @@
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 text-fortress-300 text-sm">{{ doc.uploaded_by || `User #${doc.uploaded_by_id}` }}</td>
               <td class="px-6 py-4 text-fortress-300">{{ formatFileSize(doc.file_size) }}</td>
               <td class="px-6 py-4">
                 <span :class="['px-3 py-1 rounded-full text-xs font-medium', getStatusBadge(doc.status)]">
@@ -116,42 +111,19 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                     </svg>
                   </button>
-                  
-                  <!-- Approve/Reject buttons for pending documents -->
-                  <template v-if="doc.status === 'pending'">
+
+                  <!-- Resubmit button for rejected documents only -->
+                  <template v-if="doc.status === 'rejected'">
                     <button
-                      @click="approveDocument(doc.id)"
-                      :disabled="loading"
-                      class="p-1 text-success hover:bg-success/10 disabled:opacity-50 rounded transition-colors"
-                      title="Approve"
+                      @click="showResubmitModal(doc)"
+                      class="p-1 text-secure hover:bg-secure/10 rounded transition-colors"
+                      title="Resubmit Document"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </button>
-                    <button
-                      @click="showRejectModal(doc)"
-                      :disabled="loading"
-                      class="p-1 text-alert hover:bg-alert/10 disabled:opacity-50 rounded transition-colors"
-                      title="Reject"
-                    >
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
                     </button>
                   </template>
-
-                  <!-- Delete button -->
-                  <button
-                    @click="deleteDocument(doc.id)"
-                    :disabled="loading"
-                    class="p-1 text-fortress-400 hover:text-alert hover:bg-alert/10 disabled:opacity-50 rounded transition-colors"
-                    title="Delete"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
                 </div>
               </td>
             </tr>
@@ -164,18 +136,16 @@
     <DocumentDetailModal
       v-if="selectedDocument"
       :document="selectedDocument"
-      :is-user-view="false"
+      :is-user-view="true"
       @close="selectedDocument = null"
-      @approve="approveDocument"
-      @reject="showRejectModal"
     />
 
-    <!-- Reject Modal -->
-    <RejectDocumentModal
-      :is-open="showRejectModalFlag"
-      :document="rejectDocument"
-      @close="showRejectModalFlag = false"
-      @submit="handleReject"
+    <!-- Resubmit Modal -->
+    <ResubmitDocumentModal
+      :is-open="showResubmitModalFlag"
+      :document="resubmitDocument"
+      @close="showResubmitModalFlag = false"
+      @submit="handleResubmit"
     />
   </div>
 </template>
@@ -183,25 +153,24 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import api from '../../services/api'
-import DocumentDetailModal from './KnowledgeBase/DocumentDetailModal.vue'
-import RejectDocumentModal from './KnowledgeBase/RejectDocumentModal.vue'
+import DocumentDetailModal from '../admin/KnowledgeBase/DocumentDetailModal.vue'
+import ResubmitDocumentModal from '../admin/KnowledgeBase/ResubmitDocumentModal.vue'
 
 // State
 const documents = ref([])
 const loading = ref(false)
 const error = ref(null)
 const selectedDocument = ref(null)
-const rejectDocument = ref(null)
-const showRejectModalFlag = ref(false)
-const currentStatus = ref('pending')
+const resubmitDocument = ref(null)
+const showResubmitModalFlag = ref(false)
+const currentStatus = ref('all')
 
-// Status filters ordered with pending first for admins
 const statuses = [
-  { value: 'pending', label: 'Pending Approval' },
   { value: 'all', label: 'All Documents' },
+  { value: 'pending', label: 'Pending' },
   { value: 'approved', label: 'Approved' },
-  { value: 'processed', label: 'Processed' },
-  { value: 'rejected', label: 'Rejected' }
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'processed', label: 'Processed' }
 ]
 
 // Computed
@@ -268,82 +237,40 @@ const viewDocument = (doc) => {
   selectedDocument.value = doc
 }
 
-const approveDocument = async (documentId) => {
-  try {
-    loading.value = true
-    const response = await api.post(`/v1/file-upload/${documentId}/approve`)
-    
-    const doc = documents.value.find(d => d.id === documentId)
-    if (doc) {
-      doc.status = 'approved'
-    }
-
-    selectedDocument.value = null
-    console.log('Document approved:', response)
-  } catch (error) {
-    console.error('Approval failed:', error)
-    alert('Failed to approve document')
-  } finally {
-    loading.value = false
-  }
+const showResubmitModal = (doc) => {
+  resubmitDocument.value = doc
+  showResubmitModalFlag.value = true
 }
 
-const showRejectModal = (doc) => {
-  rejectDocument.value = doc
-  showRejectModalFlag.value = true
-}
-
-const handleReject = async (data) => {
+const handleResubmit = async (data) => {
   try {
     loading.value = true
-    const response = await api.post(`/v1/file-upload/${data.documentId}/reject`, {
-      reason: data.reason
-    })
-
     const doc = documents.value.find(d => d.id === data.documentId)
     if (doc) {
-      doc.status = 'rejected'
+      doc.status = 'pending'
+      doc.updated_at = new Date().toISOString()
+      if (data.purpose) doc.file_purpose = data.purpose
+      if (data.securityLevel) doc.security_level = data.securityLevel
     }
 
-    showRejectModalFlag.value = false
+    showResubmitModalFlag.value = false
     selectedDocument.value = null
-    console.log('Document rejected:', response)
+    console.log('Document resubmitted')
   } catch (err) {
-    console.error('Rejection failed:', err)
-    error.value = 'Failed to reject document'
+    console.error('Resubmit failed:', err)
+    error.value = 'Failed to resubmit document'
   } finally {
     loading.value = false
   }
 }
 
-const deleteDocument = async (documentId) => {
-  if (!confirm('Are you sure you want to delete this document?')) return
-
-  try {
-    loading.value = true
-    documents.value = documents.value.filter(d => d.id !== documentId)
-    selectedDocument.value = null
-    console.log('Document deleted')
-  } catch (err) {
-    console.error('Delete failed:', err)
-    error.value = 'Failed to delete document'
-  } finally {
-    loading.value = false
-  }
-}
-
-const refreshDocuments = () => {
-  loadDocuments()
-}
-
-// Load all documents from backend (admin endpoint would need to be created)
+// Load data from backend
 const loadDocuments = async () => {
   loading.value = true
   error.value = null
   try {
-    // For now, fetch pending approval documents
-    // A full admin endpoint that returns all documents would be better
-    const response = await api.get('/v1/file-upload/admin/pending')
+    // Fetch user's own documents
+    const response = await api.get('/v1/file-upload/')
 
     documents.value = response.items.map(item => ({
       id: item.id,
@@ -353,7 +280,6 @@ const loadDocuments = async () => {
       security_level: item.security_level,
       uploaded_at: item.created_at,
       uploaded_by_id: item.uploaded_by_id,
-      uploaded_by: `User #${item.uploaded_by_id}`,
       file_purpose: item.file_purpose,
       chunks_created: item.chunks_created,
       is_processed: item.is_processed,
@@ -363,7 +289,7 @@ const loadDocuments = async () => {
     }))
   } catch (err) {
     console.error('Failed to load documents:', err)
-    error.value = 'Failed to load documents from server'
+    error.value = 'Failed to load your documents'
   } finally {
     loading.value = false
   }
