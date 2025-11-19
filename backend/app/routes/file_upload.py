@@ -128,7 +128,7 @@ async def upload_file(
         )
         
         # Call handler
-        result = await handle_upload_file(file_path, upload_request, user, session)
+        result = await handle_upload_file(file_path, upload_request, user, session, file_hash)
         
         if not result.get("success"):
             await storage.delete_file(file_path)

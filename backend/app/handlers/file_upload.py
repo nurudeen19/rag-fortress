@@ -19,7 +19,8 @@ async def handle_upload_file(
     file_path: str,
     upload_request: FileUploadCreate,
     user: User,
-    session: AsyncSession
+    session: AsyncSession,
+    file_hash: str
 ) -> dict:
     """Upload and create file record."""
     try:
@@ -27,7 +28,7 @@ async def handle_upload_file(
         upload_request.uploaded_by_id = user.id
         
         service = FileUploadService(session)
-        file_upload = await service.create_from_form(upload_request, file_path)
+        file_upload = await service.create_from_form(upload_request, file_path, file_hash)
         
         await session.commit()
         
