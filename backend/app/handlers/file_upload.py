@@ -42,9 +42,14 @@ async def handle_upload_file(
                 "file_name": file_upload.file_name,
                 "file_type": file_upload.file_type,
                 "file_size": file_upload.file_size,
+                "uploaded_by_id": file_upload.uploaded_by_id,
                 "status": file_upload.status.value,
                 "security_level": file_upload.security_level.name,
+                "is_department_only": file_upload.is_department_only,
+                "department_id": file_upload.department_id,
+                "file_purpose": file_upload.file_purpose,
                 "created_at": file_upload.created_at.isoformat(),
+                "updated_at": file_upload.updated_at.isoformat() if file_upload.updated_at else file_upload.created_at.isoformat(),
             }
         }
     except Exception as e:
