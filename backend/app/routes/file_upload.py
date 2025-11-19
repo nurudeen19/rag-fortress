@@ -146,6 +146,49 @@ async def upload_file(
         )
 
 
+@router.get("/list", response_model=FileUploadListWithCountsResponse)
+async def list_files(
+    status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
+    limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
+    offset: int = Query(0, ge=0, description="Pagination offset"),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    List files with status counts and pagination.
+    
+    Automatically returns:
+    - All files (if user is admin)
+    - User's own files (if user is regular user)
+    
+    Query Parameters:
+    - status_filter: Filter by status (pending, approved, rejected, processed, failed, or null for all)
+    - limit: Number of items per page (1-200)
+    - offset: Pagination offset
+    """
+    # Check user role and return appropriate data
+    if user.role.value == "admin":
+        # Admin sees all files
+        result = await handle_list_admin_files(status_filter, limit, offset, session)
+    else:
+        # Regular user sees only their own files
+        result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Failed to list files")
+        )
+    
+    return FileUploadListWithCountsResponse(
+        counts=result["counts"],
+        total=result["total"],
+        limit=result["limit"],
+        offset=result["offset"],
+        items=[FileUploadResponse(**f) for f in result["files"]]
+    )
+
+
 @router.get("/{file_id}", response_model=FileUploadDetailResponse)
 async def get_file(
     file_id: int,
@@ -261,45 +304,3 @@ async def delete_file(
     
     return SuccessResponse(message=result.get("message", "File deleted"))
 
-
-@router.get("/list", response_model=FileUploadListWithCountsResponse)
-async def list_files(
-    status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
-    limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
-    offset: int = Query(0, ge=0, description="Pagination offset"),
-    user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session)
-):
-    """
-    List files with status counts and pagination.
-    
-    Automatically returns:
-    - All files (if user is admin)
-    - User's own files (if user is regular user)
-    
-    Query Parameters:
-    - status_filter: Filter by status (pending, approved, rejected, processed, failed, or null for all)
-    - limit: Number of items per page (1-200)
-    - offset: Pagination offset
-    """
-    # Check user role and return appropriate data
-    if user.role.value == "admin":
-        # Admin sees all files
-        result = await handle_list_admin_files(status_filter, limit, offset, session)
-    else:
-        # Regular user sees only their own files
-        result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
-    
-    if not result.get("success"):
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.get("error", "Failed to list files")
-        )
-    
-    return FileUploadListWithCountsResponse(
-        counts=result["counts"],
-        total=result["total"],
-        limit=result["limit"],
-        offset=result["offset"],
-        items=[FileUploadResponse(**f) for f in result["files"]]
-    )
