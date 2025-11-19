@@ -77,7 +77,7 @@
           </div>
 
           <!-- Actions -->
-          <div v-if="document.status === 'pending' || document.status === 'rejected'" class="flex gap-3 pt-6 border-t border-fortress-700">
+          <div v-if="!isUserView && (document.status === 'pending' || document.status === 'rejected')" class="flex gap-3 pt-6 border-t border-fortress-700">
             <template v-if="document.status === 'pending'">
               <button
                 @click="$emit('approve', document.id)"
@@ -109,6 +109,16 @@
               Close
             </button>
           </div>
+
+          <!-- User View - Close Only -->
+          <div v-else-if="isUserView" class="flex gap-3 pt-6 border-t border-fortress-700">
+            <button
+              @click="$emit('close')"
+              class="w-full px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -120,6 +130,10 @@ defineProps({
   document: {
     type: Object,
     default: null
+  },
+  isUserView: {
+    type: Boolean,
+    default: false
   }
 })
 
