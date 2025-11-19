@@ -96,12 +96,13 @@
             </table>
           </div>
 
-          <!-- DOCX Viewer -->
-          <div
-            v-else-if="fileType === 'docx'"
-            class="bg-fortress-900 p-4 rounded border border-fortress-700 max-w-full overflow-x-auto"
-            ref="docxContainer"
-          ></div>
+          <!-- HTML Viewer (for converted DOCX) -->
+          <iframe
+            v-else-if="fileType === 'html'"
+            :srcDoc="htmlContent"
+            class="w-full border-0 rounded"
+            style="min-height: 500px"
+          ></iframe>
 
           <!-- Markdown Viewer -->
           <div
@@ -130,7 +131,6 @@ import { ref, watch, nextTick } from 'vue'
 import { marked } from 'marked'
 import Papa from 'papaparse'
 import * as pdfjsLib from 'pdfjs-dist'
-import { renderAsync } from 'docx-preview'
 import { Workbook } from 'exceljs'
 import api from '../../../services/api'
 
@@ -171,8 +171,8 @@ let pdfDoc = null
 const excelHeaders = ref([])
 const excelRows = ref([])
 
-// DOCX specific
-const docxContainer = ref(null)
+// HTML specific (for converted DOCX)
+const htmlContent = ref('')
 
 // Markdown specific
 const markdownContent = ref('')
@@ -191,7 +191,9 @@ const detectFileType = (filename) => {
     xlsx: 'excel',
     xls: 'excel',
     csv: 'csv',
-    docx: 'docx',
+    docx: 'html',  // DOCX files converted to HTML on backend
+    doc: 'html',   // DOC files converted to HTML on backend
+    html: 'html',
     md: 'markdown',
     markdown: 'markdown',
     txt: 'txt',
@@ -208,11 +210,13 @@ const loadFile = async () => {
   error.value = null
 
   try {
+    console.log(`Loading file: ${props.fileName} (ID: ${props.fileId})`)
     const response = await api.get(`/v1/files/${props.fileId}/content`, {
       responseType: 'blob'
     })
 
     fileType.value = detectFileType(props.fileName)
+    console.log(`Detected file type: ${fileType.value}`)
 
     // Process based on file type
     switch (fileType.value) {
@@ -225,8 +229,8 @@ const loadFile = async () => {
       case 'csv':
         await loadCSV(response)
         break
-      case 'docx':
-        await loadDOCX(response)
+      case 'html':
+        await loadHTML(response)
         break
       case 'markdown':
         await loadMarkdown(response)
@@ -366,15 +370,19 @@ const loadCSV = async (blob) => {
   }
 }
 
-// DOCX loading
+// DOCX loading (now handled as PDF on backend - this is kept for reference)
 const loadDOCX = async (blob) => {
+  console.log('Note: DOCX files are automatically converted to HTML on the backend')
+}
+
+// HTML loading (for converted DOCX files)
+const loadHTML = async (blob) => {
   try {
-    if (docxContainer.value) {
-      await renderAsync(blob, docxContainer.value)
-    }
+    const text = await blob.text()
+    htmlContent.value = text
   } catch (err) {
-    console.error('DOCX loading error:', err)
-    error.value = 'Failed to load DOCX file'
+    console.error('HTML loading error:', err)
+    error.value = 'Failed to load HTML content'
   }
 }
 

@@ -242,6 +242,7 @@ async def get_file_content(
         "xls": "application/vnd.ms-excel",
         "csv": "text/csv",
         "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "html": "text/html",
         "json": "application/json",
         "md": "text/markdown",
         "txt": "text/plain"
