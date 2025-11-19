@@ -22,7 +22,7 @@
       <button
         v-for="status in statuses"
         :key="status.value"
-        @click="currentStatus = status.value"
+        @click="currentStatus = status.value; onStatusChange()"
         :class="[
           'px-4 py-2 rounded-lg font-medium transition-colors',
           currentStatus === status.value
@@ -158,12 +158,14 @@ import ResubmitDocumentModal from '../admin/KnowledgeBase/ResubmitDocumentModal.
 
 // State
 const documents = ref([])
+const counts = ref({})
 const loading = ref(false)
 const error = ref(null)
 const selectedDocument = ref(null)
 const resubmitDocument = ref(null)
 const showResubmitModalFlag = ref(false)
 const currentStatus = ref('all')
+const pagination = ref({ limit: 50, offset: 0, total: 0 })
 
 const statuses = [
   { value: 'all', label: 'All Documents' },
@@ -228,8 +230,8 @@ const getSecurityBadge = (level) => {
 }
 
 const getStatusCount = (status) => {
-  if (status === 'all') return documents.value.length
-  return documents.value.filter(d => d.status === status).length
+  if (status === 'all') return counts.value.all || 0
+  return counts.value[status] || 0
 }
 
 // Actions
@@ -270,28 +272,58 @@ const loadDocuments = async () => {
   error.value = null
   try {
     // Fetch user's own documents
-    const response = await api.get('/v1/files/')
+    const status = currentStatus.value === 'all' ? null : currentStatus.value
+    const response = await api.get('/v1/files/list/my-uploads', {
+      params: {
+        status: status,
+        limit: pagination.value.limit,
+        offset: pagination.value.offset
+      }
+    })
 
-    documents.value = response.items.map(item => ({
+    // Update counts
+    counts.value = response.counts || {}
+    
+    // Update pagination
+    pagination.value.total = response.total
+    pagination.value.limit = response.limit
+    pagination.value.offset = response.offset
+
+    documents.value = (response.items || []).map(item => ({
       id: item.id,
       file_name: item.file_name,
       file_size: item.file_size,
       status: item.status,
       security_level: item.security_level,
       uploaded_at: item.created_at,
-      uploaded_by_id: item.uploaded_by_id,
-      file_purpose: item.file_purpose,
-      chunks_created: item.chunks_created,
-      is_processed: item.is_processed,
-      processing_error: item.processing_error,
-      retry_count: item.retry_count,
-      processing_time_ms: item.processing_time_ms
+      file_purpose: item.file_purpose
     }))
   } catch (err) {
     console.error('Failed to load documents:', err)
     error.value = 'Failed to load your documents'
   } finally {
     loading.value = false
+  }
+}
+
+// Handle status tab change
+const onStatusChange = () => {
+  pagination.value.offset = 0  // Reset to first page
+  loadDocuments()
+}
+
+// Handle pagination
+const nextPage = () => {
+  if (pagination.value.offset + pagination.value.limit < pagination.value.total) {
+    pagination.value.offset += pagination.value.limit
+    loadDocuments()
+  }
+}
+
+const prevPage = () => {
+  if (pagination.value.offset > 0) {
+    pagination.value.offset -= pagination.value.limit
+    loadDocuments()
   }
 }
 

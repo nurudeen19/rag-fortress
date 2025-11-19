@@ -5,9 +5,8 @@ Core service for tracking uploads, approvals, and processing status.
 
 import uuid
 import json
-from typing import Optional, List
-
-from sqlalchemy import select
+from typing import Optional, List, Dict
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
@@ -254,3 +253,76 @@ class FileUploadService:
         
         logger.info(f"Marked as deleted: {file_upload.file_name}")
         return file_upload
+    
+    async def get_status_counts(self) -> dict:
+        """Get count of files per status."""
+        counts = {}
+        for status in FileStatus:
+            result = await self.session.execute(
+                select(FileUpload).where(FileUpload.status == status)
+            )
+            counts[status.value] = len(result.scalars().all())
+        return counts
+    
+    async def get_by_status(
+        self,
+        status: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> tuple[List[FileUpload], int]:
+        """Get files by status with pagination. Returns (files, total_count)."""
+        query = select(FileUpload)
+        
+        if status and status != "all":
+            try:
+                status_enum = FileStatus(status)
+                query = query.where(FileUpload.status == status_enum)
+            except ValueError:
+                # Invalid status, return empty
+                return [], 0
+        
+        query = query.order_by(FileUpload.created_at.desc())
+        
+        # Get total count
+        count_result = await self.session.execute(query)
+        total = len(count_result.scalars().all())
+        
+        # Get paginated results
+        result = await self.session.execute(
+            query.limit(limit).offset(offset)
+        )
+        files = result.scalars().all()
+        
+        return files, total
+    
+    async def get_user_by_status(
+        self,
+        user_id: int,
+        status: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> tuple[List[FileUpload], int]:
+        """Get user's files by status with pagination. Returns (files, total_count)."""
+        query = select(FileUpload).where(FileUpload.uploaded_by_id == user_id)
+        
+        if status and status != "all":
+            try:
+                status_enum = FileStatus(status)
+                query = query.where(FileUpload.status == status_enum)
+            except ValueError:
+                # Invalid status, return empty
+                return [], 0
+        
+        query = query.order_by(FileUpload.created_at.desc())
+        
+        # Get total count
+        count_result = await self.session.execute(query)
+        total = len(count_result.scalars().all())
+        
+        # Get paginated results
+        result = await self.session.execute(
+            query.limit(limit).offset(offset)
+        )
+        files = result.scalars().all()
+        
+        return files, total

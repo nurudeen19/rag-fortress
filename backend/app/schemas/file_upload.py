@@ -143,6 +143,21 @@ class FileUploadListResponse(BaseModel):
         }
 
 
+class FileUploadListWithCountsResponse(BaseModel):
+    """Response for listing files with status counts."""
+    
+    counts: dict = Field(..., description="Count of files per status")
+    total: int = Field(..., description="Total number of files in current filter")
+    limit: int = Field(..., description="Pagination limit")
+    offset: int = Field(..., description="Pagination offset")
+    items: List[FileUploadResponse]
+    
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat(),
+        }
+
+
 class FileUploadStatsResponse(BaseModel):
     """Response with file upload statistics."""
     

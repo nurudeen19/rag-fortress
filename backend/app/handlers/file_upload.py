@@ -251,3 +251,93 @@ async def handle_delete_file(
         await session.rollback()
         logger.error(f"Delete file failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+async def handle_list_admin_files(
+    status: Optional[str],
+    limit: int,
+    offset: int,
+    session: AsyncSession
+) -> dict:
+    """List all files for admin with status counts and pagination."""
+    try:
+        service = FileUploadService(session)
+        
+        # Get status counts
+        counts = await service.get_status_counts()
+        
+        # Get paginated files
+        files, total = await service.get_by_status(status, limit, offset)
+        
+        return {
+            "success": True,
+            "counts": counts,
+            "files": [
+                {
+                    "id": f.id,
+                    "file_name": f.file_name,
+                    "file_type": f.file_type,
+                    "file_size": f.file_size,
+                    "uploaded_by_id": f.uploaded_by_id,
+                    "status": f.status.value,
+                    "security_level": f.security_level.name,
+                    "file_purpose": f.file_purpose,
+                    "created_at": f.created_at.isoformat(),
+                }
+                for f in files
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        logger.error(f"List admin files failed: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+async def handle_list_user_files_by_status(
+    user_id: int,
+    status: Optional[str],
+    limit: int,
+    offset: int,
+    session: AsyncSession
+) -> dict:
+    """List user's files with status counts and pagination."""
+    try:
+        service = FileUploadService(session)
+        
+        # Get all user's files for counts
+        all_files, _ = await service.get_user_by_status(user_id, None, 10000, 0)
+        
+        # Count by status
+        counts = {}
+        for s in ["pending", "approved", "rejected", "processed", "failed"]:
+            counts[s] = len([f for f in all_files if f.status.value == s])
+        counts["all"] = len(all_files)
+        
+        # Get paginated files with status filter
+        files, total = await service.get_user_by_status(user_id, status, limit, offset)
+        
+        return {
+            "success": True,
+            "counts": counts,
+            "files": [
+                {
+                    "id": f.id,
+                    "file_name": f.file_name,
+                    "file_type": f.file_type,
+                    "file_size": f.file_size,
+                    "status": f.status.value,
+                    "security_level": f.security_level.name,
+                    "file_purpose": f.file_purpose,
+                    "created_at": f.created_at.isoformat(),
+                }
+                for f in files
+            ],
+            "total": total,
+            "limit": limit,
+            "offset": offset
+        }
+    except Exception as e:
+        logger.error(f"List user files by status failed: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
