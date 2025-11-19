@@ -277,14 +277,18 @@ async def handle_list_admin_files(
             "files": [
                 {
                     "id": f.id,
+                    "upload_token": f.upload_token,
                     "file_name": f.file_name,
                     "file_type": f.file_type,
                     "file_size": f.file_size,
                     "uploaded_by_id": f.uploaded_by_id,
                     "status": f.status.value,
                     "security_level": f.security_level.name,
+                    "is_department_only": f.is_department_only,
+                    "department_id": f.department_id,
                     "file_purpose": f.file_purpose,
                     "created_at": f.created_at.isoformat(),
+                    "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
                 }
                 for f in files
             ],
@@ -334,13 +338,18 @@ async def handle_list_user_files_by_status(
             "files": [
                 {
                     "id": f.id,
+                    "upload_token": f.upload_token,
                     "file_name": f.file_name,
                     "file_type": f.file_type,
                     "file_size": f.file_size,
+                    "uploaded_by_id": f.uploaded_by_id,
                     "status": f.status.value,
                     "security_level": f.security_level.name,
+                    "is_department_only": f.is_department_only,
+                    "department_id": f.department_id,
                     "file_purpose": f.file_purpose,
                     "created_at": f.created_at.isoformat(),
+                    "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
                 }
                 for f in files
             ],

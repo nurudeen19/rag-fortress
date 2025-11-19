@@ -344,10 +344,10 @@ const loadDocuments = async () => {
   loading.value = true
   error.value = null
   try {
-    const status = currentStatus.value === 'all' ? null : currentStatus.value
+    const statusFilter = currentStatus.value === 'all' ? null : currentStatus.value
     const response = await api.get('/v1/files/list/admin', {
       params: {
-        status: status,
+        status_filter: statusFilter,
         limit: pagination.value.limit,
         offset: pagination.value.offset
       }
