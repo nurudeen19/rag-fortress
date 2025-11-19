@@ -357,28 +357,7 @@ async def handle_list_user_files_by_status(
         # Get paginated files with status filter
         files, total = await service.get_user_by_status(user_id, status, limit, offset)
         
-        # Collect all uploader IDs
-        uploader_ids = [f.uploaded_by_id for f in files if f.uploaded_by_id]
-        
-        # Fetch all uploaders in a single query (avoid N+1)
-        uploader_map = {}
-        if uploader_ids:
-            from sqlalchemy import select
-            from app.models.user import User
-            
-            uploader_stmt = select(User).where(User.id.in_(uploader_ids))
-            uploader_result = await session.execute(uploader_stmt)
-            uploaders = uploader_result.scalars().all()
-            
-            uploader_map = {
-                u.id: {
-                    "full_name": u.full_name or f"User #{u.id}",
-                    "department_name": u.department.name if u.department else None
-                }
-                for u in uploaders
-            }
-        
-        # Build response with uploader info
+        # Build response without uploader info (user sees only their files)
         files_data = []
         for f in files:
             file_dict = {
@@ -394,8 +373,7 @@ async def handle_list_user_files_by_status(
                 "department_id": f.department_id,
                 "file_purpose": f.file_purpose,
                 "created_at": f.created_at.isoformat(),
-                "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
-                "uploader_info": uploader_map.get(f.uploaded_by_id)
+                "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat()
             }
             files_data.append(file_dict)
         
