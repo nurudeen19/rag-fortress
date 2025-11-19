@@ -271,27 +271,52 @@ async def handle_list_admin_files(
         # Get paginated files
         files, total = await service.get_by_status(status, limit, offset)
         
+        # Collect all uploader IDs
+        uploader_ids = [f.uploaded_by_id for f in files if f.uploaded_by_id]
+        
+        # Fetch all uploaders in a single query (avoid N+1)
+        uploader_map = {}
+        if uploader_ids:
+            from sqlalchemy import select
+            from app.models.user import User
+            
+            uploader_stmt = select(User).where(User.id.in_(uploader_ids))
+            uploader_result = await session.execute(uploader_stmt)
+            uploaders = uploader_result.scalars().all()
+            
+            uploader_map = {
+                u.id: {
+                    "full_name": u.full_name or f"User #{u.id}",
+                    "department_name": u.department.name if u.department else None
+                }
+                for u in uploaders
+            }
+        
+        # Build response with uploader info
+        files_data = []
+        for f in files:
+            file_dict = {
+                "id": f.id,
+                "upload_token": f.upload_token,
+                "file_name": f.file_name,
+                "file_type": f.file_type,
+                "file_size": f.file_size,
+                "uploaded_by_id": f.uploaded_by_id,
+                "status": f.status.value,
+                "security_level": f.security_level.name,
+                "is_department_only": f.is_department_only,
+                "department_id": f.department_id,
+                "file_purpose": f.file_purpose,
+                "created_at": f.created_at.isoformat(),
+                "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
+                "uploader_info": uploader_map.get(f.uploaded_by_id)
+            }
+            files_data.append(file_dict)
+        
         return {
             "success": True,
             "counts": counts,
-            "files": [
-                {
-                    "id": f.id,
-                    "upload_token": f.upload_token,
-                    "file_name": f.file_name,
-                    "file_type": f.file_type,
-                    "file_size": f.file_size,
-                    "uploaded_by_id": f.uploaded_by_id,
-                    "status": f.status.value,
-                    "security_level": f.security_level.name,
-                    "is_department_only": f.is_department_only,
-                    "department_id": f.department_id,
-                    "file_purpose": f.file_purpose,
-                    "created_at": f.created_at.isoformat(),
-                    "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
-                }
-                for f in files
-            ],
+            "files": files_data,
             "total": total,
             "limit": limit,
             "offset": offset
@@ -332,27 +357,52 @@ async def handle_list_user_files_by_status(
         # Get paginated files with status filter
         files, total = await service.get_user_by_status(user_id, status, limit, offset)
         
+        # Collect all uploader IDs
+        uploader_ids = [f.uploaded_by_id for f in files if f.uploaded_by_id]
+        
+        # Fetch all uploaders in a single query (avoid N+1)
+        uploader_map = {}
+        if uploader_ids:
+            from sqlalchemy import select
+            from app.models.user import User
+            
+            uploader_stmt = select(User).where(User.id.in_(uploader_ids))
+            uploader_result = await session.execute(uploader_stmt)
+            uploaders = uploader_result.scalars().all()
+            
+            uploader_map = {
+                u.id: {
+                    "full_name": u.full_name or f"User #{u.id}",
+                    "department_name": u.department.name if u.department else None
+                }
+                for u in uploaders
+            }
+        
+        # Build response with uploader info
+        files_data = []
+        for f in files:
+            file_dict = {
+                "id": f.id,
+                "upload_token": f.upload_token,
+                "file_name": f.file_name,
+                "file_type": f.file_type,
+                "file_size": f.file_size,
+                "uploaded_by_id": f.uploaded_by_id,
+                "status": f.status.value,
+                "security_level": f.security_level.name,
+                "is_department_only": f.is_department_only,
+                "department_id": f.department_id,
+                "file_purpose": f.file_purpose,
+                "created_at": f.created_at.isoformat(),
+                "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
+                "uploader_info": uploader_map.get(f.uploaded_by_id)
+            }
+            files_data.append(file_dict)
+        
         return {
             "success": True,
             "counts": counts,
-            "files": [
-                {
-                    "id": f.id,
-                    "upload_token": f.upload_token,
-                    "file_name": f.file_name,
-                    "file_type": f.file_type,
-                    "file_size": f.file_size,
-                    "uploaded_by_id": f.uploaded_by_id,
-                    "status": f.status.value,
-                    "security_level": f.security_level.name,
-                    "is_department_only": f.is_department_only,
-                    "department_id": f.department_id,
-                    "file_purpose": f.file_purpose,
-                    "created_at": f.created_at.isoformat(),
-                    "updated_at": f.updated_at.isoformat() if f.updated_at else f.created_at.isoformat(),
-                }
-                for f in files
-            ],
+            "files": files_data,
             "total": total,
             "limit": limit,
             "offset": offset

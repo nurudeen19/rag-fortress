@@ -64,6 +64,7 @@
           <thead>
             <tr class="border-b border-fortress-700 bg-fortress-900/50">
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">File Name</th>
+              <th class="text-left px-6 py-4 font-semibold text-fortress-100">File Type</th>
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">Uploaded By</th>
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">Size</th>
               <th class="text-left px-6 py-4 font-semibold text-fortress-100">Status</th>
@@ -89,7 +90,17 @@
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 text-fortress-300 text-sm">{{ doc.uploaded_by || `User #${doc.uploaded_by_id}` }}</td>
+              <td class="px-6 py-4">
+                <span class="px-3 py-1 rounded-full text-xs font-medium bg-fortress-800 text-fortress-200">
+                  {{ formatFileType(doc.file_type) }}
+                </span>
+              </td>
+              <td class="px-6 py-4 text-fortress-300 text-sm">
+                <div>
+                  <p class="font-medium">{{ doc.uploaded_by_name || `User #${doc.uploaded_by_id}` }}</p>
+                  <p v-if="doc.uploaded_by_dept" class="text-xs text-fortress-500">{{ doc.uploaded_by_dept }}</p>
+                </div>
+              </td>
               <td class="px-6 py-4 text-fortress-300">{{ formatFileSize(doc.file_size) }}</td>
               <td class="px-6 py-4">
                 <span :class="['px-3 py-1 rounded-full text-xs font-medium', getStatusBadge(doc.status)]">
@@ -255,6 +266,19 @@ const formatDate = (dateString) => {
   })
 }
 
+const formatFileType = (fileType) => {
+  if (!fileType) return 'Unknown'
+  const typeMap = {
+    'markdown': 'Markdown',
+    'csv': 'CSV',
+    'json': 'JSON',
+    'pdf': 'PDF',
+    'text': 'Text',
+    'excel': 'Excel'
+  }
+  return typeMap[fileType] || fileType.charAt(0).toUpperCase() + fileType.slice(1)
+}
+
 const getStatusLabel = (status) => {
   const map = {
     pending: 'Pending',
@@ -388,11 +412,13 @@ const loadDocuments = async () => {
       id: item.id,
       file_name: item.file_name,
       file_size: item.file_size,
+      file_type: item.file_type,
       status: item.status,
       security_level: item.security_level,
       uploaded_at: item.created_at,
       uploaded_by_id: item.uploaded_by_id,
-      uploaded_by: `User #${item.uploaded_by_id}`,
+      uploaded_by_name: item.uploader_info?.full_name || null,
+      uploaded_by_dept: item.uploader_info?.department_name || null,
       file_purpose: item.file_purpose
     }))
   } catch (err) {

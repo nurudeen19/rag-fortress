@@ -99,6 +99,8 @@ class FileUploadResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
+    uploader_info: Optional[dict] = None
+    
     class Config:
         from_attributes = True
         json_encoders = {

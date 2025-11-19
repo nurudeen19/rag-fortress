@@ -159,6 +159,8 @@ class KnowledgeBaseSeeder(BaseSeed):
         # 1. Company-wide files (root of demo_data)
         # These are org-wide, not department-specific
         for file_path in DEMO_DATA_PATH.glob("*.md"):
+            if file_path.is_dir():
+                continue
             file_info = FileInfo(
                 file_path=file_path,
                 file_type=self._get_file_type(file_path),
@@ -269,14 +271,10 @@ class KnowledgeBaseSeeder(BaseSeed):
     async def _create_file_upload_record(self, file_info: FileInfo, session: AsyncSession) -> FileUpload:
         """Create a FileUpload record from FileInfo.
         
-        Copies file to unified storage location (data/files/knowledge_base/).
-        Stores relative path like 'knowledge_base/filename.md'.
+        Files are stored at: data/files/knowledge_base/demo_data/
+        Store relative path like: knowledge_base/demo_data/filename.md
         """
         try:
-            # Ensure knowledge_base directory exists
-            kb_storage_dir = FILES_BASE_DIR / "knowledge_base"
-            kb_storage_dir.mkdir(parents=True, exist_ok=True)
-            
             file_size = file_info.file_path.stat().st_size
             file_name = file_info.file_path.name
             
@@ -284,24 +282,20 @@ class KnowledgeBaseSeeder(BaseSeed):
             import uuid
             upload_token = f"kb_{uuid.uuid4().hex[:16]}"
             
-            # Copy file to unified storage location
-            dest_path = kb_storage_dir / file_name
-            with open(file_info.file_path, "rb") as src:
-                with open(dest_path, "wb") as dst:
-                    dst.write(src.read())
-            
-            # Store relative path from data/files/
-            rel_path = f"knowledge_base/{file_name}"
-            
             # Calculate hash of the actual file
             file_hash = file_info.compute_hash()
+            
+            # Store relative path from data/files/
+            # File is at: data/files/knowledge_base/demo_data/CODE_OF_CONDUCT.md
+            # Store path as: knowledge_base/demo_data/CODE_OF_CONDUCT.md
+            rel_path = f"knowledge_base/demo_data/{file_name}"
             
             file_upload = FileUpload(
                 upload_token=upload_token,
                 file_name=file_name,
                 file_type=file_info.file_type,
                 file_size=file_size,
-                file_path=rel_path,  # Relative path: knowledge_base/filename.md
+                file_path=rel_path,  # Relative path: knowledge_base/demo_data/filename.md
                 file_hash=file_hash,
                 status=FileStatus.APPROVED,  # Pre-approved for seeding
                 security_level=file_info.security_level,

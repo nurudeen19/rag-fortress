@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from pathlib import Path
 import json
 import csv
+import os
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -60,7 +61,15 @@ class DocumentLoader:
     
     async def _load_and_enrich(self, file_upload: FileUpload) -> Dict[str, Any]:
         """Load file and enrich with metadata from model."""
-        file_path = Path(file_upload.file_path)
+        # Resolve relative path to full path
+        rel_path = file_upload.file_path
+        if not os.path.isabs(rel_path):
+            base_dir = os.getenv("FILES_DIR", "data/files")
+            full_path = os.path.join(base_dir, rel_path)
+        else:
+            full_path = rel_path
+        
+        file_path = Path(full_path)
         
         # Load file content
         content = self._load_file_content(file_path, file_upload.file_type)
