@@ -604,7 +604,7 @@ const handleSubmit = async () => {
 
     // Show success message and redirect to my-uploads
     uploading.value = false
-    router.push('/my-uploads?status=pending')
+    router.push('/my-uploads?status=pending&message=File uploaded successfully!')
   } catch (error) {
     console.error('Upload error:', error)
     fileError.value = error.message || 'Upload failed'

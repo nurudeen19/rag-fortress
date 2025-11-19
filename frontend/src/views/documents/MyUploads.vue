@@ -35,6 +35,21 @@
       </button>
     </div>
 
+    <!-- Success Message -->
+    <div v-if="successMessage" class="mb-6 p-4 bg-success/10 border border-success/30 rounded-lg text-success text-sm flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        {{ successMessage }}
+      </div>
+      <button @click="successMessage = ''" class="text-success hover:text-success/80">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
     <!-- Error Message -->
     <div v-if="error" class="mb-6 p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
       {{ error }}
@@ -175,15 +190,19 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import api from '../../services/api'
 import DocumentDetailModal from '../admin/KnowledgeBase/DocumentDetailModal.vue'
 import ResubmitDocumentModal from '../admin/KnowledgeBase/ResubmitDocumentModal.vue'
+
+const route = useRoute()
 
 // State
 const documents = ref([])
 const counts = ref({})
 const loading = ref(false)
 const error = ref(null)
+const successMessage = ref(null)
 const selectedDocument = ref(null)
 const resubmitDocument = ref(null)
 const showResubmitModalFlag = ref(false)
@@ -352,6 +371,15 @@ const prevPage = () => {
 
 // Load data on mount
 onMounted(() => {
+  // Check for success message in query params
+  if (route.query.message) {
+    successMessage.value = decodeURIComponent(route.query.message)
+    // Auto-dismiss after 5 seconds
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
+  }
+  
   loadDocuments()
 })
 </script>
