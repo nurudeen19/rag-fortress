@@ -282,3 +282,110 @@ def require_role(role_name: str):
         return current_user
     
     return check_role
+
+
+def require_admin():
+    """
+    Create a dependency that requires admin role.
+    
+    Usage:
+        @router.delete("/files/{file_id}")
+        async def delete_file(
+            file_id: int,
+            admin: User = Depends(require_admin())
+        ):
+            # Only admins can access
+            pass
+    
+    Returns:
+        Dependency function
+    """
+    return require_role("admin")
+
+
+def require_user():
+    """
+    Create a dependency that requires user role.
+    
+    Usage:
+        @router.post("/files/upload")
+        async def upload_file(
+            user: User = Depends(require_user())
+        ):
+            # Only users (non-anonymous) can access
+            pass
+    
+    Returns:
+        Dependency function
+    """
+    return require_role("user")
+
+
+def require_any_role(*role_names: str):
+    """
+    Create a dependency that checks if user has ANY of the specified roles.
+    
+    Usage:
+        @router.get("/files")
+        async def list_files(
+            user: User = Depends(require_any_role("admin", "viewer"))
+        ):
+            # Admin or viewer can access
+            pass
+    
+    Args:
+        role_names: One or more role names to check
+    
+    Returns:
+        Dependency function
+    """
+    async def check_any_role(
+        current_user: User = Depends(get_current_user)
+    ) -> User:
+        if not any(current_user.has_role(role) for role in role_names):
+            logger.warning(
+                f"User {current_user.id} denied access: missing any of roles {role_names}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires one of these roles: {', '.join(role_names)}"
+            )
+        
+        return current_user
+    
+    return check_any_role
+
+
+def require_all_roles(*role_names: str):
+    """
+    Create a dependency that checks if user has ALL of the specified roles.
+    
+    Usage:
+        @router.post("/critical-operation")
+        async def critical_action(
+            user: User = Depends(require_all_roles("admin", "auditor"))
+        ):
+            # Only users with both admin AND auditor roles can access
+            pass
+    
+    Args:
+        role_names: One or more role names to check
+    
+    Returns:
+        Dependency function
+    """
+    async def check_all_roles(
+        current_user: User = Depends(get_current_user)
+    ) -> User:
+        if not all(current_user.has_role(role) for role in role_names):
+            logger.warning(
+                f"User {current_user.id} denied access: missing all of roles {role_names}"
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This action requires all of these roles: {', '.join(role_names)}"
+            )
+        
+        return current_user
+    
+    return check_all_roles

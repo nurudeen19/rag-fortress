@@ -166,8 +166,9 @@ async def list_files(
     - limit: Number of items per page (1-200)
     - offset: Pagination offset
     """
-    # Check user role and return appropriate data
-    if user.role.value == "admin":
+    # Handler automatically checks user role and returns appropriate data
+    # Admin sees all files, regular users see only their own
+    if user.has_role("admin"):
         # Admin sees all files
         result = await handle_list_admin_files(status_filter, limit, offset, session)
     else:
