@@ -165,7 +165,14 @@ class UserAccountService:
             Tuple of (success, error_message)
         """
         try:
-            user = await self.session.get(User, user_id)
+            from sqlalchemy import select
+            
+            # Fetch user with explicit query
+            result = await self.session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
             if not user:
                 return False, "User not found"
             
@@ -173,12 +180,13 @@ class UserAccountService:
                 return True, None  # Already suspended
             
             user.suspend_account(reason)
-            await self.session.flush()
+            await self.session.commit()
             
             logger.warning(f"User account suspended: '{user.username}' - Reason: {reason}")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Suspend user error: {e}")
             return False, "Failed to suspend account"
     
@@ -193,7 +201,14 @@ class UserAccountService:
             Tuple of (success, error_message)
         """
         try:
-            user = await self.session.get(User, user_id)
+            from sqlalchemy import select
+            
+            # Fetch user with explicit query
+            result = await self.session.execute(
+                select(User).where(User.id == user_id)
+            )
+            user = result.scalar_one_or_none()
+            
             if not user:
                 return False, "User not found"
             
@@ -201,12 +216,13 @@ class UserAccountService:
                 return True, None  # Not suspended
             
             user.unsuspend_account()
-            await self.session.flush()
+            await self.session.commit()
             
             logger.info(f"User account unsuspended: '{user.username}'")
             return True, None
         
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"Unsuspend user error: {e}")
             return False, "Failed to unsuspend account"
     

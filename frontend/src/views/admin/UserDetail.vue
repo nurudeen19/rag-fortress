@@ -252,6 +252,78 @@
         <router-link to="/access-control" class="btn btn-primary">Back to Access Control</router-link>
       </div>
     </div>
+
+    <!-- Suspension Modal -->
+    <div v-if="showSuspensionModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-fortress-900 rounded-lg p-6 max-w-md w-full mx-4 border border-fortress-700">
+        <h3 class="text-xl font-semibold text-fortress-100 mb-4">Suspend User</h3>
+        
+        <div class="mb-4 p-3 bg-alert/10 border border-alert/30 rounded text-alert text-sm">
+          <p class="font-semibold">Warning:</p>
+          <p class="mt-1">You are about to suspend <span class="font-medium">{{ user.username }}</span>.</p>
+          <p class="mt-1">Suspended users will not be able to access the system.</p>
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-fortress-200 mb-2">Suspension Reason</label>
+          <textarea
+            v-model="suspensionForm.reason"
+            placeholder="Enter the reason for suspension..."
+            class="w-full input min-h-24 text-sm"
+          ></textarea>
+          <p class="text-xs text-fortress-400 mt-1">This reason will be recorded and visible to administrators.</p>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            @click="showSuspensionModal = false"
+            class="flex-1 px-4 py-2 bg-fortress-800 hover:bg-fortress-700 text-fortress-200 rounded-lg transition-colors text-sm font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmSuspension"
+            :disabled="!suspensionForm.reason.trim()"
+            class="flex-1 px-4 py-2 bg-alert hover:bg-alert/80 disabled:bg-fortress-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium"
+          >
+            Suspend User
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Unsuspension Modal -->
+    <div v-if="showUnsuspensionModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div class="bg-fortress-900 rounded-lg p-6 max-w-md w-full mx-4 border border-fortress-700">
+        <h3 class="text-xl font-semibold text-fortress-100 mb-4">Unsuspend User</h3>
+        
+        <div class="mb-4 p-3 bg-secure/10 border border-secure/30 rounded text-secure text-sm">
+          <p class="font-semibold">Confirmation:</p>
+          <p class="mt-1">You are about to unsuspend <span class="font-medium">{{ user.username }}</span>.</p>
+          <p class="mt-1">This user will regain access to the system.</p>
+        </div>
+
+        <div v-if="user.suspension_reason" class="mb-4 p-3 bg-fortress-800/50 rounded text-sm">
+          <p class="text-xs uppercase text-fortress-500 mb-2">Original Suspension Reason:</p>
+          <p class="text-fortress-300">{{ user.suspension_reason }}</p>
+        </div>
+
+        <div class="flex gap-3">
+          <button
+            @click="showUnsuspensionModal = false"
+            class="flex-1 px-4 py-2 bg-fortress-800 hover:bg-fortress-700 text-fortress-200 rounded-lg transition-colors text-sm font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmUnsuspension"
+            class="flex-1 px-4 py-2 bg-success hover:bg-success/80 text-white rounded-lg transition-colors text-sm font-medium"
+          >
+            Unsuspend User
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -269,6 +341,11 @@ const userId = parseInt(route.params.userId)
 const selectedRoleToAssign = ref('')
 const selectedDeptToManage = ref('')
 const departments = ref([])
+const showSuspensionModal = ref(false)
+const showUnsuspensionModal = ref(false)
+const suspensionForm = ref({
+  reason: ''
+})
 const userManagedDepartments = computed(() => {
   return departments.value.filter(d => d.manager_id === userId)
 })
@@ -345,21 +422,39 @@ async function removeManager(deptId) {
 }
 
 async function suspendUser() {
-  const reason = prompt('Enter suspension reason (optional):')
-  if (reason === null) return
-  
-  const result = await adminStore.suspendUser(userId, reason)
+  // Reset form and open modal
+  suspensionForm.value = {
+    reason: ''
+  }
+  showSuspensionModal.value = true
+}
+
+async function confirmSuspension() {
+  if (!suspensionForm.value.reason.trim()) {
+    alert('Suspension reason is required')
+    return
+  }
+
+  const result = await adminStore.suspendUser(userId, suspensionForm.value.reason)
   if (result.success) {
+    showSuspensionModal.value = false
     await loadUserDetails()
+  } else {
+    alert(`Failed to suspend user: ${result.error}`)
   }
 }
 
 async function unsuspendUser() {
-  if (!confirm('Are you sure you want to unsuspend this user?')) return
-  
+  showUnsuspensionModal.value = true
+}
+
+async function confirmUnsuspension() {
   const result = await adminStore.unsuspendUser(userId)
   if (result.success) {
+    showUnsuspensionModal.value = false
     await loadUserDetails()
+  } else {
+    alert(`Failed to unsuspend user: ${result.error}`)
   }
 }
 
