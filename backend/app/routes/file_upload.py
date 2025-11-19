@@ -100,7 +100,7 @@ async def upload_file(
         
         # Extract fields from structured data if applicable
         available_fields = []
-        if file_type in ("json", "csv", "excel"):
+        if file_type in ("json", "csv", "xlsx", "xls"):
             try:
                 available_fields = StructuredDataParser.extract_fields(file_path, file_type)
                 

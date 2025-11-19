@@ -139,7 +139,7 @@ class StructuredDataParser:
             fields = StructuredDataParser.parse_json(full_path)
         elif file_type == "csv":
             fields = StructuredDataParser.parse_csv(full_path)
-        elif file_type in ("excel", "xlsx", "xls"):
+        elif file_type in ("xlsx", "xls"):
             fields = StructuredDataParser.parse_excel(full_path)
         else:
             raise ValueError(f"Unsupported file type for parsing: {file_type}")

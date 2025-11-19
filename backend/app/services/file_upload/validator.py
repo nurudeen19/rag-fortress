@@ -22,27 +22,31 @@ SUPPORTED_FORMATS: Dict[str, Set[str]] = {
         "mimes": {"text/csv", "application/csv"},
         "extensions": {"csv"}
     },
-    "excel": {
-        "mimes": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                  "application/vnd.ms-excel",
-                  "application/x-ms-excel"},
-        "extensions": {"xlsx", "xls"}
+    "xlsx": {
+        "mimes": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        "extensions": {"xlsx"}
+    },
+    "xls": {
+        "mimes": {"application/vnd.ms-excel", "application/x-ms-excel"},
+        "extensions": {"xls"}
     },
     "pdf": {
         "mimes": {"application/pdf"},
         "extensions": {"pdf"}
     },
-    "word": {
-        "mimes": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                  "application/msword",
-                  "application/x-msword"},
-        "extensions": {"docx", "doc"}
+    "docx": {
+        "mimes": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        "extensions": {"docx"}
     },
-    "text": {
+    "doc": {
+        "mimes": {"application/msword", "application/x-msword"},
+        "extensions": {"doc"}
+    },
+    "txt": {
         "mimes": {"text/plain"},
         "extensions": {"txt"}
     },
-    "markdown": {
+    "md": {
         "mimes": {"text/markdown", "text/x-markdown", "application/x-markdown", "text/plain"},
         "extensions": {"md"}
     }
