@@ -264,14 +264,14 @@ async def delete_file(
 
 @router.get("/list/admin", response_model=FileUploadListWithCountsResponse)
 async def list_admin_files(
-    status: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
+    status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
     limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """List all files for admin with status counts and pagination."""
-    result = await handle_list_admin_files(status, limit, offset, session)
+    result = await handle_list_admin_files(status_filter, limit, offset, session)
     
     if not result.get("success"):
         raise HTTPException(
@@ -290,14 +290,14 @@ async def list_admin_files(
 
 @router.get("/list/my-uploads", response_model=FileUploadListWithCountsResponse)
 async def list_my_uploads(
-    status: Optional[str] = Query(None, description="Filter by status"),
+    status_filter: Optional[str] = Query(None, description="Filter by status"),
     limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
     """List user's files with status counts and pagination."""
-    result = await handle_list_user_files_by_status(user.id, status, limit, offset, session)
+    result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
     
     if not result.get("success"):
         raise HTTPException(

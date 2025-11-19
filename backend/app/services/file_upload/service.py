@@ -5,7 +5,7 @@ Core service for tracking uploads, approvals, and processing status.
 
 import uuid
 import json
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -259,9 +259,9 @@ class FileUploadService:
         counts = {}
         for status in FileStatus:
             result = await self.session.execute(
-                select(FileUpload).where(FileUpload.status == status)
+                select(func.count(FileUpload.id)).where(FileUpload.status == status)
             )
-            counts[status.value] = len(result.scalars().all())
+            counts[status.value] = result.scalar() or 0
         return counts
     
     async def get_by_status(
@@ -269,23 +269,23 @@ class FileUploadService:
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
-    ) -> tuple[List[FileUpload], int]:
+    ) -> Tuple[List[FileUpload], int]:
         """Get files by status with pagination. Returns (files, total_count)."""
-        query = select(FileUpload)
-        
         if status and status != "all":
             try:
                 status_enum = FileStatus(status)
-                query = query.where(FileUpload.status == status_enum)
+                count_query = select(func.count(FileUpload.id)).where(FileUpload.status == status_enum)
+                query = select(FileUpload).where(FileUpload.status == status_enum).order_by(FileUpload.created_at.desc())
             except ValueError:
                 # Invalid status, return empty
                 return [], 0
+        else:
+            count_query = select(func.count(FileUpload.id))
+            query = select(FileUpload).order_by(FileUpload.created_at.desc())
         
-        query = query.order_by(FileUpload.created_at.desc())
-        
-        # Get total count
-        count_result = await self.session.execute(query)
-        total = len(count_result.scalars().all())
+        # Get total count efficiently
+        count_result = await self.session.execute(count_query)
+        total = count_result.scalar() or 0
         
         # Get paginated results
         result = await self.session.execute(
@@ -301,23 +301,37 @@ class FileUploadService:
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
-    ) -> tuple[List[FileUpload], int]:
+    ) -> Tuple[List[FileUpload], int]:
         """Get user's files by status with pagination. Returns (files, total_count)."""
-        query = select(FileUpload).where(FileUpload.uploaded_by_id == user_id)
-        
         if status and status != "all":
             try:
                 status_enum = FileStatus(status)
-                query = query.where(FileUpload.status == status_enum)
+                count_query = select(func.count(FileUpload.id)).where(
+                    FileUpload.uploaded_by_id == user_id,
+                    FileUpload.status == status_enum
+                )
+                query = select(FileUpload).where(
+                    FileUpload.uploaded_by_id == user_id,
+                    FileUpload.status == status_enum
+                ).order_by(FileUpload.created_at.desc())
             except ValueError:
                 # Invalid status, return empty
                 return [], 0
+        else:
+            count_query = select(func.count(FileUpload.id)).where(FileUpload.uploaded_by_id == user_id)
+            query = select(FileUpload).where(FileUpload.uploaded_by_id == user_id).order_by(FileUpload.created_at.desc())
         
-        query = query.order_by(FileUpload.created_at.desc())
+        # Get total count efficiently
+        count_result = await self.session.execute(count_query)
+        total = count_result.scalar() or 0
         
-        # Get total count
-        count_result = await self.session.execute(query)
-        total = len(count_result.scalars().all())
+        # Get paginated results
+        result = await self.session.execute(
+            query.limit(limit).offset(offset)
+        )
+        files = result.scalars().all()
+        
+        return files, total
         
         # Get paginated results
         result = await self.session.execute(

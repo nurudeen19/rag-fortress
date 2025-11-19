@@ -91,32 +91,45 @@ def setup_logging(
     # File handler (rotating) - WITHOUT colors
     log_file_path = log_file or settings.LOG_FILE
     if log_file_path:
-        # Create logs directory if it doesn't exist
-        log_path = Path(log_file_path)
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Rotating file handler (10MB per file, keep 5 backups)
-        file_handler = logging.handlers.RotatingFileHandler(
-            log_file_path,
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5,
-            encoding='utf-8'
-        )
-        file_handler.setLevel(logging.DEBUG)
-        
-        # JSON-like format for file logs (easier to parse) - NO COLORS via PlainFormatter
-        file_format = PlainFormatter(
-            '{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", '
-            '"function": "%(funcName)s", "line": %(lineno)d, "message": "%(message)s"}',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        file_handler.setFormatter(file_format)
-        logger.addHandler(file_handler)
+        try:
+            # Create logs directory if it doesn't exist
+            log_path = Path(log_file_path)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Rotating file handler (10MB per file, keep 5 backups)
+            file_handler = logging.handlers.RotatingFileHandler(
+                str(log_path),  # Convert Path to string for compatibility
+                maxBytes=10 * 1024 * 1024,  # 10MB
+                backupCount=5,
+                encoding='utf-8',
+                delay=False  # Don't delay file creation
+            )
+            file_handler.setLevel(logging.DEBUG)
+            
+            # JSON-like format for file logs (easier to parse) - NO COLORS via PlainFormatter
+            file_format = PlainFormatter(
+                '{"time": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", '
+                '"function": "%(funcName)s", "line": %(lineno)d, "message": "%(message)s"}',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            file_handler.setFormatter(file_format)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            # If file handler fails, still output to console
+            console_handler.emit(logging.LogRecord(
+                logger_name, logging.WARNING,
+                __file__, 0,
+                f"Failed to set up file logging: {e}",
+                (), None
+            ))
     
     # Don't propagate to root logger
     logger.propagate = False
     
     return logger
+
+
+_default_logger = None
 
 
 def get_logger(name: str) -> logging.Logger:
@@ -129,6 +142,12 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         Logger instance
     """
+    global _default_logger
+    
+    # Ensure default logger is initialized
+    if _default_logger is None:
+        _default_logger = setup_logging()
+    
     # If it's a module name, just get that logger
     if '.' in name:
         logger = logging.getLogger(name)
@@ -136,19 +155,31 @@ def get_logger(name: str) -> logging.Logger:
         # Otherwise, namespace it under the app
         logger = logging.getLogger(f"{settings.APP_NAME}.{name}")
     
-    # If no handlers, set up logging
-    if not logger.handlers and not logging.getLogger().handlers:
-        setup_logging()
-    
-    # Ensure logger propagates to root if it has no handlers
+    # If logger has no handlers, add handlers from default logger
     if not logger.handlers:
-        logger.propagate = True
+        for handler in _default_logger.handlers:
+            logger.addHandler(handler)
+        logger.setLevel(_default_logger.level)
+    
+    # Don't propagate to root logger
+    logger.propagate = False
     
     return logger
 
 
-# Create default logger
-default_logger = setup_logging()
+# Initialize default logger on first import
+try:
+    default_logger = setup_logging()
+except Exception as e:
+    # If setup fails, create a minimal console logger
+    print(f"Warning: Failed to initialize logging system: {e}")
+    default_logger = logging.getLogger(settings.APP_NAME)
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    ))
+    default_logger.addHandler(console_handler)
+    default_logger.setLevel(logging.INFO)
 
 
 # Suppress noisy third-party loggers

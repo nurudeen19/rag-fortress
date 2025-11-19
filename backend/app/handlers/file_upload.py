@@ -3,10 +3,12 @@
 import os
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 
 from app.services.file_upload import FileUploadService
 from app.schemas.file_upload import FileUploadCreate, FileUploadApproveRequest, FileUploadRejectRequest
 from app.models.user import User
+from app.models.file_upload import FileUpload, FileStatus
 from app.core import get_logger
 
 
@@ -306,14 +308,22 @@ async def handle_list_user_files_by_status(
     try:
         service = FileUploadService(session)
         
-        # Get all user's files for counts
-        all_files, _ = await service.get_user_by_status(user_id, None, 10000, 0)
-        
-        # Count by status
+        # Get status counts for this user
         counts = {}
-        for s in ["pending", "approved", "rejected", "processed", "failed"]:
-            counts[s] = len([f for f in all_files if f.status.value == s])
-        counts["all"] = len(all_files)
+        total_user_files = 0
+        
+        for s in FileStatus:
+            result = await session.execute(
+                select(func.count(FileUpload.id)).where(
+                    FileUpload.uploaded_by_id == user_id,
+                    FileUpload.status == s
+                )
+            )
+            count = result.scalar() or 0
+            counts[s.value] = count
+            total_user_files += count
+        
+        counts["all"] = total_user_files
         
         # Get paginated files with status filter
         files, total = await service.get_user_by_status(user_id, status, limit, offset)
