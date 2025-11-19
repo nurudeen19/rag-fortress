@@ -270,7 +270,7 @@ const loadDocuments = async () => {
   error.value = null
   try {
     // Fetch user's own documents
-    const response = await api.get('/v1/file-upload/')
+    const response = await api.get('/v1/files/')
 
     documents.value = response.items.map(item => ({
       id: item.id,

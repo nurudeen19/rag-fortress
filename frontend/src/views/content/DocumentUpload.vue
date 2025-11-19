@@ -362,6 +362,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import api from '../../services/api'
 
 const router = useRouter()
 
@@ -592,29 +593,18 @@ const handleSubmit = async () => {
       formData.append('field_selection', JSON.stringify(form.selectedFields))
     }
 
-    // TODO: Call your backend API here
-    // const response = await fetch('/api/v1/files/upload', {
-    //   method: 'POST',
-    //   body: formData,
-    //   headers: {
-    //     'Authorization': `Bearer ${token}`
-    //   }
-    // })
-    // const data = await response.json()
-
-    console.log('Upload data:', {
-      file: form.file.name,
-      purpose: form.purpose,
-      security_level: form.securityLevel,
-      department: form.department,
-      is_department_only: form.isDepartmentOnly,
-      selected_fields: form.selectedFields,
-      file_type: form.file.type
+    // Call backend API to upload file
+    const response = await api.post('/v1/files/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
     })
 
-    // Show success message and redirect
+    console.log('Upload successful:', response)
+
+    // Show success message and redirect to my-uploads
     uploading.value = false
-    router.push('/knowledge-base?status=pending')
+    router.push('/my-uploads?status=pending')
   } catch (error) {
     console.error('Upload error:', error)
     fileError.value = error.message || 'Upload failed'

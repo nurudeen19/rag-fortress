@@ -4,7 +4,7 @@ import os
 from typing import Optional, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.file_upload import FileUploadService, FileStorage
+from app.services.file_upload import FileUploadService
 from app.schemas.file_upload import FileUploadCreate, FileUploadApproveRequest, FileUploadRejectRequest
 from app.models.user import User
 from app.core import get_logger

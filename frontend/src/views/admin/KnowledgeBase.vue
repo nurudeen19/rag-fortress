@@ -271,7 +271,7 @@ const viewDocument = (doc) => {
 const approveDocument = async (documentId) => {
   try {
     loading.value = true
-    const response = await api.post(`/v1/file-upload/${documentId}/approve`)
+    const response = await api.post(`/v1/files/${documentId}/approve`)
     
     const doc = documents.value.find(d => d.id === documentId)
     if (doc) {
@@ -296,7 +296,7 @@ const showRejectModal = (doc) => {
 const handleReject = async (data) => {
   try {
     loading.value = true
-    const response = await api.post(`/v1/file-upload/${data.documentId}/reject`, {
+    const response = await api.post(`/v1/files/${data.documentId}/reject`, {
       reason: data.reason
     })
 
@@ -343,7 +343,7 @@ const loadDocuments = async () => {
   try {
     // For now, fetch pending approval documents
     // A full admin endpoint that returns all documents would be better
-    const response = await api.get('/v1/file-upload/admin/pending')
+    const response = await api.get('/v1/files/admin/pending')
 
     documents.value = response.items.map(item => ({
       id: item.id,
