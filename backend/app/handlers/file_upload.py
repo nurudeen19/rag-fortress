@@ -360,3 +360,48 @@ async def handle_list_user_files_by_status(
     except Exception as e:
         logger.error(f"List user files by status failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
+
+
+async def handle_get_file_content(
+    file_id: int,
+    user: User,
+    session: AsyncSession
+) -> dict:
+    """Get file content for viewing (supports text, JSON, CSV, Excel, PDF, DOCX)."""
+    try:
+        service = FileUploadService(session)
+        
+        # Get file record
+        file_record = await session.get(FileUpload, file_id)
+        if not file_record:
+            return {"success": False, "error": "File not found"}
+        
+        # Check authorization
+        is_owner = file_record.uploaded_by_id == user.id
+        is_admin = user.has_role("admin")
+        
+        if not (is_owner or is_admin):
+            return {"success": False, "error": "Access denied"}
+        
+        # Read file from disk
+        file_path = file_record.file_path
+        
+        try:
+            with open(file_path, "rb") as f:
+                file_content = f.read()
+            
+            logger.info(f"Retrieved file content for file_id={file_id}, user_id={user.id}")
+            
+            return {
+                "success": True,
+                "content": file_content,
+                "filename": file_record.file_name,
+                "file_type": file_record.file_type
+            }
+        except FileNotFoundError:
+            logger.error(f"File not found on disk: {file_path}")
+            return {"success": False, "error": "File not found on disk"}
+    
+    except Exception as e:
+        logger.error(f"Get file content failed: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}

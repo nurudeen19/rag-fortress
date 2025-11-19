@@ -76,6 +76,20 @@
             </p>
           </div>
 
+          <!-- View File Button -->
+          <div class="flex gap-3 pt-4 border-t border-fortress-700">
+            <button
+              @click="openFileViewer"
+              class="flex-1 px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+            >
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              View File
+            </button>
+          </div>
+
           <!-- Actions -->
           <div v-if="!isUserView && (document.status === 'pending' || document.status === 'rejected')" class="flex gap-3 pt-6 border-t border-fortress-700">
             <template v-if="document.status === 'pending'">
@@ -123,10 +137,21 @@
       </div>
     </div>
   </transition>
+
+  <!-- File Viewer Modal -->
+  <FileViewerModal
+    :is-open="showFileViewer"
+    :file-id="document?.id"
+    :file-name="document?.file_name"
+    @close="showFileViewer = false"
+  />
 </template>
 
 <script setup>
-defineProps({
+import { ref } from 'vue'
+import FileViewerModal from './FileViewerModal.vue'
+
+const props = defineProps({
   document: {
     type: Object,
     default: null
@@ -138,6 +163,12 @@ defineProps({
 })
 
 defineEmits(['close', 'approve', 'reject', 'resubmit'])
+
+const showFileViewer = ref(false)
+
+const openFileViewer = () => {
+  showFileViewer.value = true
+}
 
 const formatFileSize = (bytes) => {
   if (!bytes) return '0 B'

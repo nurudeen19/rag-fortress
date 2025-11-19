@@ -5,6 +5,7 @@ import json
 import tempfile
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Form
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
@@ -32,6 +33,7 @@ from app.handlers.file_upload import (
     handle_delete_file,
     handle_list_admin_files,
     handle_list_user_files_by_status,
+    handle_get_file_content,
 )
 from app.services.file_upload import FileValidator, FileStorage, StructuredDataParser
 
@@ -206,6 +208,50 @@ async def get_file(
         )
     
     return FileUploadDetailResponse(**result["file"])
+
+
+@router.get("/{file_id}/content")
+async def get_file_content(
+    file_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Get file content for viewing in browser.
+    Supports: PDF, Excel, CSV, DOCX, JSON, Markdown, TXT
+    """
+    result = await handle_get_file_content(file_id, user, session)
+    
+    if not result.get("success"):
+        status_code = status.HTTP_403_FORBIDDEN if "Access denied" in result.get("error", "") else status.HTTP_404_NOT_FOUND
+        raise HTTPException(
+            status_code=status_code,
+            detail=result.get("error", "Failed to retrieve file")
+        )
+    
+    # Return file as streaming response
+    file_content = result["content"]
+    filename = result["filename"]
+    
+    # Determine media type based on file extension
+    file_ext = filename.lower().split(".")[-1]
+    media_types = {
+        "pdf": "application/pdf",
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "xls": "application/vnd.ms-excel",
+        "csv": "text/csv",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "json": "application/json",
+        "md": "text/markdown",
+        "txt": "text/plain"
+    }
+    media_type = media_types.get(file_ext, "application/octet-stream")
+    
+    return StreamingResponse(
+        iter([file_content]),
+        media_type=media_type,
+        headers={"Content-Disposition": f"inline; filename={filename}"}
+    )
 
 
 @router.get("/", response_model=FileUploadListResponse)
