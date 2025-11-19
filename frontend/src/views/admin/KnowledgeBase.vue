@@ -198,6 +198,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useRoleAccess } from '../../composables/useRoleAccess'
+import api from '../../services/api'
 import DocumentDetailModal from './KnowledgeBase/DocumentDetailModal.vue'
 import RejectDocumentModal from './KnowledgeBase/RejectDocumentModal.vue'
 import ResubmitDocumentModal from './KnowledgeBase/ResubmitDocumentModal.vue'
@@ -209,6 +210,7 @@ const { isAdmin } = useRoleAccess()
 // State
 const documents = ref([])
 const loading = ref(false)
+const error = ref(null)
 const selectedDocument = ref(null)
 const rejectDocument = ref(null)
 const resubmitDocument = ref(null)
@@ -285,6 +287,16 @@ const getStatusCount = (status) => {
   return documents.value.filter(d => d.status === status).length
 }
 
+// Get uploaded by username from user ID
+const getUploadedByUsername = async (userId) => {
+  // Map user IDs to usernames - could be optimized with a user service
+  // For now, try to get from current user if ID matches
+  if (userId === authStore.user?.id) {
+    return authStore.user.username
+  }
+  return `User #${userId}`
+}
+
 // Actions
 const viewDocument = (doc) => {
   selectedDocument.value = doc
@@ -293,17 +305,18 @@ const viewDocument = (doc) => {
 const approveDocument = async (documentId) => {
   try {
     loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 500))
-
+    const response = await api.post(`/v1/file-upload/${documentId}/approve`)
+    
     const doc = documents.value.find(d => d.id === documentId)
     if (doc) {
       doc.status = 'approved'
     }
 
     selectedDocument.value = null
-    console.log('Document approved')
+    console.log('Document approved:', response)
   } catch (error) {
     console.error('Approval failed:', error)
+    alert('Failed to approve document')
   } finally {
     loading.value = false
   }
@@ -317,19 +330,21 @@ const showRejectModal = (doc) => {
 const handleReject = async (data) => {
   try {
     loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 500))
+    const response = await api.post(`/v1/file-upload/${data.documentId}/reject`, {
+      reason: data.reason
+    })
 
     const doc = documents.value.find(d => d.id === data.documentId)
     if (doc) {
       doc.status = 'rejected'
-      doc.rejection_reason = data.reason
     }
 
     showRejectModalFlag.value = false
     selectedDocument.value = null
-    console.log('Document rejected')
+    console.log('Document rejected:', response)
   } catch (error) {
     console.error('Rejection failed:', error)
+    alert('Failed to reject document')
   } finally {
     loading.value = false
   }
@@ -343,18 +358,14 @@ const showResubmitModal = (doc) => {
 const handleResubmit = async (data) => {
   try {
     loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
+    // Resubmit would typically mean re-uploading the file
+    // For now, we'll reset status to pending
     const doc = documents.value.find(d => d.id === data.documentId)
     if (doc) {
       doc.status = 'pending'
-      doc.uploaded_at = new Date().toISOString()
+      doc.updated_at = new Date().toISOString()
       if (data.purpose) doc.file_purpose = data.purpose
       if (data.securityLevel) doc.security_level = data.securityLevel
-      if (data.file) {
-        doc.file_name = data.file.name
-        doc.file_size = data.file.size
-      }
     }
 
     showResubmitModalFlag.value = false
@@ -362,6 +373,7 @@ const handleResubmit = async (data) => {
     console.log('Document resubmitted')
   } catch (error) {
     console.error('Resubmit failed:', error)
+    alert('Failed to resubmit document')
   } finally {
     loading.value = false
   }
@@ -372,80 +384,52 @@ const deleteDocument = async (documentId) => {
 
   try {
     loading.value = true
-    await new Promise(resolve => setTimeout(resolve, 500))
-
+    // Note: Delete endpoint may need to be implemented in the backend
+    // For now, just remove from local state
     documents.value = documents.value.filter(d => d.id !== documentId)
     selectedDocument.value = null
     console.log('Document deleted')
   } catch (error) {
     console.error('Delete failed:', error)
+    alert('Failed to delete document')
   } finally {
     loading.value = false
   }
 }
 
-// Load data
+// Load data from backend
 const loadDocuments = async () => {
   loading.value = true
+  error.value = null
   try {
-    // Mock data - replace with API call
-    documents.value = [
-      {
-        id: 1,
-        file_name: 'Q4_Financial_Report.pdf',
-        file_size: 2048000,
-        status: 'approved',
-        security_level: 'confidential',
-        uploaded_at: new Date(Date.now() - 86400000).toISOString(),
-        uploaded_by: authStore.user?.username || 'current_user',
-        file_purpose: 'Quarterly financial analysis',
-        chunks_created: 125
-      },
-      {
-        id: 2,
-        file_name: 'Sales_Process_Guide.docx',
-        file_size: 512000,
-        status: 'pending',
-        security_level: 'internal',
-        uploaded_at: new Date(Date.now() - 3600000).toISOString(),
-        uploaded_by: authStore.user?.username || 'current_user',
-        file_purpose: 'Updated sales process documentation'
-      },
-      {
-        id: 3,
-        file_name: 'Product_Strategy.pptx',
-        file_size: 1024000,
-        status: 'rejected',
-        security_level: 'confidential',
-        uploaded_at: new Date(Date.now() - 172800000).toISOString(),
-        uploaded_by: 'john_doe',
-        file_purpose: 'Q1 2025 product strategy',
-        rejection_reason: 'Missing approval from product lead'
-      },
-      {
-        id: 4,
-        file_name: 'Engineering_Best_Practices.md',
-        file_size: 256000,
-        status: 'processed',
-        security_level: 'internal',
-        uploaded_at: new Date(Date.now() - 172800000).toISOString(),
-        uploaded_by: 'tech_lead',
-        file_purpose: 'Engineering standards and best practices',
-        chunks_created: 42
-      },
-      {
-        id: 5,
-        file_name: 'Customer_Success_Metrics.xlsx',
-        file_size: 524288,
-        status: 'pending',
-        security_level: 'internal',
-        uploaded_at: new Date(Date.now() - 10800000).toISOString(),
-        uploaded_by: 'jane_smith',
-        file_purpose: 'CS team performance tracking'
-      }
-    ]
-  } catch (error) {
-    console.error('Failed to load documents:', error)
+    let response
+    
+    // If admin, fetch pending approval documents; otherwise fetch user's documents
+    if (isAdmin.value) {
+      response = await api.get('/v1/file-upload/admin/pending')
+    } else {
+      response = await api.get('/v1/file-upload/')
+    }
+
+    documents.value = response.items.map(item => ({
+      id: item.id,
+      file_name: item.file_name,
+      file_size: item.file_size,
+      status: item.status,
+      security_level: item.security_level,
+      uploaded_at: item.created_at,
+      uploaded_by_id: item.uploaded_by_id,
+      uploaded_by: `User #${item.uploaded_by_id}`,
+      file_purpose: item.file_purpose,
+      chunks_created: item.chunks_created,
+      is_processed: item.is_processed,
+      processing_error: item.processing_error,
+      retry_count: item.retry_count,
+      processing_time_ms: item.processing_time_ms
+    }))
+  } catch (err) {
+    console.error('Failed to load documents:', err)
+    error.value = 'Failed to load documents from server'
   } finally {
     loading.value = false
   }
