@@ -157,6 +157,29 @@
             </tr>
           </tbody>
         </table>
+
+        <!-- Pagination Controls -->
+        <div class="flex items-center justify-between p-4 border-t border-fortress-800">
+          <div class="text-sm text-fortress-400">
+            Showing {{ pagination.offset + 1 }}-{{ Math.min(pagination.offset + pagination.limit, pagination.total) }} of {{ pagination.total }} documents
+          </div>
+          <div class="flex gap-2">
+            <button
+              @click="prevPage"
+              :disabled="pagination.offset === 0 || loading"
+              class="px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-fortress-800 hover:bg-fortress-700 text-fortress-300"
+            >
+              ← Previous
+            </button>
+            <button
+              @click="nextPage"
+              :disabled="pagination.offset + pagination.limit >= pagination.total || loading"
+              class="px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-fortress-800 hover:bg-fortress-700 text-fortress-300"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 

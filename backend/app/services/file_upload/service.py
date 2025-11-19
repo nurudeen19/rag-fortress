@@ -257,11 +257,16 @@ class FileUploadService:
     async def get_status_counts(self) -> dict:
         """Get count of files per status."""
         counts = {}
+        total_all = 0
         for status in FileStatus:
             result = await self.session.execute(
                 select(func.count(FileUpload.id)).where(FileUpload.status == status)
             )
-            counts[status.value] = result.scalar() or 0
+            count = result.scalar() or 0
+            counts[status.value] = count
+            total_all += count
+        # Add total "all" count
+        counts["all"] = total_all
         return counts
     
     async def get_by_status(
