@@ -18,8 +18,18 @@
           <h2 class="text-2xl font-semibold text-fortress-100 mb-6">Sign In</h2>
 
           <!-- Error Message -->
-          <div v-if="error" class="mb-4 p-4 bg-alert/10 border border-alert/30 rounded-lg text-alert text-sm">
-            {{ error }}
+          <div v-if="error" :class="[
+            'mb-4 p-4 rounded-lg text-sm border',
+            errorType === 'suspended' ? 'bg-alert/10 border-alert/30 text-alert' :
+            errorType === 'inactive' ? 'bg-alert/10 border-alert/30 text-alert' :
+            errorType === 'unverified' ? 'bg-warning/10 border-warning/30 text-warning' :
+            'bg-alert/10 border-alert/30 text-alert'
+          ]">
+            <p class="font-semibold mb-2">{{ errorTitle }}</p>
+            <p>{{ error }}</p>
+            <p v-if="errorType === 'unverified'" class="text-xs mt-2 opacity-80">
+              Check your email for the verification link. Need help? Contact support.
+            </p>
           </div>
 
           <!-- Login Form -->
@@ -113,10 +123,72 @@ const credentials = ref({
 
 const loading = ref(false)
 const error = ref(null)
+const errorType = ref(null)
+const errorTitle = ref('Login Failed')
+
+const getErrorDetails = (errorMessage) => {
+  if (!errorMessage) {
+    return { type: null, title: 'Login Failed', message: errorMessage }
+  }
+
+  // Convert to lowercase for case-insensitive matching
+  const message = String(errorMessage).toLowerCase()
+  
+  // Debug logging
+  console.log('Error message received:', errorMessage)
+  console.log('Lowercased message:', message)
+
+  // Check for suspended account - includes "account is locked" with optional reason
+  if (message.includes('account is locked')) {
+    // Extract suspension reason if present (format: "Account is locked (reason)")
+    const reasonMatch = errorMessage.match(/\((.*?)\)/)
+    const reason = reasonMatch ? reasonMatch[1] : null
+    
+    console.log('Detected suspended account, reason:', reason)
+    
+    return {
+      type: 'suspended',
+      title: 'Account Suspended',
+      message: reason 
+        ? `Your account has been suspended. Reason: ${reason}`
+        : 'Your account has been suspended. Please contact support if you believe this is an error.'
+    }
+  }
+
+  // Check for inactive account
+  if (message.includes('inactive')) {
+    console.log('Detected inactive account')
+    return {
+      type: 'inactive',
+      title: 'Account Deactivated',
+      message: 'Your account has been deactivated. Please contact support to reactivate it.'
+    }
+  }
+
+  // Check for unverified account
+  if (message.includes('not verified') || message.includes('unverified')) {
+    console.log('Detected unverified account')
+    return {
+      type: 'unverified',
+      title: 'Email Not Verified',
+      message: 'Please verify your email address before logging in.'
+    }
+  }
+
+  // Default error
+  console.log('Using default error handling')
+  return {
+    type: 'generic',
+    title: 'Login Failed',
+    message: 'Invalid username/email or password. Please try again.'
+  }
+}
 
 const handleLogin = async () => {
   loading.value = true
   error.value = null
+  errorType.value = null
+  errorTitle.value = 'Login Failed'
   
   const result = await authStore.login(credentials.value)
   
@@ -124,7 +196,12 @@ const handleLogin = async () => {
     // Redirect to dashboard
     router.push('/dashboard')
   } else {
-    error.value = result.error
+    console.log('Login result:', result)
+    const errorDetails = getErrorDetails(result.error)
+    console.log('Error details parsed:', errorDetails)
+    error.value = errorDetails.message
+    errorType.value = errorDetails.type
+    errorTitle.value = errorDetails.title
   }
   
   loading.value = false

@@ -62,11 +62,16 @@ class AuthService:
                 logger.warning(f"Login failed: user not found '{username_or_email}'")
                 return None, "Invalid credentials"
             
-            # Check if account is locked
-            if user.is_account_locked():
+            # Check if account is suspended or inactive FIRST (before password verification)
+            # This prevents attackers from knowing if an account exists
+            if user.is_suspended:
                 reason = f" ({user.suspension_reason})" if user.suspension_reason else ""
-                logger.warning(f"Login failed: account locked for user '{user.username}'{reason}")
+                logger.warning(f"Login failed: account suspended for user '{user.username}'{reason}")
                 return None, f"Account is locked{reason}"
+            
+            if not user.is_active:
+                logger.warning(f"Login failed: account inactive for user '{user.username}'")
+                return None, "Account is locked"
             
             # Verify password
             if not self.verify_password(password, user.password_hash):
