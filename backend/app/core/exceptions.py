@@ -437,13 +437,51 @@ async def validation_exception_handler(
     request: Request,
     exc: RequestValidationError
 ) -> JSONResponse:
-    """Handle Pydantic validation errors."""
+    """Handle Pydantic validation errors with detailed logging."""
     from app.core import get_logger
+    import json
     
     logger = get_logger(__name__)
-    logger.warning(
-        f"Validation error on {request.url.path}",
-        extra={"errors": exc.errors()}
+    
+    # Extract detailed error information
+    errors = exc.errors()
+    
+    # Build comprehensive error details
+    error_details = []
+    for error in errors:
+        error_details.append({
+            "location": error.get("loc", []),
+            "message": error.get("msg", ""),
+            "type": error.get("type", ""),
+            "input": str(error.get("input", ""))[:500],  # Truncate large inputs
+            "context": error.get("ctx", {})
+        })
+    
+    # Get request details
+    request_details = {
+        "method": request.method,
+        "url": str(request.url),
+        "path": request.url.path,
+        "query": dict(request.query_params),
+        "headers": dict(request.headers),
+    }
+    
+    # Try to get body if applicable
+    try:
+        body = await request.body()
+        request_details["body"] = body.decode() if body else None
+    except:
+        request_details["body"] = "Could not read body"
+    
+    # Log comprehensive error information
+    logger.error(
+        f"Validation error on {request.url.path}: {len(errors)} error(s)",
+        extra={
+            "validation_errors": error_details,
+            "request_details": request_details,
+            "full_traceback": True
+        },
+        exc_info=True
     )
     
     return JSONResponse(
@@ -452,7 +490,14 @@ async def validation_exception_handler(
             "error": {
                 "type": "ValidationError",
                 "message": "Request validation failed",
-                "details": {"errors": exc.errors()}
+                "details": {
+                    "errors": error_details,
+                    "request": {
+                        "method": request.method,
+                        "path": request.url.path,
+                        "query": dict(request.query_params)
+                    }
+                }
             }
         }
     )
@@ -492,12 +537,42 @@ async def general_exception_handler(
     request: Request,
     exc: Exception
 ) -> JSONResponse:
-    """Handle all unhandled exceptions."""
+    """Handle all unhandled exceptions with detailed logging."""
     from app.core import get_logger
+    import traceback
     
     logger = get_logger(__name__)
+    
+    # Get detailed request information
+    request_details = {
+        "method": request.method,
+        "url": str(request.url),
+        "path": request.url.path,
+        "query": dict(request.query_params),
+    }
+    
+    # Try to get body if applicable
+    try:
+        body = await request.body()
+        request_details["body"] = body.decode() if body else None
+    except:
+        request_details["body"] = "Could not read body"
+    
+    # Get exception details
+    exc_details = {
+        "type": exc.__class__.__name__,
+        "message": str(exc),
+        "module": exc.__class__.__module__,
+        "traceback": traceback.format_exc()
+    }
+    
+    # Log comprehensive error information
     logger.critical(
-        f"Unhandled exception on {request.url.path}",
+        f"Unhandled exception on {request.url.path} ({exc.__class__.__name__}): {str(exc)[:200]}",
+        extra={
+            "exception_details": exc_details,
+            "request_details": request_details
+        },
         exc_info=True
     )
     
@@ -511,7 +586,8 @@ async def general_exception_handler(
         message = str(exc)
         details = {
             "type": exc.__class__.__name__,
-            "traceback": str(exc.__traceback__)
+            "request": request_details,
+            "exception": exc_details
         }
     
     return JSONResponse(
