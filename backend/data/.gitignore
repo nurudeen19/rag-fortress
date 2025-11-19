@@ -4,8 +4,16 @@
 !.gitignore
 !README.md
 
-#keep sample data in pending folder
+# Keep demo knowledge base files
 !/knowledge_base/demo_data/**
+
+# Keep unified files structure (store no actual files, only structure)
+!/files/
+!/files/uploaded/
+!/files/knowledge_base/
+!/files/processing/
+!/files/archive/
+
 # But keep subdirectory structure
 !*/
 

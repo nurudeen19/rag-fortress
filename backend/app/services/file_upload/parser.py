@@ -5,6 +5,7 @@ Handles field detection for field_selection in document uploads.
 
 import json
 import csv
+import os
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -116,23 +117,30 @@ class StructuredDataParser:
         Extract fields from structured data file.
         
         Args:
-            file_path: Path to file
+            file_path: Relative path (e.g., "uploaded/file.csv") or full path
             file_type: Type of file (json, csv, excel)
         
         Returns:
             List of field names
         """
-        path = Path(file_path)
+        # Resolve path
+        if not os.path.isabs(file_path):
+            base_dir = os.getenv("FILES_DIR", "data/files")
+            full_path = os.path.join(base_dir, file_path)
+        else:
+            full_path = file_path
+        
+        path = Path(full_path)
         
         if not path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+            raise FileNotFoundError(f"File not found: {full_path}")
         
         if file_type == "json":
-            fields = StructuredDataParser.parse_json(file_path)
+            fields = StructuredDataParser.parse_json(full_path)
         elif file_type == "csv":
-            fields = StructuredDataParser.parse_csv(file_path)
+            fields = StructuredDataParser.parse_csv(full_path)
         elif file_type in ("excel", "xlsx", "xls"):
-            fields = StructuredDataParser.parse_excel(file_path)
+            fields = StructuredDataParser.parse_excel(full_path)
         else:
             raise ValueError(f"Unsupported file type for parsing: {file_type}")
         

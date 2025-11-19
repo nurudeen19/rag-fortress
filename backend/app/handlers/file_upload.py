@@ -383,11 +383,13 @@ async def handle_get_file_content(
         if not (is_owner or is_admin):
             return {"success": False, "error": "Access denied"}
         
-        # Read file from disk
-        file_path = file_record.file_path
+        # Resolve file path: relative path -> full path
+        import os
+        base_dir = os.getenv("FILES_DIR", "data/files")
+        full_path = os.path.join(base_dir, file_record.file_path)
         
         try:
-            with open(file_path, "rb") as f:
+            with open(full_path, "rb") as f:
                 file_content = f.read()
             
             logger.info(f"Retrieved file content for file_id={file_id}, user_id={user.id}")
@@ -399,7 +401,7 @@ async def handle_get_file_content(
                 "file_type": file_record.file_type
             }
         except FileNotFoundError:
-            logger.error(f"File not found on disk: {file_path}")
+            logger.error(f"File not found on disk: {full_path}")
             return {"success": False, "error": "File not found on disk"}
     
     except Exception as e:

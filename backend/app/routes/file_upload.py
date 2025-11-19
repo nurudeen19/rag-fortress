@@ -54,7 +54,8 @@ async def upload_file(
     session: AsyncSession = Depends(get_session)
 ):
     """Upload file and create database record."""
-    storage = FileStorage()
+    # Use 'uploaded' category for user-uploaded files
+    storage = FileStorage(category="uploaded")
     
     try:
         if not file.filename:
@@ -80,7 +81,7 @@ async def upload_file(
                 detail=error_msg
             )
         
-        # Save file to disk
+        # Save file to disk (returns relative path like "uploaded/filename.pdf")
         file_path = await storage.save_file(file.filename, content)
         
         # Calculate file hash

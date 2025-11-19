@@ -4,6 +4,7 @@ import logging
 import hashlib
 import csv
 import json
+import os
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -11,11 +12,15 @@ from sqlalchemy.future import select
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
 from app.models.department import Department
 from app.seeders.base import BaseSeed
+from app.services.file_upload import FileStorage
 
 logger = logging.getLogger(__name__)
 
 # Demo data path - relative to backend directory
 DEMO_DATA_PATH = Path(__file__).parent.parent.parent / "data" / "knowledge_base" / "demo_data"
+
+# Base files directory where all files are stored
+FILES_BASE_DIR = Path(__file__).parent.parent.parent / "data" / "files"
 
 # Department mapping: folder name -> department code
 DEPARTMENT_MAPPING = {
@@ -262,33 +267,55 @@ class KnowledgeBaseSeeder(BaseSeed):
             return "unknown"
     
     async def _create_file_upload_record(self, file_info: FileInfo, session: AsyncSession) -> FileUpload:
-        """Create a FileUpload record from FileInfo."""
-        file_size = file_info.file_path.stat().st_size
-        file_name = file_info.file_path.name
+        """Create a FileUpload record from FileInfo.
         
-        # Generate unique token
-        import uuid
-        upload_token = f"kb_{uuid.uuid4().hex[:16]}"
+        Copies file to unified storage location (data/files/knowledge_base/).
+        Stores relative path like 'knowledge_base/filename.md'.
+        """
+        try:
+            # Ensure knowledge_base directory exists
+            kb_storage_dir = FILES_BASE_DIR / "knowledge_base"
+            kb_storage_dir.mkdir(parents=True, exist_ok=True)
+            
+            file_size = file_info.file_path.stat().st_size
+            file_name = file_info.file_path.name
+            
+            # Generate unique token
+            import uuid
+            upload_token = f"kb_{uuid.uuid4().hex[:16]}"
+            
+            # Copy file to unified storage location
+            dest_path = kb_storage_dir / file_name
+            with open(file_info.file_path, "rb") as src:
+                with open(dest_path, "wb") as dst:
+                    dst.write(src.read())
+            
+            # Store relative path from data/files/
+            rel_path = f"knowledge_base/{file_name}"
+            
+            # Calculate hash of the actual file
+            file_hash = file_info.compute_hash()
+            
+            file_upload = FileUpload(
+                upload_token=upload_token,
+                file_name=file_name,
+                file_type=file_info.file_type,
+                file_size=file_size,
+                file_path=rel_path,  # Relative path: knowledge_base/filename.md
+                file_hash=file_hash,
+                status=FileStatus.APPROVED,  # Pre-approved for seeding
+                security_level=file_info.security_level,
+                department_id=file_info.department_id,
+                is_department_only=file_info.is_department_only,
+                field_selection=file_info.field_selection,
+                file_purpose=file_info.file_purpose,
+                approval_reason="Demo knowledge base seed - pre-approved",
+                uploaded_by_id=None,  # Seeder system user
+            )
+            
+            logger.debug(f"Created file record: {rel_path}")
+            return file_upload
         
-        # Construct file path relative to data directory
-        rel_path = file_info.file_path.relative_to(DEMO_DATA_PATH.parent)
-        file_path_str = str(rel_path)
-        
-        file_upload = FileUpload(
-            upload_token=upload_token,
-            file_name=file_name,
-            file_type=file_info.file_type,
-            file_size=file_size,
-            file_path=file_path_str,
-            file_hash=file_info.compute_hash(),
-            status=FileStatus.APPROVED,  # Pre-approved for seeding
-            security_level=file_info.security_level,
-            department_id=file_info.department_id,
-            is_department_only=file_info.is_department_only,
-            field_selection=file_info.field_selection,
-            file_purpose=file_info.file_purpose,  # Now captured
-            approval_reason="Demo knowledge base seed - pre-approved",  # Now captured
-            uploaded_by_id=None,  # Seeder system user (can be linked to admin user if needed)
-        )
-        
-        return file_upload
+        except Exception as e:
+            logger.error(f"Error creating file upload record: {e}", exc_info=True)
+            raise
