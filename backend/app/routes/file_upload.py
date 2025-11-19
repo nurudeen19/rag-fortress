@@ -264,7 +264,6 @@ async def delete_file(
 
 @router.get("/list", response_model=FileUploadListWithCountsResponse)
 async def list_files(
-    view: str = Query("my-uploads", description="View type: 'admin' or 'my-uploads'"),
     status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
     limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
     offset: int = Query(0, ge=0, description="Pagination offset"),
@@ -274,27 +273,22 @@ async def list_files(
     """
     List files with status counts and pagination.
     
+    Automatically returns:
+    - All files (if user is admin)
+    - User's own files (if user is regular user)
+    
     Query Parameters:
-    - view: 'admin' (all files, requires admin role) or 'my-uploads' (user's files)
     - status_filter: Filter by status (pending, approved, rejected, processed, failed, or null for all)
     - limit: Number of items per page (1-200)
     - offset: Pagination offset
     """
-    # Check admin role if admin view requested
-    if view == "admin":
-        if user.role.value != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Admin access required to view all files"
-            )
+    # Check user role and return appropriate data
+    if user.role.value == "admin":
+        # Admin sees all files
         result = await handle_list_admin_files(status_filter, limit, offset, session)
-    elif view == "my-uploads":
-        result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
     else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid view parameter. Must be 'admin' or 'my-uploads'"
-        )
+        # Regular user sees only their own files
+        result = await handle_list_user_files_by_status(user.id, status_filter, limit, offset, session)
     
     if not result.get("success"):
         raise HTTPException(
