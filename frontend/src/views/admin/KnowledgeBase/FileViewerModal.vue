@@ -298,15 +298,32 @@ const previousPage = () => {
 // Excel loading
 const loadExcel = async (blob) => {
   try {
+    const { Workbook } = await import('exceljs')
+    
     const arrayBuffer = await blob.arrayBuffer()
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' })
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-
-    if (data.length > 0) {
-      excelHeaders.value = data[0] || []
-      excelRows.value = data.slice(1) || []
+    const workbook = new Workbook()
+    await workbook.xlsx.load(arrayBuffer)
+    
+    const worksheet = workbook.worksheets[0]
+    if (!worksheet) {
+      error.value = 'No data found in Excel file'
+      return
     }
+
+    // Get headers from first row
+    const firstRow = worksheet.getRow(1)
+    excelHeaders.value = firstRow.values.slice(1) || []
+
+    // Get data rows (limit to 1000 for performance)
+    const data = []
+    const maxRows = Math.min(1000, worksheet.rowCount)
+    
+    for (let i = 2; i <= maxRows; i++) {
+      const row = worksheet.getRow(i)
+      data.push(row.values.slice(1) || [])
+    }
+    
+    excelRows.value = data
   } catch (err) {
     console.error('Excel loading error:', err)
     error.value = 'Failed to load Excel file'
@@ -316,14 +333,28 @@ const loadExcel = async (blob) => {
 // CSV loading
 const loadCSV = async (blob) => {
   try {
+    const Papa = await import('papaparse')
+    
     const text = await blob.text()
-    const workbook = XLSX.read(text, { type: 'string' })
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    
+    const results = Papa.parse(text, {
+      header: false,
+      skipEmptyLines: true,
+      complete: (results) => {
+        if (results.data && results.data.length > 0) {
+          excelHeaders.value = results.data[0] || []
+          excelRows.value = results.data.slice(1) || []
+        }
+      },
+      error: (error) => {
+        throw error
+      }
+    })
 
-    if (data.length > 0) {
-      excelHeaders.value = data[0] || []
-      excelRows.value = data.slice(1) || []
+    // If parser doesn't trigger complete callback immediately
+    if (results.data && results.data.length > 0) {
+      excelHeaders.value = results.data[0] || []
+      excelRows.value = results.data.slice(1) || []
     }
   } catch (err) {
     console.error('CSV loading error:', err)
