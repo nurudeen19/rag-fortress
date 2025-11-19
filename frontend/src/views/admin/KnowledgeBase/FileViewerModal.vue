@@ -127,9 +127,15 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
-import * as XLSX from 'xlsx'
 import { marked } from 'marked'
+import Papa from 'papaparse'
+import * as pdfjsLib from 'pdfjs-dist'
+import { renderAsync } from 'docx-preview'
+import { Workbook } from 'exceljs'
 import api from '../../../services/api'
+
+// Set up pdfjs worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
 
 // Props
 const props = defineProps({
@@ -245,10 +251,8 @@ const loadFile = async () => {
 // PDF loading
 const loadPDF = async (blob) => {
   try {
-    const { getDocument } = await import('pdfjs-dist')
-    
     const arrayBuffer = await blob.arrayBuffer()
-    pdfDoc = await getDocument({ data: arrayBuffer }).promise
+    pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
     pdfPageCount.value = pdfDoc.numPages
     currentPage.value = 1
     
@@ -298,8 +302,6 @@ const previousPage = () => {
 // Excel loading
 const loadExcel = async (blob) => {
   try {
-    const { Workbook } = await import('exceljs')
-    
     const arrayBuffer = await blob.arrayBuffer()
     const workbook = new Workbook()
     await workbook.xlsx.load(arrayBuffer)
@@ -333,8 +335,6 @@ const loadExcel = async (blob) => {
 // CSV loading
 const loadCSV = async (blob) => {
   try {
-    const Papa = await import('papaparse')
-    
     const text = await blob.text()
     
     // Use a promise to properly wait for Papa.parse callback
@@ -369,8 +369,6 @@ const loadCSV = async (blob) => {
 // DOCX loading
 const loadDOCX = async (blob) => {
   try {
-    const { renderAsync } = await import('docx-preview')
-    
     if (docxContainer.value) {
       await renderAsync(blob, docxContainer.value)
     }
