@@ -52,20 +52,24 @@ class DocumentStorageService:
         )
         logger.info("DocumentStorageService initialized")
     
-    async def ingest_pending_files(self, batch_size: int = 100) -> Dict[str, Any]:
+    async def ingest_pending_files(self, batch_size: int = 100, file_ids: List[int] = None) -> Dict[str, Any]:
         """
-        Load, chunk, and store pending approved files.
+        Load, chunk, and store pending approved files or specific files.
         
         Args:
             batch_size: Chunks per batch to vector store (default: 100)
+            file_ids: Optional list of specific file IDs to ingest.
+                     If provided, only those files are processed.
+                     If None, all approved unprocessed files are ingested.
         
         Returns:
             Dict with counts: total_files, successfully_stored, chunks_generated, errors
         """
-        logger.info("Starting ingestion pipeline")
+        logger.info(f"Starting ingestion pipeline (file_ids={file_ids})")
         
         # Step 1: Load files from database
-        files = await self.loader.load_pending_files()
+        # Pass file_ids to loader - if provided, only those are loaded
+        files = await self.loader.load_pending_files(file_ids=file_ids)
         if not files:
             logger.info("No pending files to process")
             return {"total_files": 0, "successfully_stored": 0, "chunks_generated": 0, "errors": []}
@@ -81,12 +85,12 @@ class DocumentStorageService:
         logger.info(f"Generated {len(chunks)} chunks")
         
         # Step 3: Store chunks in vector DB
-        file_ids, errors = await self._store_and_track(chunks, batch_size)
+        file_ids_result, errors = await self._store_and_track(chunks, batch_size)
         
         # Step 4: Update file statuses
-        await self._update_file_statuses(files, file_ids, errors)
+        await self._update_file_statuses(files, file_ids_result, errors)
         
-        successfully_stored = len([fid for fid in file_ids if fid not in errors])
+        successfully_stored = len([fid for fid in file_ids_result if fid not in errors])
         logger.info(f"Ingestion complete: {successfully_stored}/{len(files)} files processed")
         
         return {

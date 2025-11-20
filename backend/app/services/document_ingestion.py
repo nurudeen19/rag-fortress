@@ -36,7 +36,7 @@ class DocumentIngestionService:
         
         Pipeline:
         1. Verify file is APPROVED
-        2. Load file content via DocumentLoader
+        2. Load specific file via DocumentLoader with file_id
         3. Chunk content via DocumentChunker
         4. Generate embeddings and store in vector DB
         5. Mark as PROCESSED (or FAILED on error)
@@ -67,18 +67,43 @@ class DocumentIngestionService:
             logger.info(f"File {file_id} ({file_record.file_name}) is approved, starting ingestion")
             
             try:
-                # Use DocumentStorageService to run the full pipeline
-                # The service will handle status transitions internally
-                result = await self.storage_service.ingest_pending_files(batch_size=100)
+                # Load ONLY this specific file (not all pending files)
+                from app.services.vector_store.loader import DocumentLoader
+                from app.services.vector_store.chunker import DocumentChunker
                 
-                logger.info(f"File {file_id} ingestion pipeline completed: {result}")
+                loader = DocumentLoader(self.session)
+                chunker = DocumentChunker()
                 
-                # Return success - storage service updated DB statuses internally
+                # Load only this file by passing file_id
+                files = await loader.load_pending_files(file_ids=[file_id])
+                
+                if not files:
+                    raise Exception(f"Failed to load file {file_id}")
+                
+                logger.info(f"Loaded file {file_id}, chunking content")
+                
+                # Chunk the file
+                chunks = chunker.chunk_loaded_files(files)
+                if not chunks:
+                    raise Exception(f"Failed to chunk file {file_id}")
+                
+                logger.info(f"Generated {len(chunks)} chunks for file {file_id}")
+                
+                # Store chunks in vector DB
+                result = await self.storage_service._store_and_track(chunks, batch_size=100)
+                file_ids, errors = result
+                
+                # Mark file as processed
+                file_record.status = FileStatus.PROCESSED
+                file_record.is_processed = True
+                await self.session.commit()
+                logger.info(f"File {file_id} marked as PROCESSED")
+                
+                # Return success
                 return {
                     "status": "success",
                     "file_id": file_id,
-                    "chunks_created": result.get("chunks_generated", 0),
-                    "files_processed": result.get("successfully_stored", 0),
+                    "chunks_created": len(chunks),
                     "message": f"File ingestion completed"
                 }
             

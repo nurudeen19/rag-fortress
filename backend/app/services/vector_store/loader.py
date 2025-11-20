@@ -26,25 +26,37 @@ class DocumentLoader:
         """Initialize loader with database session."""
         self.session = session
     
-    async def load_pending_files(self) -> List[Dict[str, Any]]:
+    async def load_pending_files(self, file_ids: Optional[List[int]] = None) -> List[Dict[str, Any]]:
         """
         Load pending approved files from database with enriched metadata.
+        
+        Args:
+            file_ids: Optional list of specific file IDs to load. If provided:
+                     - If contains IDs: Load only those specific files
+                     - If None: Load all approved files not yet processed
         
         Returns:
             List of documents with content and metadata
         """
-        logger.info("Loading pending approved files from database")
+        logger.info(f"Loading pending approved files from database (file_ids={file_ids})")
         
-        # Query pending approved files
-        stmt = select(FileUpload).where(
-            (FileUpload.status == FileStatus.APPROVED) &
-            (FileUpload.is_processed == False)
-        ).order_by(FileUpload.created_at)
+        # Build query based on file_ids parameter
+        if file_ids and len(file_ids) > 0:
+            # Load specific files by ID
+            stmt = select(FileUpload).where(FileUpload.id.in_(file_ids)).order_by(FileUpload.created_at)
+            logger.info(f"Loading {len(file_ids)} specific files: {file_ids}")
+        else:
+            # Load all pending approved files (not yet processed)
+            stmt = select(FileUpload).where(
+                (FileUpload.status == FileStatus.APPROVED) &
+                (FileUpload.is_processed == False)
+            ).order_by(FileUpload.created_at)
+            logger.info("Loading all pending approved files")
         
         result = await self.session.execute(stmt)
         file_uploads = result.scalars().all()
         
-        logger.info(f"Found {len(file_uploads)} pending files")
+        logger.info(f"Found {len(file_uploads)} files to load")
         
         documents = []
         for file_upload in file_uploads:
