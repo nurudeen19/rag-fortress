@@ -239,30 +239,17 @@ async def handle_delete_file(
     """Delete file (user can delete own uploads, admin can delete any)."""
     try:
         service = FileUploadService(session)
-        file_upload = await service.get_file(file_id)
+        is_admin = user.has_role("admin")
         
-        if not file_upload:
-            return {"success": False, "error": "File not found"}
+        # Call service method (handles auth and deletion)
+        result = await service.delete_file_secure(file_id, user.id, is_admin)
         
-        # Check permissions: owner or admin
-        is_admin = any(role.name == "admin" for role in user.roles)
-        if file_upload.uploaded_by_id != user.id and not is_admin:
-            return {"success": False, "error": "Permission denied"}
+        if result["success"]:
+            await session.commit()
+        else:
+            await session.rollback()
         
-        # Delete physical file from disk
-        storage = FileStorage()
-        await storage.delete_file(file_upload.file_path)
-        
-        # Mark as deleted in database
-        deleted_file = await service.delete(file_id)
-        await session.commit()
-        
-        logger.info(f"File {file_id} deleted by user {user.id}")
-        
-        return {
-            "success": True,
-            "message": "File deleted"
-        }
+        return result
     except Exception as e:
         await session.rollback()
         logger.error(f"Delete file failed: {e}", exc_info=True)
@@ -285,26 +272,8 @@ async def handle_list_admin_files(
         # Get paginated files
         files, total = await service.get_by_status(status, limit, offset)
         
-        # Collect all uploader IDs
-        uploader_ids = [f.uploaded_by_id for f in files if f.uploaded_by_id]
-        
-        # Fetch all uploaders in a single query (avoid N+1)
-        uploader_map = {}
-        if uploader_ids:
-            from sqlalchemy import select
-            from app.models.user import User
-            
-            uploader_stmt = select(User).where(User.id.in_(uploader_ids))
-            uploader_result = await session.execute(uploader_stmt)
-            uploaders = uploader_result.scalars().all()
-            
-            uploader_map = {
-                u.id: {
-                    "full_name": u.full_name or f"User #{u.id}",
-                    "department_name": u.department.name if u.department else None
-                }
-                for u in uploaders
-            }
+        # Get uploader information (service handles N+1 prevention)
+        uploader_map = await service.get_file_with_uploaders(files)
         
         # Build response with uploader info
         files_data = []
@@ -351,22 +320,8 @@ async def handle_list_user_files_by_status(
     try:
         service = FileUploadService(session)
         
-        # Get status counts for this user
-        counts = {}
-        total_user_files = 0
-        
-        for s in FileStatus:
-            result = await session.execute(
-                select(func.count(FileUpload.id)).where(
-                    FileUpload.uploaded_by_id == user_id,
-                    FileUpload.status == s
-                )
-            )
-            count = result.scalar() or 0
-            counts[s.value] = count
-            total_user_files += count
-        
-        counts["all"] = total_user_files
+        # Get status counts for this user (moved to service)
+        counts = await service.get_user_status_counts(user_id)
         
         # Get paginated files with status filter
         files, total = await service.get_user_by_status(user_id, status, limit, offset)
@@ -412,132 +367,12 @@ async def handle_get_file_content(
     """Get file content for viewing (supports text, JSON, CSV, Excel, PDF, DOCX)."""
     try:
         service = FileUploadService(session)
-        
-        # Get file record
-        file_record = await session.get(FileUpload, file_id)
-        if not file_record:
-            return {"success": False, "error": "File not found"}
-        
-        # Check authorization
-        is_owner = file_record.uploaded_by_id == user.id
         is_admin = user.has_role("admin")
         
-        if not (is_owner or is_admin):
-            return {"success": False, "error": "Access denied"}
+        # Call service method (handles file retrieval, conversion, auth)
+        result = await service.get_file_content(file_id, user.id, is_admin)
         
-        # Resolve file path: relative path -> full path
-        import os
-        from docx2html import convert
-        
-        base_dir = os.getenv("FILES_DIR", "data/files")
-        full_path = os.path.join(base_dir, file_record.file_path)
-        
-        try:
-            # Check if file is DOCX and convert to HTML for viewing
-            if file_record.file_type in ("docx", "doc") or full_path.lower().endswith((".docx", ".doc")):
-                logger.info(f"Converting DOCX to HTML for file_id={file_id}")
-                
-                try:
-                    # Convert DOCX to HTML using docx2html (pure Python, no external dependencies)
-                    html_content = convert(full_path)
-                    
-                    # Wrap HTML with styling for better display
-                    styled_html = f"""
-                    <!DOCTYPE html>
-                    <html>
-                    <head>
-                        <meta charset="UTF-8">
-                        <style>
-                            body {{
-                                font-family: Arial, sans-serif;
-                                line-height: 1.6;
-                                padding: 20px;
-                                background-color: #f5f5f5;
-                            }}
-                            .content {{
-                                background-color: white;
-                                padding: 20px;
-                                border-radius: 8px;
-                                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-                                max-width: 900px;
-                                margin: 0 auto;
-                            }}
-                            table {{
-                                border-collapse: collapse;
-                                width: 100%;
-                                margin: 15px 0;
-                            }}
-                            td, th {{
-                                border: 1px solid #ddd;
-                                padding: 12px;
-                                text-align: left;
-                            }}
-                            th {{
-                                background-color: #f0f0f0;
-                                font-weight: bold;
-                            }}
-                            ul, ol {{
-                                margin: 10px 0;
-                                padding-left: 30px;
-                            }}
-                            h1, h2, h3, h4, h5, h6 {{
-                                margin-top: 15px;
-                                margin-bottom: 10px;
-                            }}
-                        </style>
-                    </head>
-                    <body>
-                        <div class="content">
-                            {html_content}
-                        </div>
-                    </body>
-                    </html>
-                    """
-                    
-                    # Return HTML as text content
-                    file_content = styled_html.encode('utf-8')
-                    logger.info(f"Successfully converted DOCX to HTML for file_id={file_id}")
-                    
-                    return {
-                        "success": True,
-                        "content": file_content,
-                        "filename": file_record.file_name.rsplit(".", 1)[0] + ".html",
-                        "file_type": "html"  # Set type to html so frontend treats it as HTML
-                    }
-                except Exception as conv_err:
-                    logger.warning(f"DOCX to HTML conversion failed, trying plain text extraction: {conv_err}")
-                    # Fallback: Extract plain text from DOCX
-                    try:
-                        from docx import Document
-                        doc = Document(full_path)
-                        text_content = "\n".join([para.text for para in doc.paragraphs])
-                        file_content = text_content.encode('utf-8')
-                        return {
-                            "success": True,
-                            "content": file_content,
-                            "filename": file_record.file_name.rsplit(".", 1)[0] + ".txt",
-                            "file_type": "txt"
-                        }
-                    except Exception as fallback_err:
-                        logger.error(f"DOCX plain text fallback also failed: {fallback_err}")
-                        return {"success": False, "error": f"Failed to process DOCX file: {str(fallback_err)}"}
-            else:
-                # For non-DOCX files, return as-is
-                with open(full_path, "rb") as f:
-                    file_content = f.read()
-                
-                logger.info(f"Retrieved file content for file_id={file_id}, user_id={user.id}")
-                
-                return {
-                    "success": True,
-                    "content": file_content,
-                    "filename": file_record.file_name,
-                    "file_type": file_record.file_type
-                }
-        except FileNotFoundError:
-            logger.error(f"File not found on disk: {full_path}")
-            return {"success": False, "error": "File not found on disk"}
-    
+        return result
     except Exception as e:
         logger.error(f"Get file content failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}
