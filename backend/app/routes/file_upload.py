@@ -219,7 +219,8 @@ async def get_file_content(
 ):
     """
     Get file content for viewing in browser.
-    Supports: PDF, Excel, CSV, DOCX, JSON, Markdown, TXT
+    Supports viewing: PDF, Excel, CSV, JSON, Markdown, TXT
+    For unsupported types (DOCX, DOC, etc): returns metadata indicating download option
     """
     result = await handle_get_file_content(file_id, user, session)
     
@@ -230,7 +231,19 @@ async def get_file_content(
             detail=result.get("error", "Failed to retrieve file")
         )
     
-    # Return file as streaming response
+    # Check if file is viewable
+    if not result.get("viewable", False):
+        # Return JSON metadata for non-viewable files
+        return {
+            "success": True,
+            "viewable": False,
+            "can_download": result.get("can_download", True),
+            "filename": result.get("filename"),
+            "file_type": result.get("file_type"),
+            "message": result.get("message")
+        }
+    
+    # Return file as streaming response for viewable files
     file_content = result["content"]
     filename = result["filename"]
     
@@ -241,8 +254,6 @@ async def get_file_content(
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "xls": "application/vnd.ms-excel",
         "csv": "text/csv",
-        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "html": "text/html",
         "json": "application/json",
         "md": "text/markdown",
         "txt": "text/plain"

@@ -364,12 +364,12 @@ async def handle_get_file_content(
     user: User,
     session: AsyncSession
 ) -> dict:
-    """Get file content for viewing (supports text, JSON, CSV, Excel, PDF, DOCX)."""
+    """Get file content for viewing (text, JSON, CSV, Excel, PDF only)."""
     try:
         service = FileUploadService(session)
         is_admin = user.has_role("admin")
         
-        # Call service method (handles file retrieval, conversion, auth)
+        # Call service method (returns error for unsupported types like DOCX)
         result = await service.get_file_content(file_id, user.id, is_admin)
         
         return result
