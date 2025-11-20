@@ -40,6 +40,27 @@
           </button>
         </div>
 
+        <!-- Not Viewable - Offer Download -->
+        <div v-else-if="notViewable" class="p-12 text-center">
+          <svg class="w-12 h-12 text-fortress-500 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          <p class="text-fortress-300 mb-2">{{ notViewableMessage }}</p>
+          <p class="text-fortress-400 text-sm mb-6">File type: <span class="font-semibold">{{ fileTypeDisplay }}</span></p>
+          <button
+            @click="downloadFile"
+            class="px-6 py-2 bg-secure hover:bg-secure/80 text-white rounded-lg font-medium transition-colors"
+          >
+            Download File
+          </button>
+          <button
+            @click="closeViewer"
+            class="ml-2 px-6 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 rounded-lg transition-colors"
+          >
+            Close
+          </button>
+        </div>
+
         <!-- Content -->
         <div v-else class="p-6 space-y-4">
           <!-- PDF Viewer -->
@@ -159,6 +180,9 @@ const emit = defineEmits(['close'])
 // State
 const loading = ref(false)
 const error = ref(null)
+const notViewable = ref(false)
+const notViewableMessage = ref('')
+const fileTypeDisplay = ref('')
 const fileType = ref(null)
 
 // PDF specific
@@ -208,12 +232,28 @@ const loadFile = async () => {
 
   loading.value = true
   error.value = null
+  notViewable.value = false
 
   try {
     console.log(`Loading file: ${props.fileName} (ID: ${props.fileId})`)
     const response = await api.get(`/v1/files/${props.fileId}/content`, {
       responseType: 'blob'
     })
+
+    // Check if response indicates file is not viewable
+    const contentType = response.headers['content-type']
+    
+    // If we got JSON response, it means backend sent metadata (not viewable)
+    if (contentType && contentType.includes('application/json')) {
+      const jsonData = JSON.parse(await response.data.text())
+      if (!jsonData.viewable && jsonData.can_download) {
+        notViewable.value = true
+        notViewableMessage.value = jsonData.message || 'This file type cannot be viewed in the browser'
+        fileTypeDisplay.value = jsonData.file_type?.toUpperCase() || 'Unknown'
+        console.log('File not viewable, offering download instead')
+        return
+      }
+    }
 
     fileType.value = detectFileType(props.fileName)
     console.log(`Detected file type: ${fileType.value}`)
@@ -246,7 +286,7 @@ const loadFile = async () => {
     }
   } catch (err) {
     console.error('Failed to load file:', err)
-    error.value = 'Failed to load file. Please try again.'
+    error.value = err.response?.data?.detail || 'Failed to load file. Please try again.'
   } finally {
     loading.value = false
   }
@@ -425,6 +465,32 @@ const closeViewer = () => {
   pdfDoc = null
   pdfPageCount.value = 0
   error.value = null
+  notViewable.value = false
+}
+
+// Download file
+const downloadFile = async () => {
+  try {
+    loading.value = true
+    const response = await api.get(`/v1/files/${props.fileId}/download`, {
+      responseType: 'blob'
+    })
+    
+    // Create download link
+    const url = window.URL.createObjectURL(new Blob([response.data]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', props.fileName)
+    document.body.appendChild(link)
+    link.click()
+    link.parentNode.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    console.error('Download failed:', err)
+    error.value = 'Failed to download file'
+  } finally {
+    loading.value = false
+  }
 }
 
 // Watch for open/close
