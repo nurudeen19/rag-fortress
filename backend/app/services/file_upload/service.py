@@ -162,6 +162,142 @@ class FileUploadService:
         logger.info(f"Approved: {file_upload.file_name}")
         return file_upload
     
+    async def approve_and_ingest(
+        self,
+        file_id: int,
+        approved_by_id: int,
+        reason: str = ""
+    ) -> Dict:
+        """
+        Approve file and trigger ingestion job.
+        
+        Returns:
+            Dict with keys:
+            - success: bool
+            - file_upload: FileUpload object
+            - job_id: int (if job created successfully)
+            - message: str
+            - warning: Optional[str] (if job creation failed)
+            - error: Optional[str] (if approval failed)
+        """
+        try:
+            # Approve the file
+            file_upload = await self.approve(file_id, approved_by_id, reason)
+            
+            # Trigger ingestion job
+            try:
+                from app.models.job import JobType
+                from app.jobs.integration import JobQueueIntegration
+                from app.core.database import get_session_factory
+                
+                session_factory = get_session_factory()
+                job_integration = JobQueueIntegration(session_factory)
+                
+                job = await job_integration.create_and_schedule(
+                    job_type=JobType.FILE_INGESTION,
+                    reference_id=file_id,
+                    reference_type="file_upload",
+                    handler=job_integration._handle_file_ingestion,
+                    payload={"file_id": file_id},
+                    max_retries=2
+                )
+                
+                logger.info(f"Created ingestion job {job.id} for file {file_id}")
+                
+                return {
+                    "success": True,
+                    "file_upload": file_upload,
+                    "job_id": job.id,
+                    "message": "File approved and ingestion started"
+                }
+            
+            except Exception as job_err:
+                logger.error(f"Failed to create ingestion job for file {file_id}: {job_err}")
+                # File is approved, but job creation failed
+                # Return partial success - admin can manually trigger ingestion later
+                return {
+                    "success": True,
+                    "file_upload": file_upload,
+                    "message": "File approved",
+                    "warning": "Ingestion job creation failed - manual ingestion may be needed"
+                }
+        
+        except Exception as e:
+            logger.error(f"Approval failed: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def trigger_ingestion(self, file_id: int, triggered_by_admin_id: int) -> Dict:
+        """
+        Manually trigger ingestion for an approved file.
+        
+        Returns:
+            Dict with keys:
+            - success: bool
+            - job_id: int (if job created successfully)
+            - message: str
+            - error: Optional[str] (if failed)
+        """
+        try:
+            # Verify file exists and is approved
+            file_upload = await self.get_file(file_id)
+            if not file_upload:
+                return {"success": False, "error": "File not found"}
+            
+            if file_upload.status != FileStatus.APPROVED:
+                return {
+                    "success": False,
+                    "error": f"File status is {file_upload.status.value}. Only APPROVED files can be ingested."
+                }
+            
+            logger.info(f"Admin {triggered_by_admin_id} triggered manual ingestion for file {file_id}")
+            
+            # Create and schedule ingestion job
+            try:
+                from app.models.job import JobType
+                from app.jobs.integration import JobQueueIntegration
+                from app.core.database import get_session_factory
+                
+                session_factory = get_session_factory()
+                job_integration = JobQueueIntegration(session_factory)
+                
+                job = await job_integration.create_and_schedule(
+                    job_type=JobType.FILE_INGESTION,
+                    reference_id=file_id,
+                    reference_type="file_upload",
+                    handler=job_integration._handle_file_ingestion,
+                    payload={
+                        "file_id": file_id,
+                        "triggered_by": "manual",
+                        "triggered_by_admin_id": triggered_by_admin_id
+                    },
+                    max_retries=2
+                )
+                
+                logger.info(f"Created ingestion job {job.id} for file {file_id}")
+                
+                return {
+                    "success": True,
+                    "job_id": job.id,
+                    "message": f"Ingestion job created (job_id={job.id})"
+                }
+            
+            except Exception as job_err:
+                logger.error(f"Failed to create ingestion job for file {file_id}: {job_err}")
+                return {
+                    "success": False,
+                    "error": f"Failed to create ingestion job: {str(job_err)}"
+                }
+        
+        except Exception as e:
+            logger.error(f"Error triggering ingestion: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
     async def reject(
         self,
         file_id: int,

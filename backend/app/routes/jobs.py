@@ -5,11 +5,13 @@ Admin routes for job queue management.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+import json
 
-from app.core.database import get_async_session_factory
+from app.core.database import get_async_session_factory, get_session
 from app.core.startup import get_startup_controller
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_role
 from app.models.job import Job, JobStatus
+from app.models.user import User
 from app.schemas.common import MessageResponse
 
 router = APIRouter(prefix="/api/v1/admin/jobs", tags=["admin:jobs"])
@@ -40,6 +42,73 @@ async def get_job_status(current_user = Depends(get_current_user)):
         "status": "ok",
         "data": stats
     }
+
+
+@router.get("/{job_id}")
+async def get_job_detail(
+    job_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Get details for a specific job including status and result.
+    
+    Returns:
+    - job_id: Database job ID
+    - job_type: Type of job (FILE_INGESTION, etc)
+    - status: Current job status (PENDING, PROCESSING, COMPLETED, FAILED)
+    - reference_id: ID of entity being processed (file_id, etc)
+    - reference_type: Type of entity (file_upload, etc)
+    - created_at: Job creation timestamp
+    - started_at: When job execution started (null if not started)
+    - completed_at: When job execution completed (null if not completed)
+    - retry_count: Number of retries so far
+    - max_retries: Maximum allowed retries
+    - error: Error message if job failed
+    - result: Result data if job completed successfully (JSON)
+    """
+    try:
+        job = await session.get(Job, job_id)
+        
+        if not job:
+            raise HTTPException(
+                status_code=404,
+                detail="Job not found"
+            )
+        
+        # Parse result JSON if present
+        result_data = None
+        if job.result:
+            try:
+                result_data = json.loads(job.result)
+            except:
+                result_data = job.result
+        
+        return {
+            "status": "ok",
+            "data": {
+                "job_id": job.id,
+                "job_type": job.job_type.value,
+                "status": job.status.value,
+                "reference_id": job.reference_id,
+                "reference_type": job.reference_type,
+                "created_at": job.created_at.isoformat() if job.created_at else None,
+                "started_at": job.started_at.isoformat() if job.started_at else None,
+                "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+                "retry_count": job.retry_count,
+                "max_retries": job.max_retries,
+                "error": job.error,
+                "result": result_data
+            }
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to retrieve job: {str(e)}"
+        )
 
 
 @router.post("/retry-pending")

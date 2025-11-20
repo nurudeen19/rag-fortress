@@ -353,3 +353,51 @@ async def delete_file(
     
     return SuccessResponse(message=result.get("message", "File deleted"))
 
+
+@router.post("/{file_id}/ingest", response_model=SuccessResponse, status_code=202)
+async def manual_ingest_file(
+    file_id: int,
+    admin: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Manually trigger ingestion for an approved file (admin only).
+    
+    File must be in APPROVED status to be ingested.
+    Returns 202 Accepted - job is queued in background.
+    
+    Status Codes:
+    - 202: Ingestion job created and queued
+    - 400: File not found or not in APPROVED status
+    - 403: Insufficient permissions
+    """
+    try:
+        from app.handlers.file_upload import handle_ingest_file
+        
+        # Call handler to process ingestion
+        result = await handle_ingest_file(file_id, admin, session)
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.get("error", "Failed to trigger ingestion")
+            )
+        
+        # Commit successful operation
+        await session.commit()
+        
+        return SuccessResponse(
+            message=result.get("message", f"Ingestion job created (job_id={result.get('job_id')})")
+        )
+    
+    except HTTPException:
+        await session.rollback()
+        raise
+    except Exception as e:
+        await session.rollback()
+        logger.error(f"Error triggering manual ingestion: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to trigger ingestion"
+        )
+

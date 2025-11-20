@@ -161,15 +161,21 @@ async def handle_approve_file(
     admin: User,
     session: AsyncSession
 ) -> dict:
-    """Approve file for processing."""
+    """Approve file for processing and trigger ingestion job."""
     try:
         service = FileUploadService(session)
-        file_upload = await service.approve(file_id, admin.id)
+        result = await service.approve_and_ingest(file_id, admin.id)
+        
+        if not result["success"]:
+            await session.rollback()
+            logger.warning(f"Approve file failed: {result.get('error')}")
+            return {"success": False, "error": result.get("error", "Unknown error")}
         
         await session.commit()
         
         logger.warning(f"File {file_id} approved by admin {admin.id}")
         
+        file_upload = result["file_upload"]
         return {
             "success": True,
             "file": {
@@ -177,7 +183,9 @@ async def handle_approve_file(
                 "file_name": file_upload.file_name,
                 "status": file_upload.status.value,
             },
-            "message": "File approved"
+            "message": result.get("message"),
+            "job_id": result.get("job_id"),
+            "warning": result.get("warning")
         }
     except ValueError as e:
         await session.rollback()
@@ -532,4 +540,30 @@ async def handle_get_file_content(
     
     except Exception as e:
         logger.error(f"Get file content failed: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+async def handle_ingest_file(
+    file_id: int,
+    admin: User,
+    session: AsyncSession
+) -> dict:
+    """Manually trigger ingestion for an approved file."""
+    try:
+        service = FileUploadService(session)
+        result = await service.trigger_ingestion(file_id, admin.id)
+        
+        if not result["success"]:
+            logger.warning(f"Manual ingestion failed for file {file_id}: {result.get('error')}")
+            return {"success": False, "error": result.get("error")}
+        
+        logger.info(f"Admin {admin.id} triggered manual ingestion job {result['job_id']} for file {file_id}")
+        
+        return {
+            "success": True,
+            "job_id": result.get("job_id"),
+            "message": result.get("message")
+        }
+    except Exception as e:
+        logger.error(f"Handle ingest file failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}

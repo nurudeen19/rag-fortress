@@ -266,11 +266,33 @@ class JobQueueIntegration:
         return handler
     
     async def _handle_file_ingestion(self, job: Job) -> dict:
-        """Handle file ingestion job."""
-        # TODO: Implement actual file ingestion logic
-        payload = json.loads(job.payload) if job.payload else {}
-        logger.info(f"Processing file ingestion: {payload}")
-        return {"status": "ingested", "file_id": job.reference_id}
+        """Handle file ingestion job - coordinate DocumentIngestionService pipeline."""
+        try:
+            from app.services.document_ingestion import DocumentIngestionService
+            
+            payload = json.loads(job.payload) if job.payload else {}
+            file_id = payload.get("file_id") or job.reference_id
+            batch_mode = payload.get("batch_mode", False)
+            
+            logger.info(f"Starting file ingestion job: file_id={file_id}, batch_mode={batch_mode}")
+            
+            # Create new session for ingestion work
+            async with self.session_factory() as session:
+                ingestion_service = DocumentIngestionService(session)
+                
+                if batch_mode:
+                    # Process all approved files
+                    result = await ingestion_service.ingest_batch()
+                else:
+                    # Process single file
+                    result = await ingestion_service.ingest_single_file(file_id)
+            
+            logger.info(f"File ingestion completed: {result}")
+            return result
+        
+        except Exception as e:
+            logger.error(f"Error in file ingestion handler: {e}", exc_info=True)
+            raise
     
     async def _handle_embedding(self, job: Job) -> dict:
         """Handle embedding generation job."""
