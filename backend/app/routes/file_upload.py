@@ -219,8 +219,10 @@ async def get_file_content(
 ):
     """
     Get file content for viewing in browser.
-    Supports viewing: PDF, Excel, CSV, JSON, Markdown, TXT
-    For unsupported types (DOCX, DOC, etc): returns metadata indicating download option
+    Returns binary blob with appropriate Content-Type header.
+    
+    Supports: PDF, Excel, CSV, JSON, Markdown, TXT
+    For unsupported types: returns with application/octet-stream
     """
     result = await handle_get_file_content(file_id, user, session)
     
@@ -231,39 +233,31 @@ async def get_file_content(
             detail=result.get("error", "Failed to retrieve file")
         )
     
-    # Check if file is viewable
-    if not result.get("viewable", False):
-        # Return JSON metadata for non-viewable files
-        return {
-            "success": True,
-            "viewable": False,
-            "can_download": result.get("can_download", True),
-            "filename": result.get("filename"),
-            "file_type": result.get("file_type"),
-            "message": result.get("message")
-        }
-    
-    # Return file as streaming response for viewable files
     file_content = result["content"]
     filename = result["filename"]
+    file_type = result.get("file_type", "").lower()
     
-    # Determine media type based on file extension
-    file_ext = filename.lower().split(".")[-1]
-    media_types = {
+    # Map file types to proper content types
+    content_type_map = {
         "pdf": "application/pdf",
+        "txt": "text/plain",
+        "md": "text/markdown",
+        "markdown": "text/markdown",
+        "json": "application/json",
+        "csv": "text/csv",
         "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "xls": "application/vnd.ms-excel",
-        "csv": "text/csv",
-        "json": "application/json",
-        "md": "text/markdown",
-        "txt": "text/plain"
     }
-    media_type = media_types.get(file_ext, "application/octet-stream")
+    
+    content_type = content_type_map.get(file_type, "application/octet-stream")
     
     return StreamingResponse(
         iter([file_content]),
-        media_type=media_type,
-        headers={"Content-Disposition": f"inline; filename={filename}"}
+        media_type=content_type,
+        headers={
+            "Content-Disposition": f"inline; filename={filename}",
+            "X-File-Type": file_type
+        }
     )
 
 

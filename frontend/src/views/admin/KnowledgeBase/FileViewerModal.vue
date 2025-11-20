@@ -86,7 +86,7 @@
           </div>
 
           <!-- Excel/CSV Table -->
-          <div v-else-if="fileType === 'excel' || fileType === 'csv'" class="overflow-x-auto border border-fortress-700 rounded">
+          <div v-else-if="fileType === 'xlsx' || fileType === 'xls' || fileType === 'csv'" class="overflow-x-auto border border-fortress-700 rounded">
             <table class="w-full border-collapse">
               <thead>
                 <tr class="bg-fortress-900">
@@ -117,17 +117,9 @@
             </table>
           </div>
 
-          <!-- HTML Viewer (for converted DOCX) -->
-          <iframe
-            v-else-if="fileType === 'html'"
-            :srcDoc="htmlContent"
-            class="w-full border-0 rounded"
-            style="min-height: 500px"
-          ></iframe>
-
           <!-- Markdown Viewer -->
           <div
-            v-else-if="fileType === 'markdown'"
+            v-else-if="fileType === 'md' || fileType === 'markdown'"
             class="bg-fortress-900 p-4 rounded border border-fortress-700 prose prose-invert max-w-none"
             v-html="markdownContent"
           ></div>
@@ -195,9 +187,6 @@ let pdfDoc = null
 const excelHeaders = ref([])
 const excelRows = ref([])
 
-// HTML specific (for converted DOCX)
-const htmlContent = ref('')
-
 // Markdown specific
 const markdownContent = ref('')
 
@@ -207,23 +196,22 @@ const jsonContent = ref('')
 // Text specific
 const textContent = ref('')
 
+// Categorize file types
+const viewableTypes = ['pdf', 'txt', 'md', 'markdown', 'json', 'csv', 'xlsx', 'xls']
+const downloadOnlyTypes = ['docx', 'doc', 'pptx', 'xls', 'zip', 'rar', 'exe']
+
+const isViewable = (type) => viewableTypes.includes(type?.toLowerCase())
+const isDownloadOnly = (type) => downloadOnlyTypes.includes(type?.toLowerCase())
+
+// Get file type from response
+const getFileTypeFromResponse = (response) => {
+  return response.file_type?.toLowerCase() || null
+}
+
 // Detect file type from filename
 const detectFileType = (filename) => {
   const ext = filename.toLowerCase().split('.').pop()
-  const typeMap = {
-    pdf: 'pdf',
-    xlsx: 'excel',
-    xls: 'excel',
-    csv: 'csv',
-    docx: 'html',  // DOCX files converted to HTML on backend
-    doc: 'html',   // DOC files converted to HTML on backend
-    html: 'html',
-    md: 'markdown',
-    markdown: 'markdown',
-    txt: 'txt',
-    json: 'json'
-  }
-  return typeMap[ext] || 'unknown'
+  return ext || 'unknown'
 }
 
 // Load file from backend
@@ -235,54 +223,55 @@ const loadFile = async () => {
   notViewable.value = false
 
   try {
-    console.log(`Loading file: ${props.fileName} (ID: ${props.fileId})`)
+    // Get file as blob
     const response = await api.get(`/v1/files/${props.fileId}/content`, {
       responseType: 'blob'
     })
 
-    // Check if response indicates file is not viewable
-    const contentType = response.headers['content-type']
-    
-    // If we got JSON response, it means backend sent metadata (not viewable)
-    if (contentType && contentType.includes('application/json')) {
-      const jsonData = JSON.parse(await response.data.text())
-      if (!jsonData.viewable && jsonData.can_download) {
-        notViewable.value = true
-        notViewableMessage.value = jsonData.message || 'This file type cannot be viewed in the browser'
-        fileTypeDisplay.value = jsonData.file_type?.toUpperCase() || 'Unknown'
-        console.log('File not viewable, offering download instead')
-        return
-      }
+    fileType.value = detectFileType(props.fileName)
+
+    // Check if file is viewable or download-only
+    if (isDownloadOnly(fileType.value)) {
+      notViewable.value = true
+      notViewableMessage.value = `${fileType.value.toUpperCase()} files cannot be viewed in browser. Please download to view.`
+      fileTypeDisplay.value = fileType.value.toUpperCase()
+      return
     }
 
-    fileType.value = detectFileType(props.fileName)
-    console.log(`Detected file type: ${fileType.value}`)
+    if (!isViewable(fileType.value)) {
+      notViewable.value = true
+      notViewableMessage.value = `File type ".${fileType.value}" is not supported for preview. Please download to view.`
+      fileTypeDisplay.value = fileType.value.toUpperCase()
+      return
+    }
 
-    // Process based on file type
+    // Get the blob - when responseType is 'blob', the entire response is the blob
+    const blob = response.data || response
+
+    // File is viewable - process based on type
     switch (fileType.value) {
       case 'pdf':
-        await loadPDF(response)
+        await loadPDF(blob)
         break
-      case 'excel':
-        await loadExcel(response)
+      case 'xlsx':
+      case 'xls':
+        await loadExcel(blob)
         break
       case 'csv':
-        await loadCSV(response)
+        await loadCSV(blob)
         break
-      case 'html':
-        await loadHTML(response)
-        break
+      case 'md':
       case 'markdown':
-        await loadMarkdown(response)
+        await loadMarkdown(blob)
         break
       case 'json':
-        await loadJSON(response)
+        await loadJSON(blob)
         break
       case 'txt':
-        await loadText(response)
+        await loadText(blob)
         break
       default:
-        error.value = 'File type not supported for preview'
+        error.value = `File type ".${fileType.value}" not supported for preview`
     }
   } catch (err) {
     console.error('Failed to load file:', err)
@@ -295,8 +284,24 @@ const loadFile = async () => {
 // PDF loading
 const loadPDF = async (blob) => {
   try {
+    if (!blob) {
+      error.value = 'No file content received'
+      return
+    }
+    if (!(blob instanceof Blob)) {
+      error.value = 'Invalid file format received'
+      return
+    }
     const arrayBuffer = await blob.arrayBuffer()
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      error.value = 'PDF file is empty'
+      return
+    }
     pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+    if (!pdfDoc) {
+      error.value = 'Failed to parse PDF document'
+      return
+    }
     pdfPageCount.value = pdfDoc.numPages
     currentPage.value = 1
     
@@ -304,7 +309,7 @@ const loadPDF = async (blob) => {
     await renderPDFPage(1)
   } catch (err) {
     console.error('PDF loading error:', err)
-    error.value = 'Failed to load PDF'
+    error.value = `Failed to load PDF: ${err.message || 'Unknown error'}`
   }
 }
 
@@ -346,7 +351,19 @@ const previousPage = () => {
 // Excel loading
 const loadExcel = async (blob) => {
   try {
+    if (!blob) {
+      error.value = 'No file content received'
+      return
+    }
+    if (!(blob instanceof Blob)) {
+      error.value = 'Invalid file format received'
+      return
+    }
     const arrayBuffer = await blob.arrayBuffer()
+    if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+      error.value = 'Excel file is empty'
+      return
+    }
     const workbook = new Workbook()
     await workbook.xlsx.load(arrayBuffer)
     
@@ -372,14 +389,26 @@ const loadExcel = async (blob) => {
     excelRows.value = data
   } catch (err) {
     console.error('Excel loading error:', err)
-    error.value = 'Failed to load Excel file'
+    error.value = `Failed to load Excel file: ${err.message || 'Unknown error'}`
   }
 }
 
 // CSV loading
 const loadCSV = async (blob) => {
   try {
+    if (!blob) {
+      error.value = 'No file content received'
+      return
+    }
+    if (!(blob instanceof Blob)) {
+      error.value = 'Invalid file format received'
+      return
+    }
     const text = await blob.text()
+    if (!text) {
+      error.value = 'CSV file is empty'
+      return
+    }
     
     // Use a promise to properly wait for Papa.parse callback
     return new Promise((resolve, reject) => {
@@ -406,56 +435,81 @@ const loadCSV = async (blob) => {
     })
   } catch (err) {
     console.error('CSV loading error:', err)
-    error.value = 'Failed to load CSV file'
-  }
-}
-
-// DOCX loading (now handled as PDF on backend - this is kept for reference)
-const loadDOCX = async (blob) => {
-  console.log('Note: DOCX files are automatically converted to HTML on the backend')
-}
-
-// HTML loading (for converted DOCX files)
-const loadHTML = async (blob) => {
-  try {
-    const text = await blob.text()
-    htmlContent.value = text
-  } catch (err) {
-    console.error('HTML loading error:', err)
-    error.value = 'Failed to load HTML content'
+    error.value = `Failed to load CSV file: ${err.message || 'Unknown error'}`
   }
 }
 
 // Markdown loading
 const loadMarkdown = async (blob) => {
   try {
+    if (!blob) {
+      error.value = 'No file content received'
+      return
+    }
+    if (!(blob instanceof Blob)) {
+      error.value = 'Invalid file format received'
+      return
+    }
     const text = await blob.text()
-    markdownContent.value = marked(text)
+    if (!text) {
+      error.value = 'Markdown file is empty'
+      return
+    }
+    if (typeof marked.parse !== 'function') {
+      error.value = 'Markdown parser not available'
+      return
+    }
+    markdownContent.value = marked.parse(text)
   } catch (err) {
     console.error('Markdown loading error:', err)
-    error.value = 'Failed to load Markdown file'
+    error.value = `Failed to load Markdown file: ${err.message || 'Unknown error'}`
   }
 }
 
 // JSON loading
 const loadJSON = async (blob) => {
   try {
+    if (!blob) {
+      error.value = 'No file content received'
+      return
+    }
+    if (!(blob instanceof Blob)) {
+      error.value = 'Invalid file format received'
+      return
+    }
     const text = await blob.text()
+    if (!text) {
+      error.value = 'JSON file is empty'
+      return
+    }
     const json = JSON.parse(text)
     jsonContent.value = JSON.stringify(json, null, 2)
   } catch (err) {
     console.error('JSON loading error:', err)
-    error.value = 'Invalid JSON file'
+    error.value = `Invalid JSON file: ${err.message || 'Unknown error'}`
   }
 }
 
 // Text loading
 const loadText = async (blob) => {
   try {
-    textContent.value = await blob.text()
+    if (!blob) {
+      error.value = 'No file content received'
+      return
+    }
+    if (!(blob instanceof Blob)) {
+      error.value = 'Invalid file format received'
+      return
+    }
+    const text = await blob.text()
+    if (text === undefined || text === null) {
+      error.value = 'Text file is empty'
+      return
+    }
+    textContent.value = text
   } catch (err) {
     console.error('Text loading error:', err)
-    error.value = 'Failed to load text file'
+    error.value = `Failed to load text file: ${err.message || 'Unknown error'}`
   }
 }
 
@@ -472,12 +526,15 @@ const closeViewer = () => {
 const downloadFile = async () => {
   try {
     loading.value = true
-    const response = await api.get(`/v1/files/${props.fileId}/download`, {
+    const response = await api.get(`/v1/files/${props.fileId}/content`, {
       responseType: 'blob'
     })
     
-    // Create download link
-    const url = window.URL.createObjectURL(new Blob([response.data]))
+    // When responseType is 'blob', response.data is the blob
+    const blob = response.data || response
+    
+    // Create download link from blob
+    const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
     link.setAttribute('download', props.fileName)

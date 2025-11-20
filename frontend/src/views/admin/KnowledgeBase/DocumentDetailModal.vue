@@ -1,7 +1,7 @@
 <template>
   <transition name="modal">
     <div v-if="document" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-fortress-800 rounded-lg border border-fortress-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div class="bg-fortress-800 rounded-lg border border-fortress-700 w-full max-w-xl max-h-[85vh] overflow-y-auto shadow-2xl">
         <!-- Header -->
         <div class="sticky top-0 flex items-center justify-between p-6 border-b border-fortress-700 bg-fortress-800">
           <h2 class="text-xl font-semibold text-fortress-100">Document Details</h2>

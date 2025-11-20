@@ -536,9 +536,8 @@ class FileUploadService:
         is_admin: bool
     ) -> dict:
         """
-        Retrieve file content for viewing (text, JSON, CSV, Excel, PDF only).
-        
-        For unsupported formats (DOCX, DOC), returns response indicating download option.
+        Retrieve file content for viewing.
+        Returns raw file content. Frontend decides how to display it.
         
         Args:
             file_id: File upload ID
@@ -546,10 +545,9 @@ class FileUploadService:
             is_admin: Whether user is admin
         
         Returns:
-            Dict with success status, content (if viewable), filename, file_type
-            For unsupported types, returns success with viewable=false and can_download=true
+            Dict with success status, content, filename, file_type
         """
-        
+        import os
         
         # Get file record
         file_record = await self.get_file(file_id)
@@ -560,18 +558,6 @@ class FileUploadService:
         is_owner = file_record.uploaded_by_id == user_id
         if not (is_owner or is_admin):
             return {"success": False, "error": "Access denied"}
-        
-        # Check if file type is viewable
-        viewable_types = ("txt", "json", "csv", "xlsx", "xls", "pdf")
-        if file_record.file_type not in viewable_types:
-            return {
-                "success": True,
-                "viewable": False,
-                "can_download": True,
-                "filename": file_record.file_name,
-                "file_type": file_record.file_type,
-                "message": f"File type '{file_record.file_type}' cannot be viewed in browser. Please download instead."
-            }
         
         try:
             # Resolve file path
@@ -586,7 +572,6 @@ class FileUploadService:
             
             return {
                 "success": True,
-                "viewable": True,
                 "content": file_content,
                 "filename": file_record.file_name,
                 "file_type": file_record.file_type
