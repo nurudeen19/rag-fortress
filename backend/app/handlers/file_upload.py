@@ -67,6 +67,10 @@ async def handle_get_file(file_id: int, session: AsyncSession) -> dict:
         if not file_upload:
             return {"success": False, "error": "File not found"}
         
+        # Get uploader info with department using the service method
+        uploader_map = await service.get_file_with_uploaders([file_upload])
+        uploader_info = uploader_map.get(file_upload.uploaded_by_id)
+        
         return {
             "success": True,
             "file": {
@@ -83,7 +87,10 @@ async def handle_get_file(file_id: int, session: AsyncSession) -> dict:
                 "uploaded_by_id": file_upload.uploaded_by_id,
                 "created_at": file_upload.created_at.isoformat(),
                 "updated_at": file_upload.updated_at.isoformat(),
-                "is_processed": file_upload.status.value in ["processed", "failed"],
+                "uploader_info": uploader_info,
+                "is_processed": file_upload.is_processed,
+                "processing_error": file_upload.processing_error,
+                "retry_count": file_upload.retry_count,
                 "chunks_created": file_upload.chunks_created,
                 "processing_time_ms": file_upload.processing_time_ms,
             }

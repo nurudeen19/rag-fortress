@@ -113,6 +113,12 @@ const router = createRouter({
           meta: { requiresRoles: ['admin'] }
         },
         {
+          path: 'knowledge-base/details/:id',
+          name: 'document-details',
+          component: () => import('../views/admin/KnowledgeBase/DocumentDetailsPage.vue'),
+          meta: { requiresRoles: ['admin'] }
+        },
+        {
           path: 'my-uploads',
           name: 'my-uploads',
           component: () => import('../views/documents/MyUploads.vue'),

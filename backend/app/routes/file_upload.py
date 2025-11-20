@@ -324,7 +324,7 @@ async def approve_file(
 @router.post("/{file_id}/reject", response_model=SuccessResponse)
 async def reject_file(
     file_id: int,
-    reason: str = Query(..., min_length=1),
+    reason: str = Form(..., min_length=1),
     admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):

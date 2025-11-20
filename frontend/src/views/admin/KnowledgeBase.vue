@@ -140,10 +140,10 @@
                   <!-- Approve/Reject buttons for pending documents -->
                   <template v-if="doc.status === 'pending'">
                     <button
-                      @click="approveDocument(doc.id)"
+                      @click="initiateApproval(doc)"
                       :disabled="loading"
                       class="p-1 text-success hover:bg-success/10 disabled:opacity-50 rounded transition-colors"
-                      title="Approve"
+                      title="Quick Approve & Process"
                     >
                       <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -203,16 +203,6 @@
       </div>
     </div>
 
-    <!-- Detail Modal -->
-    <DocumentDetailModal
-      v-if="selectedDocument"
-      :document="selectedDocument"
-      :is-user-view="false"
-      @close="selectedDocument = null"
-      @approve="approveDocument"
-      @reject="showRejectModal"
-    />
-
     <!-- Reject Modal -->
     <RejectDocumentModal
       :is-open="showRejectModalFlag"
@@ -220,25 +210,39 @@
       @close="showRejectModalFlag = false"
       @submit="handleReject"
     />
+
+    <!-- Approval Confirmation Modal -->
+    <ApprovalConfirmationModal
+      :is-open="showApprovalConfirm"
+      :document="approvalDocument"
+      :loading="approvingDocument"
+      @close="showApprovalConfirm = false"
+      @confirm="confirmApproval"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '../../services/api'
-import DocumentDetailModal from './KnowledgeBase/DocumentDetailModal.vue'
 import RejectDocumentModal from './KnowledgeBase/RejectDocumentModal.vue'
+import ApprovalConfirmationModal from './KnowledgeBase/ApprovalConfirmationModal.vue'
+
+const router = useRouter()
 
 // State
 const documents = ref([])
 const counts = ref({})
 const loading = ref(false)
 const error = ref(null)
-const selectedDocument = ref(null)
 const rejectDocument = ref(null)
 const showRejectModalFlag = ref(false)
 const currentStatus = ref('pending')
 const pagination = ref({ limit: 50, offset: 0, total: 0 })
+const showApprovalConfirm = ref(false)
+const approvalDocument = ref(null)
+const approvingDocument = ref(false)
 
 // Status filters ordered with pending first for admins
 const statuses = [
@@ -324,26 +328,43 @@ const getStatusCount = (status) => {
 
 // Actions
 const viewDocument = (doc) => {
-  selectedDocument.value = doc
+  // Navigate to details page and pass document as state
+  router.push({
+    name: 'document-details',
+    params: { id: doc.id },
+    state: { document: doc }
+  })
 }
 
-const approveDocument = async (documentId) => {
+const initiateApproval = (doc) => {
+  approvalDocument.value = doc
+  showApprovalConfirm.value = true
+}
+
+const confirmApproval = async () => {
+  if (!approvalDocument.value) return
+
   try {
-    loading.value = true
-    const response = await api.post(`/v1/files/${documentId}/approve`)
+    approvingDocument.value = true
+    const documentId = approvalDocument.value.id
     
+    // Approve and ingest immediately
+    await api.post(`/v1/files/${documentId}/approve`)
+    await api.post(`/v1/files/${documentId}/ingest`)
+
+    // Update document status
     const doc = documents.value.find(d => d.id === documentId)
     if (doc) {
-      doc.status = 'approved'
+      doc.status = 'processed'
     }
 
-    selectedDocument.value = null
-    console.log('Document approved:', response)
+    showApprovalConfirm.value = false
+    approvalDocument.value = null
   } catch (error) {
     console.error('Approval failed:', error)
     alert('Failed to approve document')
   } finally {
-    loading.value = false
+    approvingDocument.value = false
   }
 }
 
@@ -365,7 +386,6 @@ const handleReject = async (data) => {
     }
 
     showRejectModalFlag.value = false
-    selectedDocument.value = null
     console.log('Document rejected:', response)
   } catch (err) {
     console.error('Rejection failed:', err)
@@ -381,7 +401,6 @@ const deleteDocument = async (documentId) => {
   try {
     loading.value = true
     documents.value = documents.value.filter(d => d.id !== documentId)
-    selectedDocument.value = null
     console.log('Document deleted')
   } catch (err) {
     console.error('Delete failed:', err)

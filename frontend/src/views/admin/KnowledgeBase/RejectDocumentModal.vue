@@ -26,7 +26,7 @@
               <div class="flex-1 min-w-0">
                 <p class="text-fortress-300 font-medium truncate">{{ document.file_name }}</p>
                 <p class="text-fortress-500 text-sm mt-1">
-                  Submitted by {{ document.uploaded_by }}
+                  Submitted by {{ document.uploaded_by_name || `User #${document.uploaded_by_id}` }}
                 </p>
               </div>
             </div>

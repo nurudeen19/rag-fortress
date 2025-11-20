@@ -1,9 +1,9 @@
 <template>
   <transition name="modal">
     <div v-if="document" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div class="bg-fortress-800 rounded-lg border border-fortress-700 w-full max-w-xl max-h-[85vh] overflow-y-auto shadow-2xl">
+      <div class="bg-fortress-800 rounded-lg border border-fortress-700 w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col">
         <!-- Header -->
-        <div class="sticky top-0 flex items-center justify-between p-6 border-b border-fortress-700 bg-fortress-800">
+        <div class="flex items-center justify-between p-6 border-b border-fortress-700 bg-fortress-800">
           <h2 class="text-xl font-semibold text-fortress-100">Document Details</h2>
           <button
             @click="$emit('close')"
@@ -15,141 +15,168 @@
           </button>
         </div>
 
+        <!-- Tabs Navigation -->
+        <div class="flex gap-0 border-b border-fortress-700 bg-fortress-900/30 px-6">
+          <button
+            @click="activeTab = 'operations'"
+            :class="[
+              'px-4 py-3 font-medium transition-colors border-b-2',
+              activeTab === 'operations'
+                ? 'text-secure border-secure'
+                : 'text-fortress-400 hover:text-fortress-300 border-transparent'
+            ]"
+          >
+            Operations
+          </button>
+          <button
+            @click="activeTab = 'preview'"
+            :class="[
+              'px-4 py-3 font-medium transition-colors border-b-2',
+              activeTab === 'preview'
+                ? 'text-secure border-secure'
+                : 'text-fortress-400 hover:text-fortress-300 border-transparent'
+            ]"
+          >
+            File Preview
+          </button>
+        </div>
+
         <!-- Content -->
-        <div class="p-6 space-y-6">
-          <!-- File Info -->
-          <div>
-            <h3 class="text-sm font-semibold text-fortress-300 mb-3">File Information</h3>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-fortress-400">File Name:</span>
-                <span class="text-fortress-100">{{ document.file_name }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-fortress-400">File Size:</span>
-                <span class="text-fortress-100">{{ formatFileSize(document.file_size) }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-fortress-400">Uploaded By:</span>
-                <span class="text-fortress-100">{{ document.uploaded_by }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-fortress-400">Uploaded At:</span>
-                <span class="text-fortress-100">{{ formatDate(document.uploaded_at) }}</span>
+        <div class="flex-1 overflow-y-auto p-6">
+          <!-- Operations Tab -->
+          <div v-if="activeTab === 'operations'" class="space-y-6">
+            <!-- File Information -->
+            <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4 space-y-3">
+              <h3 class="text-sm font-semibold text-fortress-300 mb-4">File Information</h3>
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-fortress-400">File Name:</span>
+                  <p class="text-fortress-100 font-medium">{{ document.file_name }}</p>
+                </div>
+                <div>
+                  <span class="text-fortress-400">File Size:</span>
+                  <p class="text-fortress-100 font-medium">{{ formatFileSize(document.file_size) }}</p>
+                </div>
+                <div>
+                  <span class="text-fortress-400">Uploaded By:</span>
+                  <p class="text-fortress-100 font-medium">{{ document.uploaded_by }}</p>
+                </div>
+                <div>
+                  <span class="text-fortress-400">Uploaded At:</span>
+                  <p class="text-fortress-100 font-medium">{{ formatDate(document.uploaded_at) }}</p>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Status & Security -->
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <p class="text-sm font-semibold text-fortress-300 mb-2">Status</p>
-              <span :class="['px-3 py-1 rounded-full text-sm font-medium', getStatusBadge(document.status)]">
-                {{ getStatusLabel(document.status) }}
-              </span>
+            <!-- Status & Security -->
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
+                <p class="text-xs font-semibold text-fortress-400 mb-2">Status</p>
+                <span :class="['px-3 py-1 rounded-full text-sm font-medium inline-block', getStatusBadge(document.status)]">
+                  {{ getStatusLabel(document.status) }}
+                </span>
+              </div>
+              <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
+                <p class="text-xs font-semibold text-fortress-400 mb-2">Security Level</p>
+                <span :class="['px-3 py-1 rounded-full text-sm font-medium inline-block', getSecurityBadge(document.security_level)]">
+                  {{ document.security_level }}
+                </span>
+              </div>
             </div>
-            <div>
-              <p class="text-sm font-semibold text-fortress-300 mb-2">Security Level</p>
-              <span :class="['px-3 py-1 rounded-full text-sm font-medium', getSecurityBadge(document.security_level)]">
-                {{ document.security_level }}
-              </span>
+
+            <!-- File Purpose -->
+            <div v-if="document.file_purpose" class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
+              <h3 class="text-sm font-semibold text-fortress-300 mb-2">File Purpose</h3>
+              <p class="text-sm text-fortress-400">{{ document.file_purpose }}</p>
             </div>
-          </div>
 
-          <!-- Purpose -->
-          <div v-if="document.file_purpose">
-            <h3 class="text-sm font-semibold text-fortress-300 mb-2">File Purpose</h3>
-            <p class="text-sm text-fortress-400">{{ document.file_purpose }}</p>
-          </div>
+            <!-- Processing Info -->
+            <div v-if="document.chunks_created" class="p-4 bg-secure/10 border border-secure/50 rounded-lg">
+              <p class="text-sm">
+                <span class="font-semibold text-secure">{{ document.chunks_created }}</span>
+                <span class="text-fortress-400">chunks created from this document</span>
+              </p>
+            </div>
 
-          <!-- Rejection Reason -->
-          <div v-if="document.rejection_reason" class="p-4 bg-alert/10 border border-alert/50 rounded-lg">
-            <h3 class="text-sm font-semibold text-alert mb-2">Rejection Reason</h3>
-            <p class="text-sm text-fortress-300">{{ document.rejection_reason }}</p>
-          </div>
+            <!-- Rejection Reason -->
+            <div v-if="document.rejection_reason" class="p-4 bg-alert/10 border border-alert/50 rounded-lg">
+              <h3 class="text-sm font-semibold text-alert mb-2">Rejection Reason</h3>
+              <p class="text-sm text-fortress-300">{{ document.rejection_reason }}</p>
+            </div>
 
-          <!-- Processing Info -->
-          <div v-if="document.chunks_created" class="p-4 bg-secure/10 border border-secure/50 rounded-lg">
-            <p class="text-sm">
-              <span class="font-semibold text-secure">{{ document.chunks_created }}</span>
-              <span class="text-fortress-400">chunks created from this document</span>
-            </p>
-          </div>
+            <!-- Approval Options (if pending) -->
+            <div v-if="!isUserView && document.status === 'pending'" class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4 space-y-3">
+              <h3 class="text-sm font-semibold text-fortress-300">Approval Options</h3>
+              <div class="space-y-2">
+                <button
+                  @click="$emit('approveQuick', document.id)"
+                  class="w-full px-4 py-2 bg-success hover:bg-success/90 text-white font-medium rounded-lg transition-colors text-sm"
+                >
+                  ✓ Approve & Process Immediately
+                </button>
+                <button
+                  @click="$emit('approveScheduled', document.id)"
+                  class="w-full px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors text-sm"
+                >
+                  ⏰ Approve & Schedule for Later
+                </button>
+                <button
+                  @click="$emit('approveManual', document.id)"
+                  class="w-full px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors text-sm"
+                >
+                  👤 Approve & Manual Processing
+                </button>
+              </div>
+            </div>
 
-          <!-- View File Button -->
-          <div class="flex gap-3 pt-4 border-t border-fortress-700">
-            <button
-              @click="openFileViewer"
-              class="flex-1 px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              View File
-            </button>
-          </div>
-
-          <!-- Actions -->
-          <div v-if="!isUserView && (document.status === 'pending' || document.status === 'rejected')" class="flex gap-3 pt-6 border-t border-fortress-700">
-            <template v-if="document.status === 'pending'">
-              <button
-                @click="$emit('approve', document.id)"
-                class="flex-1 px-4 py-2 bg-success hover:bg-success/90 text-white font-medium rounded-lg transition-colors"
-              >
-                Approve
-              </button>
+            <!-- Rejection Option (if pending or rejected) -->
+            <div v-if="!isUserView && (document.status === 'pending' || document.status === 'rejected')" class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
               <button
                 @click="$emit('reject', document)"
-                class="flex-1 px-4 py-2 bg-alert hover:bg-alert/90 text-white font-medium rounded-lg transition-colors"
+                class="w-full px-4 py-2 bg-alert/20 hover:bg-alert/30 text-alert font-medium rounded-lg transition-colors text-sm border border-alert/50"
               >
-                Reject
+                ✗ Reject Document
               </button>
-            </template>
+            </div>
 
-            <template v-if="document.status === 'rejected'">
+            <!-- Resubmit Option (if rejected) -->
+            <div v-if="!isUserView && document.status === 'rejected'" class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
               <button
                 @click="$emit('resubmit', document)"
-                class="flex-1 px-4 py-2 bg-secure hover:bg-secure/90 text-white font-medium rounded-lg transition-colors"
+                class="w-full px-4 py-2 bg-secure hover:bg-secure/90 text-white font-medium rounded-lg transition-colors text-sm"
               >
-                Resubmit Document
+                🔄 Request Resubmission
               </button>
-            </template>
-
-            <button
-              @click="$emit('close')"
-              class="flex-1 px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors"
-            >
-              Close
-            </button>
+            </div>
           </div>
 
-          <!-- User View - Close Only -->
-          <div v-else-if="isUserView" class="flex gap-3 pt-6 border-t border-fortress-700">
-            <button
-              @click="$emit('close')"
-              class="w-full px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors"
-            >
-              Close
-            </button>
+          <!-- File Preview Tab -->
+          <div v-else-if="activeTab === 'preview'" class="space-y-4">
+            <FileViewerComponent
+              :file-id="document.id"
+              :file-name="document.file_name"
+              :auto-load="true"
+            />
           </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex gap-3 p-6 border-t border-fortress-700 bg-fortress-900/30">
+          <button
+            @click="$emit('close')"
+            class="flex-1 px-4 py-2 bg-fortress-700 hover:bg-fortress-600 text-fortress-100 font-medium rounded-lg transition-colors"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>
   </transition>
-
-  <!-- File Viewer Modal -->
-  <FileViewerModal
-    :is-open="showFileViewer"
-    :file-id="document?.id"
-    :file-name="document?.file_name"
-    @close="showFileViewer = false"
-  />
 </template>
 
 <script setup>
 import { ref } from 'vue'
-import FileViewerModal from './FileViewerModal.vue'
+import FileViewerComponent from './FileViewerComponent.vue'
 
 const props = defineProps({
   document: {
@@ -162,13 +189,9 @@ const props = defineProps({
   }
 })
 
-defineEmits(['close', 'approve', 'reject', 'resubmit'])
+defineEmits(['close', 'reject', 'resubmit', 'approveQuick', 'approveScheduled', 'approveManual'])
 
-const showFileViewer = ref(false)
-
-const openFileViewer = () => {
-  showFileViewer.value = true
-}
+const activeTab = ref('operations')
 
 const formatFileSize = (bytes) => {
   if (!bytes) return '0 B'
