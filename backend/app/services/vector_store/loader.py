@@ -98,7 +98,8 @@ class DocumentLoader:
         meta = {
             "upload_token": file_upload.upload_token,
             "file_id": file_upload.id,
-            "security_level": file_upload.security_level.name,  # e.g., "GENERAL", "CONFIDENTIAL"
+            # store integer representation for simpler ACL comparisons
+            "security_level": file_upload.security_level.value,
             "is_department_only": file_upload.is_department_only,
             "department": dept_name,
             "file_type": file_upload.file_type,

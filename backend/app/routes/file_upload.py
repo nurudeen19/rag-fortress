@@ -332,18 +332,39 @@ async def approve_file(
 async def reject_file(
     file_id: int,
     reason: str = Form(..., min_length=1),
+    notify_user: bool = Form(False),
     admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
-    """Reject file from processing (admin only)."""
+    """Reject file from processing (admin only). Optionally notify uploader."""
     result = await handle_reject_file(file_id, reason, admin, session)
-    
+
     if not result.get("success"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.get("error")
         )
-    
+
+    # Create notification if requested and uploader exists
+    if notify_user:
+        from app.services.notification_service import NotificationService
+        from app.services.file_upload import FileUploadService
+        try:
+            fu_service = FileUploadService(session)
+            file_upload = await fu_service.get_file(file_id)
+            if file_upload and file_upload.uploaded_by_id:
+                notif_service = NotificationService(session)
+                await notif_service.create(
+                    user_id=file_upload.uploaded_by_id,
+                    message=f"Your file '{file_upload.file_name}' was rejected: {reason}",
+                    notification_type="file_rejected",
+                    related_file_id=file_upload.id,
+                )
+                await session.commit()
+        except Exception as e:
+            # Log but do not fail rejection endpoint
+            logger.error(f"Failed to create rejection notification: {e}")
+
     return SuccessResponse(message=result.get("message", "File rejected"))
 
 

@@ -78,6 +78,13 @@ class DocumentStorageService:
         
         # Step 2: Chunk files
         chunks = self.chunker.chunk_loaded_files(files)
+        # Track chunk counts per file for later persistence
+        chunk_counts: Dict[int, int] = {}
+        for c in chunks:
+            fid = c.metadata.get("file_id")
+            if fid is None:
+                continue
+            chunk_counts[fid] = chunk_counts.get(fid, 0) + 1
         if not chunks:
             logger.warning("No chunks generated from files")
             return {"total_files": len(files), "successfully_stored": 0, "chunks_generated": 0, "errors": []}
@@ -88,7 +95,7 @@ class DocumentStorageService:
         file_ids_result, errors = await self._store_and_track(chunks, batch_size)
         
         # Step 4: Update file statuses
-        await self._update_file_statuses(files, file_ids_result, errors)
+        await self._update_file_statuses(files, file_ids_result, errors, chunk_counts)
         
         successfully_stored = len([fid for fid in file_ids_result if fid not in errors])
         logger.info(f"Ingestion complete: {successfully_stored}/{len(files)} files processed")
@@ -149,10 +156,11 @@ class DocumentStorageService:
         return successful_file_ids, error_file_ids
     
     async def _update_file_statuses(
-        self, 
-        files: List[Dict[str, Any]], 
-        successful_file_ids: set, 
-        error_file_ids: Dict[int, str]
+        self,
+        files: List[Dict[str, Any]],
+        successful_file_ids: set,
+        error_file_ids: Dict[int, str],
+        chunk_counts: Dict[int, int]
     ) -> None:
         """Update FileUpload statuses in database after storage."""
         for file_data in files:
@@ -173,6 +181,9 @@ class DocumentStorageService:
                     file_upload.status = FileStatus.PROCESSED
                     file_upload.is_processed = True
                     file_upload.processing_completed_at = datetime.now(timezone.utc)
+                    # persist chunk count if available
+                    if file_id in chunk_counts:
+                        file_upload.chunks_created = chunk_counts[file_id]
                     logger.info(f"✓ Marked {file_data.get('file_name')} as PROCESSED")
                 
                 elif file_id in error_file_ids:

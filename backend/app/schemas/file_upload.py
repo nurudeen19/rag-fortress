@@ -89,7 +89,8 @@ class FileUploadResponse(BaseModel):
     file_size: int
     
     status: str
-    security_level: str
+    # integer representation of security level (1=GENERAL,...)
+    security_level: int
     is_department_only: bool
     department_id: Optional[int]
     
