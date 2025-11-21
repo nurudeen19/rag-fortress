@@ -29,13 +29,13 @@
             <!-- Notifications Dropdown -->
             <div class="relative">
               <button
-                @click="notificationsOpen = !notificationsOpen"
+                @click="toggleNotifications"
                 class="p-2 rounded-lg text-fortress-400 hover:text-fortress-100 hover:bg-fortress-800 transition-colors relative"
               >
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                 </svg>
-                <span class="absolute top-1 right-1 w-2 h-2 bg-alert rounded-full"></span>
+                <span v-if="unreadCount > 0" class="absolute top-1 right-1 w-2 h-2 bg-alert rounded-full"></span>
               </button>
 
               <!-- Notifications Dropdown Menu -->
@@ -44,11 +44,42 @@
                 @click.self="notificationsOpen = false"
                 class="absolute right-0 mt-2 w-80 bg-fortress-900 border border-fortress-800 rounded-lg shadow-glow overflow-hidden animate-fade-in"
               >
-                <div class="p-4 border-b border-fortress-800">
+                <div class="flex items-center justify-between p-4 border-b border-fortress-800">
                   <p class="text-sm font-medium text-fortress-100">Notifications</p>
+                  <button
+                    v-if="notifications.length > 0 && unreadCount > 0"
+                    @click="markAllNotificationsRead"
+                    class="text-xs text-secure hover:text-secure-light"
+                  >Mark all read</button>
                 </div>
-                <div class="p-4">
-                  <p class="text-sm text-fortress-400 text-center py-8">No notifications yet</p>
+                <div class="max-h-96 overflow-y-auto scrollbar-thin divide-y divide-fortress-800">
+                  <div v-if="loadingNotifications" class="p-4 text-center">
+                    <svg class="w-6 h-6 animate-spin mx-auto text-secure mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <p class="text-xs text-fortress-400">Loading...</p>
+                  </div>
+                  <div v-else-if="notifications.length === 0" class="p-6 text-center">
+                    <p class="text-sm text-fortress-400">No notifications</p>
+                  </div>
+                  <div
+                    v-for="n in notifications"
+                    :key="n.id"
+                    class="p-4 hover:bg-fortress-800/60 transition-colors"
+                  >
+                    <div class="flex items-start justify-between">
+                      <p class="text-sm text-fortress-200 pr-2" :class="!n.is_read ? 'font-medium' : ''">{{ n.message }}</p>
+                      <button
+                        v-if="!n.is_read"
+                        @click="markNotificationRead(n.id)"
+                        class="ml-2 text-xs text-secure hover:underline"
+                      >Read</button>
+                    </div>
+                    <div class="mt-1 flex items-center justify-between">
+                      <span class="text-xs text-fortress-500">{{ formatNotifTime(n.created_at) }}</span>
+                      <span v-if="!n.is_read" class="w-2 h-2 bg-alert rounded-full"></span>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -156,10 +187,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useRoleAccess } from '../composables/useRoleAccess'
+import api from '../services/api'
 
 const router = useRouter()
 const route = useRoute()
@@ -169,6 +201,10 @@ const { getAvailableNav } = useRoleAccess()
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 const notificationsOpen = ref(false)
+const unreadCount = ref(0)
+const notifications = ref([])
+const loadingNotifications = ref(false)
+let unreadInterval = null
 
 // Close sidebar and menus on route change
 watch(() => route.path, () => {
@@ -210,4 +246,87 @@ const handleLogout = async () => {
   await authStore.logout()
   router.push('/login')
 }
+
+// Notification helpers
+const formatNotifTime = (isoString) => {
+  if (!isoString) return ''
+  const date = new Date(isoString)
+  return date.toLocaleString('en-US', {
+    hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric'
+  })
+}
+
+const fetchUnreadCount = async () => {
+  if (!authStore.user) return
+  try {
+    const res = await api.get('/v1/notifications/unread/count')
+    unreadCount.value = res.data?.count ?? 0
+  } catch (e) {
+    // Ignore 404 (notifications not available) or auth errors silently
+    if (e.response?.status !== 404 && e.response?.status !== 401) {
+      console.warn('Failed to fetch unread count:', e.message)
+    }
+  }
+}
+
+const fetchNotifications = async () => {
+  if (!authStore.user) return
+  loadingNotifications.value = true
+  try {
+    const res = await api.get('/v1/notifications', { params: { limit: 50, offset: 0 } })
+    const items = res.data?.items || []
+    notifications.value = items.map(i => ({
+      id: i.id,
+      message: i.message,
+      is_read: i.is_read,
+      created_at: i.created_at,
+      notification_type: i.notification_type,
+      related_file_id: i.related_file_id
+    }))
+  } catch (e) {
+    // silent failure
+  } finally {
+    loadingNotifications.value = false
+  }
+}
+
+const markNotificationRead = async (id) => {
+  try {
+    await api.post(`/v1/notifications/${id}/read`)
+    const n = notifications.value.find(n => n.id === id)
+    if (n) n.is_read = true
+    fetchUnreadCount()
+  } catch (e) {
+    // ignore
+  }
+}
+
+const markAllNotificationsRead = async () => {
+  try {
+    await api.post('/v1/notifications/read-all')
+    notifications.value.forEach(n => { n.is_read = true })
+    unreadCount.value = 0
+  } catch (e) {
+    // ignore
+  }
+}
+
+const toggleNotifications = async () => {
+  notificationsOpen.value = !notificationsOpen.value
+  if (notificationsOpen.value) {
+    if (notifications.value.length === 0) await fetchNotifications()
+    else fetchUnreadCount()
+  }
+}
+
+onMounted(() => {
+  if (authStore.user) {
+    fetchUnreadCount()
+    unreadInterval = setInterval(fetchUnreadCount, 30000)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (unreadInterval) clearInterval(unreadInterval)
+})
 </script>

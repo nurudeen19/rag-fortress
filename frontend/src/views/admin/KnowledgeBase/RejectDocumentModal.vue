@@ -114,7 +114,7 @@
 <script setup>
 import { ref } from 'vue'
 
-defineProps({
+const props = defineProps({
   isOpen: {
     type: Boolean,
     default: false
@@ -143,19 +143,17 @@ const commonReasons = [
 ]
 
 const submit = async () => {
-  if (!form.value.reason.trim()) return
+  if (!form.value.reason.trim() || !props.document?.id) return
 
   rejecting.value = true
   
-  // TODO: API call to reject document
-  await new Promise(resolve => setTimeout(resolve, 800))
-  
   emit('submit', {
-    documentId: document.value?.id,
+    documentId: props.document.id,
     reason: form.value.reason,
     notifyUploader: form.value.notifyUploader
   })
 
+  rejecting.value = false
   close()
 }
 

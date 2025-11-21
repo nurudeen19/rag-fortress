@@ -31,6 +31,7 @@ class Notification(Base):
 
     # timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # relationships (optional backrefs for convenience)
     user = relationship("User", backref="notifications")

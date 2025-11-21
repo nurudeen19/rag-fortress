@@ -25,6 +25,7 @@ def upgrade() -> None:
         sa.Column('is_read', sa.Boolean(), nullable=False, server_default=sa.text('0'), index=True),
         sa.Column('read_at', sa.DateTime(), nullable=True),
         sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP'), index=True),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'), index=True),
     )
     op.create_index('idx_notifications_user_unread', 'notifications', ['user_id', 'is_read'])
     op.create_index('idx_notifications_type_created', 'notifications', ['notification_type', 'created_at'])

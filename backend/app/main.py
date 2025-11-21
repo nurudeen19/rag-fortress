@@ -81,6 +81,7 @@ def create_app() -> FastAPI:
     from app.routes.file_upload import router as file_upload_router
     from app.routes.jobs import router as jobs_router
     from app.routes.departments import router as departments_router
+    from app.routes.notifications import router as notifications_router
     
     app.include_router(email_router)
     app.include_router(auth_router)
@@ -88,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(file_upload_router)
     app.include_router(jobs_router)
     app.include_router(departments_router, prefix="/api/v1/admin")
+    app.include_router(notifications_router)
     
     # Health check endpoint
     @app.get("/health")

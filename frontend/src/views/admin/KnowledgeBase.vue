@@ -398,8 +398,12 @@ const showRejectModal = (doc) => {
 const handleReject = async (data) => {
   try {
     loading.value = true
-    const response = await api.post(`/v1/files/${data.documentId}/reject`, {
-      reason: data.reason
+    // Backend expects multipart/form-data with fields: reason (string) and notify_user (bool)
+    const formData = new FormData()
+    formData.append('reason', data.reason)
+    formData.append('notify_user', data.notifyUploader)
+    await api.post(`/v1/files/${data.documentId}/reject`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
 
     const doc = documents.value.find(d => d.id === data.documentId)
