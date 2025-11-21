@@ -146,6 +146,9 @@ class DocumentLoader:
                 loader = PyPDFLoader(str(file_path))
                 docs = loader.load()
                 return "\n\n".join([d.page_content for d in docs])
+            except ImportError as e:
+                logger.error(f"PDF loader not available. Install with: pip install pypdf")
+                raise
             except Exception as e:
                 logger.error(f"Failed to load PDF: {e}")
                 raise
@@ -153,10 +156,21 @@ class DocumentLoader:
         # Word documents
         elif file_type_lower in ['doc', 'docx']:
             try:
-                from langchain_community.document_loaders import Docx2txtLoader
-                loader = Docx2txtLoader(str(file_path))
-                docs = loader.load()
-                return "\n\n".join([d.page_content for d in docs])
+                # Try python-docx first (lightweight, requires python-docx package)
+                import docx
+                doc = docx.Document(str(file_path))
+                paragraphs = [para.text for para in doc.paragraphs if para.text.strip()]
+                return "\n\n".join(paragraphs)
+            except ImportError:
+                # Fallback to UnstructuredWordDocumentLoader if python-docx not available
+                try:
+                    from langchain_community.document_loaders import UnstructuredWordDocumentLoader
+                    loader = UnstructuredWordDocumentLoader(str(file_path))
+                    docs = loader.load()
+                    return "\n\n".join([d.page_content for d in docs])
+                except ImportError:
+                    logger.error(f"DOCX loader not available. Install with: pip install python-docx")
+                    raise
             except Exception as e:
                 logger.error(f"Failed to load DOCX: {e}")
                 raise
@@ -164,10 +178,29 @@ class DocumentLoader:
         # Excel files
         elif file_type_lower in ['xlsx', 'xls']:
             try:
-                from langchain_community.document_loaders import UnstructuredExcelLoader
-                loader = UnstructuredExcelLoader(str(file_path))
-                docs = loader.load()
-                return "\n\n".join([d.page_content for d in docs])
+                # Try openpyxl first (lightweight, requires openpyxl package)
+                import openpyxl
+                wb = openpyxl.load_workbook(str(file_path), read_only=True, data_only=True)
+                content_parts = []
+                for sheet_name in wb.sheetnames:
+                    sheet = wb[sheet_name]
+                    content_parts.append(f"Sheet: {sheet_name}\n")
+                    for row in sheet.iter_rows(values_only=True):
+                        row_text = "\t".join([str(cell) if cell is not None else "" for cell in row])
+                        if row_text.strip():
+                            content_parts.append(row_text)
+                wb.close()
+                return "\n".join(content_parts)
+            except ImportError:
+                # Fallback to UnstructuredExcelLoader
+                try:
+                    from langchain_community.document_loaders import UnstructuredExcelLoader
+                    loader = UnstructuredExcelLoader(str(file_path))
+                    docs = loader.load()
+                    return "\n\n".join([d.page_content for d in docs])
+                except ImportError:
+                    logger.error(f"Excel loader not available. Install with: pip install openpyxl")
+                    raise
             except Exception as e:
                 logger.error(f"Failed to load Excel: {e}")
                 raise
