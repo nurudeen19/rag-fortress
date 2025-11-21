@@ -22,6 +22,8 @@ import concurrent.futures
 
 from app.models.job import Job, JobStatus, JobType
 from app.services.job_service import JobService
+from app.services.document_ingestion import DocumentIngestionService
+from app.services.email import get_email_service
 from app.jobs import get_job_manager
 from app.core import get_logger
 from app.core.sync_db import get_sync_session
@@ -174,8 +176,12 @@ class JobQueueIntegration:
     
     async def _job_wrapper(self, job_id: int, handler: Callable) -> None:
         """
-        Wrapper executed by JobManager.
-        Handles job status updates using sync database.
+        Wrapper executed by JobManager in isolated event loop.
+        Handles job status updates using SYNC database to avoid event loop conflicts.
+        
+        CRITICAL: This runs in asyncio.run() which creates a NEW event loop.
+        Any async database connections from the main loop will fail here.
+        Therefore, we use SYNC sessions for job status updates.
         
         Retries:
         - On failure, increments retry_count in database
@@ -184,12 +190,13 @@ class JobQueueIntegration:
         
         Args:
             job_id: Database job ID
-            handler: Async handler to execute
+            handler: Async handler to execute (gets fresh async session inside)
         """
+        # Use SYNC session for job status tracking (avoids event loop conflicts)
         sync_session = get_sync_session()
+        job = None
         
         try:
-            # Get job using sync session
             from sqlalchemy import select
             result = sync_session.execute(select(Job).where(Job.id == job_id))
             job = result.scalar_one_or_none()
@@ -204,9 +211,17 @@ class JobQueueIntegration:
             job.status = JobStatus.PROCESSING
             sync_session.commit()
             
-            # Execute handler (async)
+            # Execute handler (async - handler manages its own async sessions)
             logger.info(f"Executing job {job_id} handler: {handler.__name__}")
             result_data = await handler(job)
+            
+            # Ensure result_data is JSON-serializable
+            if result_data:
+                try:
+                    result_data = json.loads(json.dumps(result_data, default=str))
+                except Exception as serialize_err:
+                    logger.warning(f"Could not serialize result: {serialize_err}, using string instead")
+                    result_data = {"status": "success", "message": str(result_data)}
             
             # Mark completed (sync update)
             job.status = JobStatus.COMPLETED
@@ -216,28 +231,33 @@ class JobQueueIntegration:
             logger.info(f"Job {job_id} completed successfully: {result_data}")
         
         except Exception as e:
-            logger.error(f"Job {job_id} failed (attempt {job.retry_count + 1}/{job.max_retries + 1}): {e}", exc_info=True)
+            logger.error(f"Job {job_id} failed (attempt {job.retry_count + 1 if job else 0}/{job.max_retries + 1 if job else 1}): {e}", exc_info=True)
             
             # Mark failed with retry logic
-            try:
-                if job.retry_count < job.max_retries:
-                    # Retry: increment counter and set back to PENDING
-                    job.retry_count += 1
-                    job.status = JobStatus.PENDING
-                    job.error = f"Retry {job.retry_count}/{job.max_retries}: {str(e)}"
-                    logger.info(f"Job {job_id} marked for retry ({job.retry_count}/{job.max_retries})")
-                else:
-                    # Max retries exceeded: mark as FAILED
-                    job.status = JobStatus.FAILED
-                    job.error = f"Max retries exceeded. Last error: {str(e)}"
-                    logger.error(f"Job {job_id} failed permanently (max retries exceeded)")
-                
-                sync_session.commit()
-            except Exception as update_error:
-                logger.error(f"Failed to update job {job_id} status: {update_error}")
+            if job:
+                try:
+                    if job.retry_count < job.max_retries:
+                        # Retry: increment counter and set back to PENDING
+                        job.retry_count += 1
+                        job.status = JobStatus.PENDING
+                        job.error = f"Retry {job.retry_count}/{job.max_retries}: {str(e)}"
+                        logger.info(f"Job {job_id} marked for retry ({job.retry_count}/{job.max_retries})")
+                    else:
+                        # Max retries exceeded: mark as FAILED
+                        job.status = JobStatus.FAILED
+                        job.error = f"Max retries exceeded. Last error: {str(e)}"
+                        logger.error(f"Job {job_id} failed permanently (max retries exceeded)")
+                    
+                    sync_session.commit()
+                except Exception as update_error:
+                    logger.error(f"Failed to update job {job_id} status: {update_error}")
         
         finally:
-            sync_session.close()
+            # Close sync session
+            try:
+                sync_session.close()
+            except Exception as close_err:
+                logger.warning(f"Error closing session for job {job_id}: {close_err}")
     
     def _get_handler_for_job_type(self, job_type: JobType) -> Callable:
         """
@@ -268,24 +288,21 @@ class JobQueueIntegration:
     async def _handle_file_ingestion(self, job: Job) -> dict:
         """Handle file ingestion job - coordinate DocumentIngestionService pipeline."""
         try:
-            from app.services.document_ingestion import DocumentIngestionService
-            
             payload = json.loads(job.payload) if job.payload else {}
             file_id = payload.get("file_id") or job.reference_id
             batch_mode = payload.get("batch_mode", False)
             
             logger.info(f"Starting file ingestion job: file_id={file_id}, batch_mode={batch_mode}")
             
-            # Create new session for ingestion work
-            async with self.session_factory() as session:
-                ingestion_service = DocumentIngestionService(session)
-                
-                if batch_mode:
-                    # Process all approved files
-                    result = await ingestion_service.ingest_batch()
-                else:
-                    # Process single file
-                    result = await ingestion_service.ingest_single_file(file_id)
+            # Create ingestion service (it manages its own sessions)
+            ingestion_service = DocumentIngestionService()
+            
+            if batch_mode:
+                # Process all approved files
+                result = await ingestion_service.ingest_batch()
+            else:
+                # Process single file
+                result = await ingestion_service.ingest_single_file(file_id)
             
             logger.info(f"File ingestion completed: {result}")
             return result
@@ -320,8 +337,6 @@ class JobQueueIntegration:
             payload = json.loads(job.payload) if job.payload else {}
             
             logger.info(f"Password reset email job payload: {payload}")
-            
-            from app.services.email import get_email_service
             
             email_service = get_email_service()
             
@@ -368,8 +383,6 @@ class JobQueueIntegration:
             payload = json.loads(job.payload) if job.payload else {}
             
             logger.info(f"Password changed email job payload: {payload}")
-            
-            from app.services.email import get_email_service
             
             email_service = get_email_service()
             

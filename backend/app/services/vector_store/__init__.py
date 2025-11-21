@@ -17,7 +17,7 @@ Usage:
     results = storage.ingest_from_pending()
 """
 
-from app.services.vector_store.storage import DocumentStorageService, IngestionResult
+from app.services.vector_store.storage import DocumentStorageService
 from app.core.vector_store_factory import get_vector_store
 from app.services.vector_store.loader import DocumentLoader
 from app.services.vector_store.chunker import DocumentChunker
@@ -25,7 +25,6 @@ from app.services.vector_store.chunker import DocumentChunker
 
 __all__ = [
     "DocumentStorageService",
-    "IngestionResult",
     "get_vector_store",
     "DocumentLoader",
     "DocumentChunker",

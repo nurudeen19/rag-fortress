@@ -11,8 +11,10 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
+from app.models.job import JobType
 from app.schemas.file_upload import FileUploadCreate
 from app.core import get_logger
+from app.core.startup import get_startup_controller
 
 
 logger = get_logger(__name__)
@@ -172,6 +174,8 @@ class FileUploadService:
         """
         Approve file and trigger ingestion job.
         
+        Both approval and job creation are done in a transaction to ensure consistency.
+        
         Returns:
             Dict with keys:
             - success: bool
@@ -182,17 +186,20 @@ class FileUploadService:
             - error: Optional[str] (if approval failed)
         """
         try:
-            # Approve the file
+            # Approve the file first
             file_upload = await self.approve(file_id, approved_by_id, reason)
+            
+            # Commit approval to database
+            await self.session.commit()
+            logger.info(f"File {file_id} approved, committing to database")
             
             # Trigger ingestion job
             try:
-                from app.models.job import JobType
-                from app.jobs.integration import JobQueueIntegration
-                from app.core.database import get_session_factory
+                startup_controller = get_startup_controller()
+                job_integration = startup_controller.job_integration
                 
-                session_factory = get_session_factory()
-                job_integration = JobQueueIntegration(session_factory)
+                if job_integration is None:
+                    raise Exception("Job integration not initialized")
                 
                 job = await job_integration.create_and_schedule(
                     job_type=JobType.FILE_INGESTION,
@@ -213,8 +220,8 @@ class FileUploadService:
                 }
             
             except Exception as job_err:
-                logger.error(f"Failed to create ingestion job for file {file_id}: {job_err}")
-                # File is approved, but job creation failed
+                logger.error(f"Failed to create ingestion job for file {file_id}: {job_err}", exc_info=True)
+                # File is approved (already committed), but job creation failed
                 # Return partial success - admin can manually trigger ingestion later
                 return {
                     "success": True,
@@ -224,7 +231,8 @@ class FileUploadService:
                 }
         
         except Exception as e:
-            logger.error(f"Approval failed: {e}")
+            await self.session.rollback()
+            logger.error(f"Approval failed: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e)
@@ -257,12 +265,11 @@ class FileUploadService:
             
             # Create and schedule ingestion job
             try:
-                from app.models.job import JobType
-                from app.jobs.integration import JobQueueIntegration
-                from app.core.database import get_session_factory
+                startup_controller = get_startup_controller()
+                job_integration = startup_controller.job_integration
                 
-                session_factory = get_session_factory()
-                job_integration = JobQueueIntegration(session_factory)
+                if job_integration is None:
+                    raise Exception("Job integration not initialized")
                 
                 job = await job_integration.create_and_schedule(
                     job_type=JobType.FILE_INGESTION,
@@ -286,14 +293,14 @@ class FileUploadService:
                 }
             
             except Exception as job_err:
-                logger.error(f"Failed to create ingestion job for file {file_id}: {job_err}")
+                logger.error(f"Failed to create ingestion job for file {file_id}: {job_err}", exc_info=True)
                 return {
                     "success": False,
                     "error": f"Failed to create ingestion job: {str(job_err)}"
                 }
         
         except Exception as e:
-            logger.error(f"Error triggering ingestion: {e}")
+            logger.error(f"Error triggering ingestion: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e)

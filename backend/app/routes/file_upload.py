@@ -318,7 +318,14 @@ async def approve_file(
             detail=result.get("error")
         )
     
-    return SuccessResponse(message=result.get("message", "File approved"))
+    return SuccessResponse(
+        message=result.get("message", "File approved"),
+        data={
+            "job_id": result.get("job_id"),
+            "file_id": file_id,
+            "warning": result.get("warning")
+        }
+    )
 
 
 @router.post("/{file_id}/reject", response_model=SuccessResponse)

@@ -252,6 +252,51 @@ def get_async_session_factory():
     return db_manager.get_session_factory()
 
 
+async def get_fresh_async_session_factory():
+    """
+    Create a fresh async session factory bound to the CURRENT event loop.
+    
+    CRITICAL: Use this in background jobs that run in isolated event loops
+    (via asyncio.run()). The regular get_async_session_factory() returns
+    a factory bound to the main event loop, which will fail in isolated loops.
+    
+    This creates a new engine and session factory for the current loop context.
+    """
+    settings = DatabaseSettings()
+    config = settings.get_database_config()
+    
+    engine_kwargs = {
+        "echo": config.get("echo", False),
+    }
+    
+    # Add pool configuration for PostgreSQL and MySQL
+    if config["provider"] in {"postgresql", "mysql"}:
+        engine_kwargs.update({
+            "pool_size": config.get("pool_size", 5),
+            "max_overflow": config.get("max_overflow", 10),
+            "pool_timeout": config.get("pool_timeout", 30),
+            "pool_recycle": config.get("pool_recycle", 3600),
+        })
+    else:
+        # SQLite doesn't support connection pooling
+        engine_kwargs["poolclass"] = NullPool
+    
+    # Add SQLite-specific configuration
+    if config["provider"] == "sqlite":
+        engine_kwargs["connect_args"] = config.get("connect_args", {})
+    
+    # Build async URL and create fresh engine in current loop
+    url = settings._get_async_database_url()
+    fresh_engine = create_async_engine(url, **engine_kwargs)
+    
+    # Create session factory bound to this engine
+    return async_sessionmaker(
+        fresh_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+
 def initialize_db_manager_sync():
     """
     Initialize database manager in a sync context (for CLI tools).
