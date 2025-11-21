@@ -1,5 +1,13 @@
 <template>
   <div class="w-full">
+    <!-- Notification Toast -->
+    <div v-if="notification.show" class="fixed top-4 right-4 max-w-md z-50 p-4 rounded-lg shadow-lg border" :class="notification.type === 'success' ? 'bg-secure/20 text-secure border-secure/50' : 'bg-alert/20 text-alert border-alert/50'">
+      <div class="flex items-center justify-between">
+        <span>{{ notification.message }}</span>
+        <button @click="notification.show = false" class="ml-2 hover:opacity-70">×</button>
+      </div>
+    </div>
+
     <!-- Header -->
     <div class="mb-8">
       <div class="flex items-center justify-between mb-2">
@@ -243,6 +251,7 @@ const pagination = ref({ limit: 50, offset: 0, total: 0 })
 const showApprovalConfirm = ref(false)
 const approvalDocument = ref(null)
 const approvingDocument = ref(false)
+const notification = ref({ show: false, message: '', type: 'success' })
 
 // Status filters ordered with pending first for admins
 const statuses = [
@@ -253,6 +262,14 @@ const statuses = [
   { value: 'rejected', label: 'Rejected' },
   { value: 'failed', label: 'Failed' }
 ]
+
+// Notification helper
+const showNotification = (message, type = 'success') => {
+  notification.value = { show: true, message, type }
+  setTimeout(() => {
+    notification.value.show = false
+  }, 4000)
+}
 
 // Computed
 const filteredDocuments = computed(() => {
@@ -348,21 +365,26 @@ const confirmApproval = async () => {
     approvingDocument.value = true
     const documentId = approvalDocument.value.id
     
-    // Approve and ingest immediately
-    await api.post(`/v1/files/${documentId}/approve`)
-    await api.post(`/v1/files/${documentId}/ingest`)
+    // Approve and ingest immediately (approve endpoint triggers job)
+    const response = await api.post(`/v1/files/${documentId}/approve`)
 
     // Update document status
     const doc = documents.value.find(d => d.id === documentId)
     if (doc) {
-      doc.status = 'processed'
+      doc.status = 'approved'
     }
 
     showApprovalConfirm.value = false
     approvalDocument.value = null
+    
+    // Show success feedback with job info
+    const message = response.data?.message || 'Document approved successfully!'
+    const jobInfo = response.data?.data?.job_id ? ` (Job #${response.data.data.job_id})` : ''
+    showNotification(message + jobInfo, 'success')
   } catch (error) {
     console.error('Approval failed:', error)
-    alert('Failed to approve document')
+    const errorMsg = error.response?.data?.detail || error.message || 'Failed to approve document'
+    showNotification(errorMsg, 'error')
   } finally {
     approvingDocument.value = false
   }
@@ -386,10 +408,11 @@ const handleReject = async (data) => {
     }
 
     showRejectModalFlag.value = false
-    console.log('Document rejected:', response)
+    showNotification('Document rejected successfully', 'success')
   } catch (err) {
     console.error('Rejection failed:', err)
-    error.value = 'Failed to reject document'
+    const errorMsg = err.response?.data?.detail || err.message || 'Failed to reject document'
+    showNotification(errorMsg, 'error')
   } finally {
     loading.value = false
   }

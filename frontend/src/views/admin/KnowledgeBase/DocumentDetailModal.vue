@@ -15,8 +15,8 @@
           </button>
         </div>
 
-        <!-- Tabs Navigation -->
-        <div class="flex gap-0 border-b border-fortress-700 bg-fortress-900/30 px-6">
+        <!-- Tabs Navigation (only show operations tab for admins) -->
+        <div v-if="!isUserView" class="flex gap-0 border-b border-fortress-700 bg-fortress-900/30 px-6">
           <button
             @click="activeTab = 'operations'"
             :class="[
@@ -43,8 +43,8 @@
 
         <!-- Content -->
         <div class="flex-1 overflow-y-auto p-6">
-          <!-- Operations Tab -->
-          <div v-if="activeTab === 'operations'" class="space-y-6">
+          <!-- Operations Tab (admin only) -->
+          <div v-if="!isUserView && activeTab === 'operations'" class="space-y-6">
             <!-- File Information -->
             <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4 space-y-3">
               <h3 class="text-sm font-semibold text-fortress-300 mb-4">File Information</h3>
@@ -150,8 +150,68 @@
             </div>
           </div>
 
-          <!-- File Preview Tab -->
-          <div v-else-if="activeTab === 'preview'" class="space-y-4">
+          <!-- File Details (user view - always show) -->
+          <div v-if="isUserView" class="space-y-6">
+            <!-- File Information -->
+            <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4 space-y-3">
+              <h3 class="text-sm font-semibold text-fortress-300 mb-4">File Information</h3>
+              <div class="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span class="text-fortress-400">File Name:</span>
+                  <p class="text-fortress-100 font-medium">{{ document.file_name }}</p>
+                </div>
+                <div>
+                  <span class="text-fortress-400">File Size:</span>
+                  <p class="text-fortress-100 font-medium">{{ formatFileSize(document.file_size) }}</p>
+                </div>
+                <div>
+                  <span class="text-fortress-400">Uploaded By:</span>
+                  <p class="text-fortress-100 font-medium">{{ document.uploaded_by }}</p>
+                </div>
+                <div>
+                  <span class="text-fortress-400">Uploaded At:</span>
+                  <p class="text-fortress-100 font-medium">{{ formatDate(document.uploaded_at) }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Status & Security -->
+            <div class="grid grid-cols-2 gap-4">
+              <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
+                <p class="text-xs font-semibold text-fortress-400 mb-2">Status</p>
+                <span :class="['px-3 py-1 rounded-full text-sm font-medium inline-block', getStatusBadge(document.status)]">
+                  {{ getStatusLabel(document.status) }}
+                </span>
+              </div>
+              <div class="bg-fortress-900/30 rounded-lg border border-fortress-700 p-4">
+                <p class="text-xs font-semibold text-fortress-400 mb-2">Security Level</p>
+                <span :class="['px-3 py-1 rounded-full text-sm font-medium inline-block', getSecurityBadge(document.security_level)]">
+                  {{ document.security_level }}
+                </span>
+              </div>
+            </div>
+
+            <!-- Processing Info -->
+            <div v-if="document.chunks_created" class="p-4 bg-secure/10 border border-secure/50 rounded-lg">
+              <p class="text-sm">
+                <span class="font-semibold text-secure">{{ document.chunks_created }}</span>
+                <span class="text-fortress-400">chunks created from this document</span>
+              </p>
+            </div>
+
+            <!-- File Preview Section -->
+            <div class="space-y-4">
+              <h3 class="text-sm font-semibold text-fortress-300">File Preview</h3>
+              <FileViewerComponent
+                :file-id="document.id"
+                :file-name="document.file_name"
+                :auto-load="true"
+              />
+            </div>
+          </div>
+
+          <!-- File Preview Tab (admin) -->
+          <div v-else-if="!isUserView && activeTab === 'preview'" class="space-y-4">
             <FileViewerComponent
               :file-id="document.id"
               :file-name="document.file_name"
@@ -191,7 +251,7 @@ const props = defineProps({
 
 defineEmits(['close', 'reject', 'resubmit', 'approveQuick', 'approveScheduled', 'approveManual'])
 
-const activeTab = ref('operations')
+const activeTab = ref(props.isUserView ? 'details' : 'operations')
 
 const formatFileSize = (bytes) => {
   if (!bytes) return '0 B'

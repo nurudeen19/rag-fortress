@@ -1,5 +1,13 @@
 <template>
   <div class="min-h-screen bg-fortress-900 p-6">
+    <!-- Notification Toast -->
+    <div v-if="notification.show" class="fixed top-4 right-4 max-w-md z-50 p-4 rounded-lg shadow-lg border" :class="notification.type === 'success' ? 'bg-secure/20 text-secure border-secure/50' : 'bg-alert/20 text-alert border-alert/50'">
+      <div class="flex items-center justify-between">
+        <span>{{ notification.message }}</span>
+        <button @click="notification.show = false" class="ml-2 hover:opacity-70">×</button>
+      </div>
+    </div>
+
     <!-- Header -->
     <div class="mb-8">
       <router-link to="/knowledge-base" class="text-secure hover:text-secure/80 text-sm font-medium flex items-center gap-2 mb-3">
@@ -239,6 +247,15 @@ const approvalMode = ref(null)
 const showApprovalDialog = ref(false)
 const showRejectDialog = ref(false)
 const rejectionReason = ref('')
+const notification = ref({ show: false, message: '', type: 'success' })
+
+// Notification helper
+const showNotification = (message, type = 'success') => {
+  notification.value = { show: true, message, type }
+  setTimeout(() => {
+    notification.value.show = false
+  }, 4000)
+}
 
 // Load document
 const loadDocument = async () => {
@@ -307,7 +324,7 @@ const confirmApproval = async () => {
     const documentId = document.value.id
 
     // Approve the document
-    await api.post(`/v1/files/${documentId}/approve`)
+    const approveResponse = await api.post(`/v1/files/${documentId}/approve`)
 
     // If quick mode, also ingest immediately
     if (approvalMode.value === 'quick') {
@@ -317,10 +334,15 @@ const confirmApproval = async () => {
     // Refresh document
     await loadDocument()
     showApprovalDialog.value = false
-    alert('Document approved successfully!')
+    
+    // Show success feedback with job info
+    const message = approveResponse.data?.message || 'Document approved successfully!'
+    const jobInfo = approveResponse.data?.data?.job_id ? ` (Job #${approveResponse.data.data.job_id})` : ''
+    showNotification(message + jobInfo, 'success')
   } catch (error) {
     console.error('Approval failed:', error)
-    alert('Failed to approve document')
+    const errorMsg = error.response?.data?.detail || error.message || 'Failed to approve document'
+    showNotification(errorMsg, 'error')
   } finally {
     approving.value = false
   }
@@ -336,10 +358,11 @@ const handleReject = async (data) => {
     // Refresh document
     await loadDocument()
     showRejectDialog.value = false
-    alert('Document rejected successfully!')
+    showNotification('Document rejected successfully', 'success')
   } catch (error) {
     console.error('Rejection failed:', error)
-    alert('Failed to reject document')
+    const errorMsg = error.response?.data?.detail || error.message || 'Failed to reject document'
+    showNotification(errorMsg, 'error')
   } finally {
     approving.value = false
   }
