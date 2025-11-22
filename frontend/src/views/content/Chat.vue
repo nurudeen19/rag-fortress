@@ -1,7 +1,7 @@
 <template>
-  <div class="flex flex-col h-screen bg-fortress-950">
+  <div class="flex flex-col h-full bg-gradient-to-b from-fortress-950 to-fortress-900">
     <!-- Conversation Header -->
-    <div class="bg-fortress-900 border-b border-fortress-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
+    <div class="bg-fortress-900/80 backdrop-blur-sm border-b border-fortress-800/50 px-6 py-4 flex items-center justify-between flex-shrink-0">
       <div class="flex-1">
         <div class="flex items-center space-x-3">
           <div>
@@ -54,142 +54,289 @@
     </div>
 
     <!-- Messages Container -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto p-6 space-y-4 flex-shrink-1 basis-auto">
-      <!-- Empty State -->
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+      <!-- Empty State with Suggestions -->
       <div v-if="messages.length === 0" class="h-full flex items-center justify-center">
-        <div class="text-center">
-          <svg class="w-16 h-16 mx-auto mb-4 text-fortress-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <p class="text-fortress-300 text-lg">Start a conversation</p>
-          <p class="text-fortress-500 text-sm mt-2">Ask questions about your documents</p>
+        <div class="max-w-3xl mx-auto text-center px-4">
+          <!-- Animated Icon -->
+          <div class="relative inline-block mb-6">
+            <div class="absolute inset-0 bg-secure/20 rounded-full blur-2xl animate-pulse"></div>
+            <div class="relative bg-gradient-to-br from-secure/30 to-secure/10 rounded-full p-6 border border-secure/30">
+              <svg class="w-16 h-16 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+            </div>
+          </div>
+          
+          <h2 class="text-3xl font-bold text-fortress-100 mb-3">What can I help you with?</h2>
+          <p class="text-fortress-400 text-lg mb-8">Ask questions about your documents and get AI-powered answers</p>
+          
+          <!-- Quick Suggestions -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+            <button
+              @click="inputMessage = 'What are the key points in the sales playbook?'; focusInput()"
+              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
+            >
+              <div class="flex items-start gap-3">
+                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
+                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Summarize documents</p>
+                  <p class="text-sm text-fortress-500 mt-1">Get key insights from your files</p>
+                </div>
+              </div>
+            </button>
+            
+            <button
+              @click="inputMessage = 'Find information about our company policies'; focusInput()"
+              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
+            >
+              <div class="flex items-start gap-3">
+                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
+                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Search knowledge</p>
+                  <p class="text-sm text-fortress-500 mt-1">Find specific information</p>
+                </div>
+              </div>
+            </button>
+            
+            <button
+              @click="inputMessage = 'Compare different approaches in the documentation'; focusInput()"
+              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
+            >
+              <div class="flex items-start gap-3">
+                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
+                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Analyze & compare</p>
+                  <p class="text-sm text-fortress-500 mt-1">Deep dive into content</p>
+                </div>
+              </div>
+            </button>
+            
+            <button
+              @click="inputMessage = 'Explain the process described in the guidelines'; focusInput()"
+              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
+            >
+              <div class="flex items-start gap-3">
+                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
+                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Get explanations</p>
+                  <p class="text-sm text-fortress-500 mt-1">Understand complex topics</p>
+                </div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
 
       <!-- Messages -->
-      <template v-for="(message, index) in messages" :key="index">
-        <!-- User Message -->
-        <div v-if="message.role === 'user'" class="flex justify-end">
-          <div class="max-w-xs lg:max-w-md bg-secure/20 border border-secure/40 rounded-lg px-4 py-3">
-            <p class="text-fortress-100">{{ message.content }}</p>
-            <p class="text-xs text-secure/60 mt-1">{{ formatTime(message.timestamp) }}</p>
-          </div>
-        </div>
-
-        <!-- Assistant Message -->
-        <div v-else class="flex justify-start">
-          <div class="max-w-xs lg:max-w-md">
-            <!-- Main Response -->
-            <div class="bg-fortress-800 rounded-lg px-4 py-3 mb-2">
-              <p class="text-fortress-100 whitespace-pre-wrap">{{ message.content }}</p>
-              <p class="text-xs text-fortress-500 mt-2">{{ formatTime(message.timestamp) }}</p>
+      <div class="max-w-4xl mx-auto space-y-6">
+        <template v-for="(message, index) in messages" :key="index">
+          <!-- User Message -->
+          <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
+            <div class="max-w-[75%] lg:max-w-[65%]">
+              <div class="bg-gradient-to-br from-secure/30 to-secure/20 border border-secure/40 rounded-2xl rounded-tr-sm px-5 py-3 shadow-lg">
+                <p class="text-fortress-50 leading-relaxed">{{ message.content }}</p>
+              </div>
+              <div class="flex items-center justify-end gap-2 mt-2 px-2">
+                <p class="text-xs text-fortress-500">{{ formatTime(message.timestamp) }}</p>
+                <div class="w-1 h-1 rounded-full bg-secure/50"></div>
+                <p class="text-xs text-fortress-500">You</p>
+              </div>
             </div>
+          </div>
 
-            <!-- Sources/References -->
-            <div v-if="message.sources && message.sources.length > 0" class="text-sm">
-              <p class="text-fortress-400 mb-2">📄 <span class="font-medium">Sources:</span></p>
-              <div class="space-y-1 ml-4">
-                <div
-                  v-for="(source, idx) in message.sources"
-                  :key="idx"
-                  class="flex items-start space-x-2 p-2 bg-fortress-800/50 rounded border border-fortress-700"
-                >
-                  <span class="text-fortress-500 text-xs font-medium mt-0.5">{{ idx + 1 }}.</span>
-                  <div class="flex-1">
-                    <p class="text-fortress-300 text-xs break-words">{{ source.document }}</p>
-                    <p class="text-fortress-500 text-xs mt-0.5">Relevance: {{ Math.round(source.score * 100) }}%</p>
+          <!-- Assistant Message -->
+          <div v-else class="flex justify-start animate-slide-in-left">
+            <div class="max-w-[85%] lg:max-w-[75%]">
+              <div class="flex items-start gap-3">
+                <!-- AI Avatar -->
+                <div class="flex-shrink-0 mt-1">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                </div>
+                
+                <div class="flex-1">
+                  <!-- Main Response -->
+                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-5 py-4 shadow-lg">
+                    <p class="text-fortress-100 leading-relaxed whitespace-pre-wrap">{{ message.content }}</p>
+                  </div>
+                  
+                  <!-- Sources/References -->
+                  <div v-if="message.sources && message.sources.length > 0" class="mt-3 ml-2">
+                    <div class="flex items-center gap-2 mb-2">
+                      <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <p class="text-xs font-semibold text-fortress-400 uppercase tracking-wide">Sources</p>
+                    </div>
+                    <div class="space-y-2">
+                      <div
+                        v-for="(source, idx) in message.sources"
+                        :key="idx"
+                        class="group flex items-start gap-3 p-3 bg-fortress-800/40 hover:bg-fortress-800/60 border border-fortress-700/30 hover:border-secure/30 rounded-lg transition-all duration-200 cursor-pointer"
+                      >
+                        <div class="flex-shrink-0 w-6 h-6 rounded-full bg-secure/10 flex items-center justify-center border border-secure/20">
+                          <span class="text-xs font-semibold text-secure">{{ idx + 1 }}</span>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                          <p class="text-sm text-fortress-200 group-hover:text-fortress-100 font-medium break-words transition-colors">{{ source.document }}</p>
+                          <div class="flex items-center gap-2 mt-1">
+                            <div class="flex-1 bg-fortress-700/30 rounded-full h-1.5 overflow-hidden">
+                              <div class="bg-gradient-to-r from-secure to-secure/70 h-full rounded-full transition-all duration-300" :style="{ width: `${source.score * 100}%` }"></div>
+                            </div>
+                            <span class="text-xs font-medium text-secure">{{ Math.round(source.score * 100) }}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Error Message -->
+                  <div v-if="message.error" class="mt-3 bg-alert/10 border border-alert/30 rounded-lg px-4 py-3">
+                    <div class="flex items-start gap-2">
+                      <svg class="w-5 h-5 text-alert flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p class="text-alert text-sm">{{ message.error }}</p>
+                    </div>
+                  </div>
+                  
+                  <!-- Timestamp -->
+                  <div class="flex items-center gap-2 mt-2 px-2">
+                    <p class="text-xs text-fortress-500">{{ formatTime(message.timestamp) }}</p>
+                    <div class="w-1 h-1 rounded-full bg-fortress-600"></div>
+                    <p class="text-xs text-fortress-500">AI Assistant</p>
                   </div>
                 </div>
               </div>
             </div>
-
-            <!-- Error Message -->
-            <div v-if="message.error" class="bg-alert/10 border border-alert/30 rounded-lg px-3 py-2">
-              <p class="text-alert text-sm">⚠️ {{ message.error }}</p>
-            </div>
           </div>
-        </div>
-      </template>
+        </template>
+      </div>
 
       <!-- Loading Indicator -->
-      <div v-if="loading" class="flex justify-start">
-        <div class="bg-fortress-800 rounded-lg px-4 py-3">
-          <div class="flex items-center space-x-2">
-            <div class="flex space-x-1">
-              <div class="w-2 h-2 bg-fortress-500 rounded-full animate-bounce" style="animation-delay: 0s"></div>
-              <div class="w-2 h-2 bg-fortress-500 rounded-full animate-bounce" style="animation-delay: 0.1s"></div>
-              <div class="w-2 h-2 bg-fortress-500 rounded-full animate-bounce" style="animation-delay: 0.2s"></div>
+      <div v-if="loading" class="max-w-4xl mx-auto">
+        <div class="flex justify-start animate-slide-in-left">
+          <div class="flex items-start gap-3">
+            <!-- AI Avatar -->
+            <div class="flex-shrink-0 mt-1">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center animate-pulse">
+                <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+              </div>
             </div>
-            <span class="text-fortress-400 text-sm">Thinking...</span>
+            
+            <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-5 py-4 shadow-lg">
+              <div class="flex items-center gap-3">
+                <div class="flex gap-1.5">
+                  <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0s; animation-duration: 0.6s;"></div>
+                  <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
+                  <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
+                </div>
+                <span class="text-fortress-300 text-sm font-medium">Analyzing your documents...</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Input Area -->
-    <div class="bg-fortress-900 border-t border-fortress-800 px-6 py-5 flex-shrink-0">
-      <!-- Info Message -->
-      <div v-if="messages.length === 0" class="mb-4 p-3 bg-fortress-800/50 rounded-lg border border-fortress-700">
-        <p class="text-fortress-400 text-sm">
-          💡 <span class="font-medium">Tip:</span> Ask specific questions about your documents for better results. You can ask about concepts, facts, or relationships in your knowledge base.
-        </p>
-      </div>
-
-      <form @submit.prevent="sendMessage" class="space-y-3">
-        <!-- Input Field with Enhanced Design -->
-        <div class="flex items-end space-x-3">
-          <div class="flex-1 relative group">
-            <input
-              v-model="inputMessage"
-              type="text"
-              placeholder="Ask a question about your documents..."
-              class="w-full bg-fortress-800 border border-fortress-700 rounded-xl px-5 py-3.5 text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure focus:ring-2 focus:ring-secure/20 transition-all duration-200 shadow-sm group-hover:border-fortress-600"
-              :disabled="loading"
-              @keydown.enter.exact="sendMessage"
-              @keydown.shift.enter=""
-            />
-            <!-- Subtle gradient underline effect -->
-            <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-secure/0 via-secure to-secure/0 opacity-0 group-focus-within:opacity-100 transition-opacity rounded-b-xl"></div>
+    <div class="bg-fortress-900/80 backdrop-blur-sm border-t border-fortress-800/50 px-4 py-4 flex-shrink-0">
+      <div class="max-w-4xl mx-auto">
+        <form @submit.prevent="sendMessage" class="space-y-3">
+          <!-- Input Field with Enhanced Design -->
+          <div class="relative">
+            <!-- Input Container -->
+            <div class="flex items-end gap-2">
+              <!-- Textarea Input -->
+              <div class="flex-1 relative group">
+                <textarea
+                  ref="inputField"
+                  v-model="inputMessage"
+                  rows="1"
+                  placeholder="Ask anything about your documents..."
+                  class="w-full bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl px-5 py-3.5 pr-12 text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure/50 focus:ring-2 focus:ring-secure/20 transition-all duration-200 shadow-lg resize-none max-h-32 overflow-y-auto"
+                  :disabled="loading"
+                  @keydown.enter.exact.prevent="sendMessage"
+                  @keydown.shift.enter="handleNewLine"
+                  @input="autoResize"
+                ></textarea>
+                
+                <!-- Character Count Inside Input -->
+                <div class="absolute bottom-3 right-3 flex items-center gap-2">
+                  <span v-if="inputMessage.length > 0" class="text-xs font-medium px-2 py-0.5 rounded-full" :class="inputMessage.length > 1800 ? 'bg-alert/20 text-alert' : 'bg-fortress-700/50 text-fortress-400'">
+                    {{ inputMessage.length }}/2000
+                  </span>
+                </div>
+              </div>
+              
+              <!-- Send Button -->
+              <button
+                type="submit"
+                class="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-secure to-secure/90 hover:from-secure/95 hover:to-secure disabled:from-fortress-700 disabled:to-fortress-800 disabled:cursor-not-allowed rounded-2xl text-white font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:scale-105 disabled:shadow-none disabled:scale-100 flex items-center justify-center group"
+                :disabled="loading || !inputMessage.trim()"
+                title="Send message (Enter)"
+              >
+                <svg v-if="!loading" class="w-5 h-5 transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+                <svg v-else class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
           </div>
-          <button
-            type="submit"
-            class="bg-gradient-to-br from-secure to-secure/90 hover:from-secure/95 hover:to-secure disabled:from-secure/50 disabled:to-secure/40 disabled:cursor-not-allowed px-7 py-3.5 rounded-xl text-white font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:shadow-none flex items-center justify-center min-w-[100px] gap-2"
-            :disabled="loading || !inputMessage.trim()"
-            title="Send message (Enter to send, Shift+Enter for new line)"
-          >
-            <span v-if="!loading" class="flex items-center gap-2">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-              <span>Send</span>
-            </span>
-            <span v-else class="flex items-center gap-2">
-              <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Sending</span>
-            </span>
-          </button>
-        </div>
 
-        <!-- Character Count & Clear -->
-        <div class="flex justify-between items-center text-xs px-1">
-          <p class="text-fortress-500">
-            <span :class="inputMessage.length > 1800 ? 'text-alert' : ''">{{ inputMessage.length }}</span> / 2000
-          </p>
-          <button
-            v-if="messages.length > 0"
-            type="button"
-            @click="clearHistory"
-            class="text-fortress-500 hover:text-fortress-300 transition-colors flex items-center gap-1"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-            Clear
-          </button>
-        </div>
-      </form>
+          <!-- Bottom Actions -->
+          <div class="flex justify-between items-center px-2">
+            <!-- Hints -->
+            <div class="flex items-center gap-4 text-xs text-fortress-500">
+              <div class="flex items-center gap-1.5">
+                <kbd class="px-1.5 py-0.5 bg-fortress-800 border border-fortress-700 rounded text-xs font-mono">Enter</kbd>
+                <span>to send</span>
+              </div>
+              <div class="hidden sm:flex items-center gap-1.5">
+                <kbd class="px-1.5 py-0.5 bg-fortress-800 border border-fortress-700 rounded text-xs font-mono">Shift+Enter</kbd>
+                <span>for new line</span>
+              </div>
+            </div>
+            
+            <!-- Clear Button -->
+            <button
+              v-if="messages.length > 0"
+              type="button"
+              @click="clearHistory"
+              class="text-fortress-500 hover:text-fortress-300 transition-colors flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-fortress-800/50"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+              <span class="text-xs font-medium">Clear chat</span>
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
 
     <!-- Rename Modal -->
@@ -250,6 +397,7 @@ const messages = ref([])
 const inputMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
+const inputField = ref(null)
 const showChatOptions = ref(false)
 const showRenameModal = ref(false)
 const renameInput = ref('')
@@ -398,9 +546,32 @@ const deleteChat = async () => {
   }
 }
 
+// Auto-resize textarea
+const autoResize = () => {
+  if (inputField.value) {
+    inputField.value.style.height = 'auto'
+    inputField.value.style.height = inputField.value.scrollHeight + 'px'
+  }
+}
+
+// Handle new line in textarea
+const handleNewLine = (event) => {
+  // Allow default behavior for Shift+Enter
+}
+
+// Focus input field
+const focusInput = () => {
+  if (inputField.value) {
+    inputField.value.focus()
+  }
+}
+
 // Auto scroll on mount
 onMounted(() => {
   scrollToBottom()
+  if (inputField.value) {
+    inputField.value.focus()
+  }
 })
 </script>
 
@@ -420,6 +591,36 @@ onMounted(() => {
   }
 }
 
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in-left {
+  animation: slideInLeft 0.3s ease-out;
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -436,5 +637,11 @@ onMounted(() => {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #5a6573;
+}
+
+/* Smooth scrolling */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 transparent;
 }
 </style>

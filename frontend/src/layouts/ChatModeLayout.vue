@@ -90,119 +90,149 @@
       </div>
     </nav>
 
-    <div class="flex pt-16 h-[calc(100vh-64px)]">
+    <div class="flex h-[calc(100vh-64px)]">
       <!-- Chat Sidebar -->
       <aside
         :class="[
-          'fixed lg:relative inset-y-0 left-0 z-40 w-64 bg-fortress-900 border-r border-fortress-800 pt-16 lg:pt-0 transform transition-transform duration-300 flex flex-col',
+          'fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-fortress-900 border-r border-fortress-800 pt-16 lg:pt-0 transform transition-transform duration-300 flex flex-col h-full',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         ]"
       >
         <!-- New Chat Button -->
-        <div class="p-4 border-b border-fortress-800">
+        <div class="p-4 border-b border-fortress-800/50">
           <button
             @click="newChat"
-            class="w-full bg-secure hover:bg-secure/90 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+            class="w-full bg-gradient-to-r from-secure to-secure/90 hover:from-secure/95 hover:to-secure text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-lg hover:shadow-xl hover:scale-[1.02]"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4" />
             </svg>
             <span>New Chat</span>
           </button>
         </div>
 
         <!-- Filters & Search -->
-        <div class="px-4 py-3 border-b border-fortress-800">
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="Search conversations..."
-            class="w-full bg-fortress-800 border border-fortress-700 rounded-lg px-3 py-2 text-sm text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure transition-colors"
-          />
+        <div class="px-4 py-3 border-b border-fortress-800/50">
+          <div class="relative group">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fortress-500 group-focus-within:text-secure transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search conversations..."
+              class="w-full bg-fortress-800/60 border border-fortress-700/50 rounded-xl pl-9 pr-3 py-2.5 text-sm text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure/50 focus:ring-2 focus:ring-secure/20 transition-all"
+            />
+          </div>
         </div>
 
         <!-- Chat History Section -->
         <div class="flex-1 overflow-y-auto scrollbar-thin">
           <!-- Today -->
-          <div v-if="todayChats.length > 0" class="px-2 py-4">
-            <h3 class="text-xs font-semibold text-fortress-400 uppercase px-2 mb-2">Today</h3>
+          <div v-if="todayChats.length > 0" class="px-3 py-4">
+            <h3 class="text-xs font-bold text-fortress-400 uppercase tracking-wider px-2 mb-3 flex items-center gap-2">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Today
+            </h3>
             <div class="space-y-1">
               <button
                 v-for="chat in todayChats"
                 :key="chat.id"
                 @click="selectChat(chat)"
                 :class="[
-                  'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors truncate',
+                  'group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 truncate relative',
                   activeChat?.id === chat.id
-                    ? 'bg-secure/20 text-secure border border-secure/30'
-                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800'
+                    ? 'bg-gradient-to-r from-secure/20 to-secure/10 text-secure border border-secure/30 shadow-md'
+                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800/60'
                 ]"
                 :title="chat.title"
               >
-                {{ chat.title }}
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span class="truncate">{{ chat.title }}</span>
+                </span>
               </button>
             </div>
           </div>
 
           <!-- Yesterday -->
-          <div v-if="yesterdayChats.length > 0" class="px-2 py-4 border-t border-fortress-800">
-            <h3 class="text-xs font-semibold text-fortress-400 uppercase px-2 mb-2">Yesterday</h3>
+          <div v-if="yesterdayChats.length > 0" class="px-3 py-4 border-t border-fortress-800/30">
+            <h3 class="text-xs font-bold text-fortress-400 uppercase tracking-wider px-2 mb-3">Yesterday</h3>
             <div class="space-y-1">
               <button
                 v-for="chat in yesterdayChats"
                 :key="chat.id"
                 @click="selectChat(chat)"
                 :class="[
-                  'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors truncate',
+                  'group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 truncate',
                   activeChat?.id === chat.id
-                    ? 'bg-secure/20 text-secure border border-secure/30'
-                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800'
+                    ? 'bg-gradient-to-r from-secure/20 to-secure/10 text-secure border border-secure/30 shadow-md'
+                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800/60'
                 ]"
                 :title="chat.title"
               >
-                {{ chat.title }}
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span class="truncate">{{ chat.title }}</span>
+                </span>
               </button>
             </div>
           </div>
 
           <!-- Previous 7 Days -->
-          <div v-if="week7Chats.length > 0" class="px-2 py-4 border-t border-fortress-800">
-            <h3 class="text-xs font-semibold text-fortress-400 uppercase px-2 mb-2">Previous 7 Days</h3>
+          <div v-if="week7Chats.length > 0" class="px-3 py-4 border-t border-fortress-800/30">
+            <h3 class="text-xs font-bold text-fortress-400 uppercase tracking-wider px-2 mb-3">Previous 7 Days</h3>
             <div class="space-y-1">
               <button
                 v-for="chat in week7Chats"
                 :key="chat.id"
                 @click="selectChat(chat)"
                 :class="[
-                  'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors truncate',
+                  'group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 truncate',
                   activeChat?.id === chat.id
-                    ? 'bg-secure/20 text-secure border border-secure/30'
-                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800'
+                    ? 'bg-gradient-to-r from-secure/20 to-secure/10 text-secure border border-secure/30 shadow-md'
+                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800/60'
                 ]"
                 :title="chat.title"
               >
-                {{ chat.title }}
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span class="truncate">{{ chat.title }}</span>
+                </span>
               </button>
             </div>
           </div>
 
           <!-- Older -->
-          <div v-if="olderChats.length > 0" class="px-2 py-4 border-t border-fortress-800">
-            <h3 class="text-xs font-semibold text-fortress-400 uppercase px-2 mb-2">Older</h3>
+          <div v-if="olderChats.length > 0" class="px-3 py-4 border-t border-fortress-800/30">
+            <h3 class="text-xs font-bold text-fortress-400 uppercase tracking-wider px-2 mb-3">Older</h3>
             <div class="space-y-1">
               <button
                 v-for="chat in olderChats"
                 :key="chat.id"
                 @click="selectChat(chat)"
                 :class="[
-                  'w-full text-left px-3 py-2 rounded-lg text-sm transition-colors truncate',
+                  'group w-full text-left px-3 py-2.5 rounded-xl text-sm transition-all duration-200 truncate',
                   activeChat?.id === chat.id
-                    ? 'bg-secure/20 text-secure border border-secure/30'
-                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800'
+                    ? 'bg-gradient-to-r from-secure/20 to-secure/10 text-secure border border-secure/30 shadow-md'
+                    : 'text-fortress-300 hover:text-fortress-100 hover:bg-fortress-800/60'
                 ]"
                 :title="chat.title"
               >
-                {{ chat.title }}
+                <span class="flex items-center gap-2">
+                  <svg class="w-4 h-4 flex-shrink-0 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  <span class="truncate">{{ chat.title }}</span>
+                </span>
               </button>
             </div>
           </div>
@@ -228,7 +258,7 @@
       </aside>
 
       <!-- Main Chat View -->
-      <main class="flex-1 overflow-x-hidden overflow-y-auto">
+      <main class="flex-1 overflow-hidden h-full">
         <router-view :key="activeChat?.id" />
       </main>
 
