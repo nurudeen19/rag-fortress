@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col h-full bg-gradient-to-b from-fortress-950 to-fortress-900">
+  <div class="flex flex-col h-[calc(100vh-4rem)] bg-gradient-to-b from-fortress-950 to-fortress-900">
     <!-- Conversation Header -->
     <div class="bg-fortress-900/80 backdrop-blur-sm border-b border-fortress-800/50 px-6 py-4 flex items-center justify-between flex-shrink-0">
       <div class="flex-1">
@@ -54,7 +54,7 @@
     </div>
 
     <!-- Messages Container -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 bg-transparent">
       <!-- Empty State with Suggestions -->
       <div v-if="messages.length === 0" class="h-full flex items-center justify-center">
         <div class="max-w-3xl mx-auto text-center px-4">
@@ -262,7 +262,7 @@
     </div>
 
     <!-- Input Area -->
-    <div class="bg-fortress-900/80 backdrop-blur-sm border-t border-fortress-800/50 px-4 py-4 flex-shrink-0">
+    <div class="bg-transparent border-t border-fortress-800/50 px-4 py-4 flex-shrink-0">
       <div class="max-w-4xl mx-auto">
         <form @submit.prevent="sendMessage" class="space-y-3">
           <!-- Input Field with Enhanced Design -->
