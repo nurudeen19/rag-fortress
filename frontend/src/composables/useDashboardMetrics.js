@@ -1,6 +1,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { apiClient } from '../services/apiClient'
+import api from '../services/api'
 
 export function useDashboardMetrics() {
   const authStore = useAuthStore()
@@ -41,10 +41,10 @@ export function useDashboardMetrics() {
     error.value = null
     
     try {
-      const response = await apiClient.get('/dashboard/admin/metrics')
-      if (response.data?.status === 'ok') {
-        adminMetrics.value = response.data.data
-        cacheStatus.value = response.data.cached ? 'cached' : 'fresh'
+      const response = await api.get('/dashboard/admin/metrics')
+      if (response.status === 'ok') {
+        adminMetrics.value = response.data
+        cacheStatus.value = response.cached ? 'cached' : 'fresh'
       }
     } catch (err) {
       error.value = err.message || 'Failed to load admin metrics'
@@ -59,9 +59,9 @@ export function useDashboardMetrics() {
     error.value = null
     
     try {
-      const response = await apiClient.get('/dashboard/user/metrics')
-      if (response.data?.status === 'ok') {
-        userMetrics.value = response.data.data
+      const response = await api.get('/dashboard/user/metrics')
+      if (response.status === 'ok') {
+        userMetrics.value = response.data
       }
     } catch (err) {
       error.value = err.message || 'Failed to load user metrics'
