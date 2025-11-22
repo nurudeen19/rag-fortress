@@ -46,6 +46,7 @@ class StartupController:
         self.llm_provider = None
         self.fallback_llm_provider = None
         self.retriever = None
+        self.cache_manager = None
     
     async def initialize(self):
         """
@@ -87,17 +88,15 @@ class StartupController:
             # await self._initialize_llm()
             # await self._initialize_fallback_llm()
             
-            # ========== STEP 6: Email Client (OPTIONAL) ==========
+            # ========== STEP 6: Cache (OPTIONAL but RECOMMENDED) ==========
+            await self._initialize_cache()
+            
+            # ========== STEP 7: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
             
-            # ========== STEP 7: Job Queue (OPTIONAL, at end) ==========
+            # ========== STEP 8: Job Queue (OPTIONAL, at end) ==========
             await self._initialize_job_queue()
 
-            # Future initializations will be added here:
-            # - Vector store connection pool
-            # - Cache warming
-            # - etc.
-            
             self.initialized = True
             logger.info("✓ Application initialization completed successfully")
         
@@ -290,6 +289,30 @@ class StartupController:
             logger.error(f"Vector store smoke test failed: {e}", exc_info=True)
             # Do not block app startup for smoke test failures
     
+    async def _initialize_cache(self):
+        """Initialize cache layer (optional - graceful fallback)."""
+        logger.info("Initializing cache layer...")
+        
+        try:
+            from app.core.cache import initialize_cache
+            from app.config.cache_settings import cache_settings
+            
+            use_redis = settings.CACHE_BACKEND == "redis" and settings.CACHE_ENABLED
+            redis_url = cache_settings.get_redis_url() if use_redis else None
+            redis_options = cache_settings.get_redis_options() if use_redis else None
+            
+            self.cache_manager = await initialize_cache(
+                redis_url=redis_url,
+                use_redis=use_redis,
+                redis_options=redis_options
+            )
+            
+            logger.info(f"✓ Cache initialized ({settings.CACHE_BACKEND} backend)")
+        
+        except Exception as e:
+            logger.warning(f"⚠ Cache initialization failed (continuing without cache): {e}")
+            # Don't block startup - cache is optional
+    
     async def shutdown(self):
         """
         Cleanup resources on application shutdown.
@@ -302,6 +325,12 @@ class StartupController:
         logger.info("Starting application shutdown...")
         
         try:
+            # Shutdown cache
+            if self.cache_manager:
+                logger.info("Closing cache connections...")
+                from app.core.cache import close_cache
+                await close_cache()
+            
             # Shutdown job manager
             if self.job_manager:
                 logger.info("Shutting down job manager...")
@@ -316,11 +345,6 @@ class StartupController:
             if self.email_client:
                 logger.info("Shutting down email client...")
                 await self.email_client.shutdown()
-            
-            # Future cleanup tasks:
-            # - Flush caches
-            # - Stop background workers
-            # - etc.
             
             logger.info("✓ Application shutdown completed")
         

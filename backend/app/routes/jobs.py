@@ -18,16 +18,28 @@ router = APIRouter(prefix="/api/v1/admin/jobs", tags=["admin:jobs"])
 
 
 @router.get("/status")
-async def get_job_status(current_user = Depends(get_current_user)):
+async def get_job_status(
+    current_user = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
     """
-    Get job queue statistics.
+    Get job queue statistics. Cached for 1 minute after first access.
     
     Returns counts of jobs by status.
     """
     # TODO: Add admin role check
     
-    session_factory = get_async_session_factory()
-    async with session_factory() as session:
+    from app.services.stats_cache import StatsCache
+    
+    try:
+        stats = await StatsCache.get_job_stats(session)
+        
+        return {
+            "status": "ok",
+            "data": stats
+        }
+    except Exception as e:
+        # Fallback to direct query on cache errors
         stats = {}
         for status in JobStatus:
             result = await session.execute(
@@ -37,11 +49,13 @@ async def get_job_status(current_user = Depends(get_current_user)):
         
         result = await session.execute(select(func.count(Job.id)))
         stats["total"] = result.scalar()
-    
-    return {
-        "status": "ok",
-        "data": stats
-    }
+        
+        return {
+            "status": "ok",
+            "data": stats,
+            "cached": False,
+            "cache_error": str(e)
+        }
 
 
 @router.get("/{job_id}")

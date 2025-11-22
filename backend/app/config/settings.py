@@ -9,9 +9,10 @@ from .embedding_settings import EmbeddingSettings
 from .vectordb_settings import VectorDBSettings
 from .database_settings import DatabaseSettings
 from .email_settings import EmailSettings
+from .cache_settings import CacheSettings
 
 
-class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings):
+class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings, CacheSettings):
     """
     Main settings class that inherits from all specialized settings modules.
     

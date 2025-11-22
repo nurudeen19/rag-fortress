@@ -32,6 +32,10 @@ async def handle_upload_file(
         
         await session.commit()
         
+        # Invalidate cache
+        from app.services.stats_cache import StatsCache
+        await StatsCache.invalidate_file_stats(user.id)
+        
         logger.info(f"File uploaded by user {user.id}: {upload_request.file_name}")
         
         return {
@@ -180,6 +184,11 @@ async def handle_approve_file(
         
         await session.commit()
         
+        # Invalidate cache
+        from app.services.stats_cache import StatsCache
+        file_upload = result["file_upload"]
+        await StatsCache.invalidate_file_stats(file_upload.uploaded_by_id)
+        
         logger.warning(f"File {file_id} approved by admin {admin.id}")
         
         file_upload = result["file_upload"]
@@ -213,9 +222,14 @@ async def handle_reject_file(
     """Reject file from processing."""
     try:
         service = FileUploadService(session)
+        old_status = (await service.get_file(file_id)).status
         file_upload = await service.reject(file_id, admin.id, reason=reason)
         
         await session.commit()
+        
+        # Invalidate cache
+        from app.services.stats_cache import StatsCache
+        await StatsCache.invalidate_file_stats(file_upload.uploaded_by_id)
         
         logger.warning(f"File {file_id} rejected by admin {admin.id}: {reason}")
         
@@ -273,8 +287,9 @@ async def handle_list_admin_files(
     try:
         service = FileUploadService(session)
         
-        # Get status counts
-        counts = await service.get_status_counts()
+        # Get status counts (cached)
+        from app.services.stats_cache import StatsCache
+        counts = await StatsCache.get_file_status_counts(session)
         
         # Get paginated files
         files, total = await service.get_by_status(status, limit, offset)
@@ -327,8 +342,9 @@ async def handle_list_user_files_by_status(
     try:
         service = FileUploadService(session)
         
-        # Get status counts for this user (moved to service)
-        counts = await service.get_user_status_counts(user_id)
+        # Get status counts for this user (cached)
+        from app.services.stats_cache import StatsCache
+        counts = await StatsCache.get_file_status_counts(session, user_id=user_id)
         
         # Get paginated files with status filter
         files, total = await service.get_user_by_status(user_id, status, limit, offset)
