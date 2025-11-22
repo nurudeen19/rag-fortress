@@ -31,6 +31,8 @@ async def handle_create_notification(
         # Invalidate cache for this user's unread count (new notification added)
         cache = get_cache()
         await cache.delete(f"notif:unread_count:{user_id}")
+        await cache.delete(f"dashboard:user:metrics:{user_id}")
+        await cache.delete("dashboard:admin:metrics")
         
         logger.info(f"Created notification {notif.id} for user {user_id}, invalidated cache")
         return {"success": True, "notification_id": notif.id}
@@ -87,6 +89,7 @@ async def handle_mark_notification_read(
         # Invalidate cache for this user's unread count
         cache = get_cache()
         await cache.delete(f"notif:unread_count:{user.id}")
+        await cache.delete(f"dashboard:user:metrics:{user.id}")
         
         logger.info(f"Marked notification {notification_id} as read for user {user.id}")
         return {"success": True}
@@ -109,6 +112,7 @@ async def handle_mark_all_notifications_read(user: User, session: AsyncSession) 
         # Invalidate cache for this user's unread count
         cache = get_cache()
         await cache.delete(f"notif:unread_count:{user.id}")
+        await cache.delete(f"dashboard:user:metrics:{user.id}")
         
         logger.info(f"Marked all {changed} notifications as read for user {user.id}")
         return {"success": True, "updated": changed}

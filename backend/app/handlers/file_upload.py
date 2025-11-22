@@ -38,6 +38,8 @@ async def handle_upload_file(
         cache = get_cache()
         await cache.invalidate_pattern(f"stats:*:{user.id}")
         await cache.invalidate_pattern("stats:files*")
+        await cache.delete("dashboard:admin:metrics")
+        await cache.delete(f"dashboard:user:metrics:{user.id}")
         
         logger.info(f"File uploaded by user {user.id}: {upload_request.file_name}")
         
@@ -192,6 +194,8 @@ async def handle_approve_file(
         file_upload = result["file_upload"]
         await cache.invalidate_pattern(f"stats:*:{file_upload.uploaded_by_id}")
         await cache.invalidate_pattern("stats:files*")
+        await cache.delete("dashboard:admin:metrics")
+        await cache.delete(f"dashboard:user:metrics:{file_upload.uploaded_by_id}")
         
         logger.warning(f"File {file_id} approved by admin {admin.id}")
         
@@ -235,6 +239,8 @@ async def handle_reject_file(
         cache = get_cache()
         await cache.invalidate_pattern(f"stats:*:{file_upload.uploaded_by_id}")
         await cache.invalidate_pattern("stats:files*")
+        await cache.delete("dashboard:admin:metrics")
+        await cache.delete(f"dashboard:user:metrics:{file_upload.uploaded_by_id}")
         
         logger.warning(f"File {file_id} rejected by admin {admin.id}: {reason}")
         
