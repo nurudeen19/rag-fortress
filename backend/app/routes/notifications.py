@@ -8,6 +8,11 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.services.notification_service import NotificationService
 from app.schemas.user import SuccessResponse
+from app.handlers.notification import (
+    handle_get_unread_count,
+    handle_mark_notification_read,
+    handle_mark_all_notifications_read,
+)
 
 router = APIRouter(prefix="/api/v1/notifications", tags=["notifications"])
 
@@ -41,9 +46,15 @@ async def unread_count(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    service = NotificationService(session)
-    count = await service.get_unread_count(user.id)
-    return SuccessResponse(message="Unread count", data={"count": count})
+    result = await handle_get_unread_count(user, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Failed to get unread count")
+        )
+    
+    return SuccessResponse(message="Unread count", data={"count": result["count"]})
 
 
 @router.post("/{notification_id}/read", response_model=SuccessResponse)
@@ -52,11 +63,14 @@ async def mark_read(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    service = NotificationService(session)
-    ok = await service.mark_read(notification_id, user.id)
-    if not ok:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Notification not found")
-    await session.commit()
+    result = await handle_mark_notification_read(notification_id, user, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=result.get("error", "Notification not found")
+        )
+    
     return SuccessResponse(message="Notification marked read")
 
 
@@ -65,7 +79,12 @@ async def mark_all_read(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    service = NotificationService(session)
-    changed = await service.mark_all_read(user.id)
-    await session.commit()
-    return SuccessResponse(message="All notifications marked read", data={"updated": changed})
+    result = await handle_mark_all_notifications_read(user, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Failed to mark all as read")
+        )
+    
+    return SuccessResponse(message="All notifications marked read", data={"updated": result["updated"]})
