@@ -137,6 +137,14 @@ export function useRoleAccess() {
         roles: ['admin'],
         group: 'admin',
       })
+      nav.push({
+        name: 'System Settings',
+        path: '/system-settings',
+        routeName: 'system-settings',
+        icon: 'settings',
+        roles: ['admin'],
+        group: 'admin',
+      })
     }
 
     // Filter to only items user has role for

@@ -95,6 +95,12 @@ const router = createRouter({
           meta: { requiresRoles: ['admin'] }
         },
         {
+          path: 'system-settings',
+          name: 'system-settings',
+          component: () => import('../views/admin/Configuration.vue'),
+          meta: { requiresRoles: ['admin'] }
+        },
+        {
           path: 'profile',
           name: 'profile',
           component: () => import('../views/users/Profile.vue'),
