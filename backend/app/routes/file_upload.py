@@ -34,6 +34,7 @@ from app.handlers.file_upload import (
     handle_list_admin_files,
     handle_list_user_files_by_status,
     handle_get_file_content,
+    handle_get_file_counts,
 )
 from app.services.file_upload import FileValidator, FileStorage, StructuredDataParser
 
@@ -149,7 +150,7 @@ async def upload_file(
         )
 
 
-@router.get("/list", response_model=FileUploadListWithCountsResponse)
+@router.get("/list", response_model=FileUploadListResponse)
 async def list_files(
     status_filter: Optional[str] = Query(None, description="Filter by status (pending, approved, rejected, processed, failed, all)"),
     limit: int = Query(50, ge=1, le=200, description="Number of items per page"),
@@ -158,7 +159,7 @@ async def list_files(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    List files with status counts and pagination.
+    List files with pagination (counts available via GET /v1/files/stats/counts).
     
     Automatically returns:
     - All files (if user is admin)
@@ -184,13 +185,36 @@ async def list_files(
             detail=result.get("error", "Failed to list files")
         )
     
-    return FileUploadListWithCountsResponse(
-        counts=result["counts"],
+    return FileUploadListResponse(
         total=result["total"],
         limit=result["limit"],
         offset=result["offset"],
         items=[FileUploadResponse(**f) for f in result["files"]]
     )
+
+
+@router.get("/stats/counts")
+async def get_file_counts(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Get file status counts only (no file records).
+    
+    Useful for updating UI after file operations without fetching all files.
+    Returns different counts based on user role:
+    - Admin: All files
+    - User: Their own files
+    """
+    result = await handle_get_file_counts(user, session)
+    
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Failed to get file counts")
+        )
+    
+    return {"counts": result["counts"]}
 
 
 @router.get("/{file_id}", response_model=FileUploadDetailResponse)

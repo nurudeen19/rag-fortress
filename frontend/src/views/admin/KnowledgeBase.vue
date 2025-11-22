@@ -377,6 +377,9 @@ const confirmApproval = async () => {
     showApprovalConfirm.value = false
     approvalDocument.value = null
     
+    // Refresh counts
+    await loadCounts()
+    
     // Show success feedback with job info
     const message = response.data?.message || 'Document approved successfully!'
     const jobInfo = response.data?.data?.job_id ? ` (Job #${response.data.data.job_id})` : ''
@@ -411,6 +414,9 @@ const handleReject = async (data) => {
       doc.status = 'rejected'
     }
 
+    // Refresh counts
+    await loadCounts()
+
     showRejectModalFlag.value = false
     showNotification('Document rejected successfully', 'success')
   } catch (err) {
@@ -439,6 +445,7 @@ const deleteDocument = async (documentId) => {
 
 const refreshDocuments = () => {
   loadDocuments()
+  loadCounts()
 }
 
 // Load all documents from backend with status filtering and pagination
@@ -455,9 +462,6 @@ const loadDocuments = async () => {
       }
     })
 
-    // Update counts
-    counts.value = response.counts || {}
-    
     // Update pagination
     pagination.value.total = response.total
     pagination.value.limit = response.limit
@@ -481,6 +485,17 @@ const loadDocuments = async () => {
     error.value = 'Failed to load documents from server'
   } finally {
     loading.value = false
+  }
+}
+
+// Load counts from dedicated stats endpoint
+const loadCounts = async () => {
+  try {
+    const response = await api.get('/v1/files/stats/counts')
+    counts.value = response.counts || {}
+  } catch (err) {
+    console.error('Failed to load counts:', err)
+    // Silently fail - counts not critical
   }
 }
 
@@ -508,6 +523,7 @@ const prevPage = () => {
 // Load data on mount
 onMounted(() => {
   loadDocuments()
+  loadCounts()
 })
 </script>
 

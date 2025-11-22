@@ -602,6 +602,9 @@ const handleSubmit = async () => {
 
     console.log('Upload successful:', response)
 
+    // Refresh counts and store for next page
+    await refreshCountsForNextPage()
+
     // Show success message and redirect to my-uploads
     uploading.value = false
     router.push('/my-uploads?status=pending&message=File uploaded successfully!')
@@ -609,6 +612,18 @@ const handleSubmit = async () => {
     console.error('Upload error:', error)
     fileError.value = error.message || 'Upload failed'
     uploading.value = false
+  }
+}
+
+// Refresh counts and store in sessionStorage for MyUploads to use
+const refreshCountsForNextPage = async () => {
+  try {
+    const countsResponse = await api.get('/v1/files/stats/counts')
+    if (countsResponse.data?.counts) {
+      sessionStorage.setItem('lastCounts', JSON.stringify(countsResponse.data.counts))
+    }
+  } catch (countErr) {
+    console.error('Failed to refresh counts:', countErr)
   }
 }
 </script>

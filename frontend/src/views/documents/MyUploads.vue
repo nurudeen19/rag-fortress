@@ -323,9 +323,6 @@ const loadDocuments = async () => {
       }
     })
 
-    // Update counts
-    counts.value = response.counts || {}
-    
     // Update pagination
     pagination.value.total = response.total
     pagination.value.limit = response.limit
@@ -345,6 +342,17 @@ const loadDocuments = async () => {
     error.value = 'Failed to load your documents'
   } finally {
     loading.value = false
+  }
+}
+
+// Load counts from dedicated stats endpoint
+const loadCounts = async () => {
+  try {
+    const response = await api.get('/v1/files/stats/counts')
+    counts.value = response.counts || {}
+  } catch (err) {
+    console.error('Failed to load counts:', err)
+    // Silently fail - counts not critical
   }
 }
 
@@ -380,7 +388,19 @@ onMounted(() => {
     }, 5000)
   }
   
+  // Check if counts were refreshed after upload
+  const storedCounts = sessionStorage.getItem('lastCounts')
+  if (storedCounts) {
+    try {
+      counts.value = JSON.parse(storedCounts)
+      sessionStorage.removeItem('lastCounts')
+    } catch (err) {
+      console.error('Failed to parse stored counts:', err)
+    }
+  }
+  
   loadDocuments()
+  loadCounts()
 })
 </script>
 

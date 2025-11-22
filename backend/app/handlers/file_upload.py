@@ -9,6 +9,8 @@ from app.services.file_upload import FileUploadService
 from app.schemas.file_upload import FileUploadCreate, FileUploadApproveRequest, FileUploadRejectRequest
 from app.models.user import User
 from app.models.file_upload import FileUpload, FileStatus
+from app.config.cache_settings import cache_settings
+from app.core.cache import get_cache
 from app.core import get_logger
 
 
@@ -32,9 +34,10 @@ async def handle_upload_file(
         
         await session.commit()
         
-        # Invalidate cache
-        from app.services.stats_cache import StatsCache
-        await StatsCache.invalidate_file_stats(user.id)
+        # Invalidate cache        
+        cache = get_cache()
+        await cache.invalidate_pattern(f"stats:*:{user.id}")
+        await cache.invalidate_pattern("stats:files*")
         
         logger.info(f"File uploaded by user {user.id}: {upload_request.file_name}")
         
@@ -185,9 +188,10 @@ async def handle_approve_file(
         await session.commit()
         
         # Invalidate cache
-        from app.services.stats_cache import StatsCache
+        cache = get_cache()
         file_upload = result["file_upload"]
-        await StatsCache.invalidate_file_stats(file_upload.uploaded_by_id)
+        await cache.invalidate_pattern(f"stats:*:{file_upload.uploaded_by_id}")
+        await cache.invalidate_pattern("stats:files*")
         
         logger.warning(f"File {file_id} approved by admin {admin.id}")
         
@@ -228,8 +232,9 @@ async def handle_reject_file(
         await session.commit()
         
         # Invalidate cache
-        from app.services.stats_cache import StatsCache
-        await StatsCache.invalidate_file_stats(file_upload.uploaded_by_id)
+        cache = get_cache()
+        await cache.invalidate_pattern(f"stats:*:{file_upload.uploaded_by_id}")
+        await cache.invalidate_pattern("stats:files*")
         
         logger.warning(f"File {file_id} rejected by admin {admin.id}: {reason}")
         
@@ -283,13 +288,9 @@ async def handle_list_admin_files(
     offset: int,
     session: AsyncSession
 ) -> dict:
-    """List all files for admin with status counts and pagination."""
+    """List all files for admin with pagination (counts available via /stats/counts endpoint)."""
     try:
-        service = FileUploadService(session)
-        
-        # Get status counts (cached)
-        from app.services.stats_cache import StatsCache
-        counts = await StatsCache.get_file_status_counts(session)
+        service = FileUploadService(session)       
         
         # Get paginated files
         files, total = await service.get_by_status(status, limit, offset)
@@ -320,7 +321,6 @@ async def handle_list_admin_files(
         
         return {
             "success": True,
-            "counts": counts,
             "files": files_data,
             "total": total,
             "limit": limit,
@@ -338,13 +338,9 @@ async def handle_list_user_files_by_status(
     offset: int,
     session: AsyncSession
 ) -> dict:
-    """List user's files with status counts and pagination."""
+    """List user's files with pagination (counts available via /stats/counts endpoint)."""
     try:
         service = FileUploadService(session)
-        
-        # Get status counts for this user (cached)
-        from app.services.stats_cache import StatsCache
-        counts = await StatsCache.get_file_status_counts(session, user_id=user_id)
         
         # Get paginated files with status filter
         files, total = await service.get_user_by_status(user_id, status, limit, offset)
@@ -371,7 +367,6 @@ async def handle_list_user_files_by_status(
         
         return {
             "success": True,
-            "counts": counts,
             "files": files_data,
             "total": total,
             "limit": limit,
@@ -424,4 +419,36 @@ async def handle_ingest_file(
         }
     except Exception as e:
         logger.error(f"Handle ingest file failed: {e}", exc_info=True)
+        return {"success": False, "error": str(e)}
+
+
+async def handle_get_file_counts(user: User, session: AsyncSession) -> dict:
+    """
+    Get file status counts for the user (admin sees all, user sees their own).
+    Uses service for business logic and cache for performance.
+    """
+    try:
+        cache = get_cache()
+        
+        # Determine cache key and service call based on role
+        if user.has_role("admin"):
+            cache_key = "stats:file_counts"
+            service = FileUploadService(session)
+            counts = await service.get_status_counts()
+        else:
+            cache_key = f"stats:file_counts:{user.id}"
+            service = FileUploadService(session)
+            counts = await service.get_user_status_counts(user.id)
+        
+        # Try cache first
+        cached_counts = await cache.get(cache_key)
+        if cached_counts:
+            return {"success": True, "counts": cached_counts}
+        
+        # Cache the results
+        await cache.set(cache_key, counts, ttl=cache_settings.CACHE_TTL_STATS)
+        
+        return {"success": True, "counts": counts}
+    except Exception as e:
+        logger.error(f"Get file counts failed: {e}", exc_info=True)
         return {"success": False, "error": str(e)}

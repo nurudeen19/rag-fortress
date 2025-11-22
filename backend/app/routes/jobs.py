@@ -13,6 +13,8 @@ from app.core.security import get_current_user, require_role
 from app.models.job import Job, JobStatus
 from app.models.user import User
 from app.schemas.common import MessageResponse
+from app.core.cache import get_cache
+from app.config.cache_settings import cache_settings
 
 router = APIRouter(prefix="/api/v1/admin/jobs", tags=["admin:jobs"])
 
@@ -29,33 +31,34 @@ async def get_job_status(
     """
     # TODO: Add admin role check
     
-    from app.services.stats_cache import StatsCache
     
-    try:
-        stats = await StatsCache.get_job_stats(session)
-        
-        return {
-            "status": "ok",
-            "data": stats
-        }
-    except Exception as e:
-        # Fallback to direct query on cache errors
-        stats = {}
-        for status in JobStatus:
-            result = await session.execute(
-                select(func.count(Job.id)).where(Job.status == status)
-            )
-            stats[status.value] = result.scalar()
-        
-        result = await session.execute(select(func.count(Job.id)))
-        stats["total"] = result.scalar()
-        
-        return {
-            "status": "ok",
-            "data": stats,
-            "cached": False,
-            "cache_error": str(e)
-        }
+    
+    cache = get_cache()
+    cache_key = "stats:jobs"
+    
+    # Try cache first
+    cached = await cache.get(cache_key)
+    if cached:
+        return {"status": "ok", "data": cached}
+    
+    # Fetch from database
+    stats = {}
+    for status in JobStatus:
+        result = await session.execute(
+            select(func.count(Job.id)).where(Job.status == status)
+        )
+        stats[status.value] = result.scalar() or 0
+    
+    result = await session.execute(select(func.count(Job.id)))
+    stats["total"] = result.scalar() or 0
+    
+    # Cache for 1 minute
+    await cache.set(cache_key, stats, ttl=cache_settings.CACHE_TTL_STATS)
+    
+    return {
+        "status": "ok",
+        "data": stats
+    }
 
 
 @router.get("/{job_id}")

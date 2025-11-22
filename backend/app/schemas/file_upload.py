@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional, List
 from enum import Enum
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class SecurityLevelEnum(str, Enum):
@@ -47,7 +47,7 @@ class FileUploadCreate(BaseModel):
         description="If True, only department members can access"
     )
     
-    @validator('file_type')
+    @field_validator('file_type')
     def validate_file_type(cls, v):
         """Validate file type is a supported format."""
         supported = {'pdf', 'txt', 'md', 'csv', 'json', 'xlsx', 'xls', 'docx', 'doc'}
@@ -55,7 +55,7 @@ class FileUploadCreate(BaseModel):
             raise ValueError(f"Unsupported file type: {v}. Supported: {supported}")
         return v.lower()
     
-    @validator('file_size')
+    @field_validator('file_size')
     def validate_file_size(cls, v):
         """Validate file size is reasonable."""
         max_size = 100 * 1024 * 1024  # 100MB
@@ -134,10 +134,14 @@ class FileUploadRejectRequest(BaseModel):
     reason: str = Field(..., min_length=1, description="Rejection reason")
 
 
+
+
 class FileUploadListResponse(BaseModel):
-    """Response for listing file uploads."""
+    """Response for listing files without counts (use /stats/counts endpoint for counts)."""
     
-    total: int = Field(..., description="Total number of files")
+    total: int = Field(..., description="Total number of files in current filter")
+    limit: int = Field(..., description="Pagination limit")
+    offset: int = Field(..., description="Pagination offset")
     items: List[FileUploadResponse]
     
     class Config:
@@ -147,7 +151,7 @@ class FileUploadListResponse(BaseModel):
 
 
 class FileUploadListWithCountsResponse(BaseModel):
-    """Response for listing files with status counts."""
+    """Response for listing files with status counts (deprecated - use FileUploadListResponse + /stats/counts)."""
     
     counts: dict = Field(..., description="Count of files per status")
     total: int = Field(..., description="Total number of files in current filter")
