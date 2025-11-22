@@ -30,6 +30,31 @@ const router = createRouter({
       meta: { public: true }
     },
 
+    // Chat mode routes with chat-specific layout
+    {
+      path: '/chat',
+      component: () => import('../layouts/ChatModeLayout.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          redirect: '/chat/new'
+        },
+        {
+          path: 'new',
+          name: 'chat',
+          component: () => import('../views/content/Chat.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
+        },
+        {
+          path: ':id',
+          name: 'chat-conversation',
+          component: () => import('../views/content/Chat.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
+        }
+      ]
+    },
+
     // Protected routes with dashboard layout
     {
       path: '/',
@@ -44,12 +69,6 @@ const router = createRouter({
           path: 'dashboard',
           name: 'dashboard',
           component: () => import('../views/system/Dashboard.vue'),
-          meta: { requiresRoles: ['user', 'manager', 'admin'] }
-        },
-        {
-          path: 'chat',
-          name: 'chat',
-          component: () => import('../views/content/Chat.vue'),
           meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
