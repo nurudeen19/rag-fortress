@@ -90,11 +90,11 @@
       </div>
     </nav>
 
-    <div class="flex h-[calc(100vh-64px)]">
+    <div class="flex pt-16 h-screen">
       <!-- Chat Sidebar -->
       <aside
         :class="[
-          'fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-fortress-900 border-r border-fortress-800 pt-16 lg:pt-0 transform transition-transform duration-300 flex flex-col h-full',
+          'fixed lg:relative inset-y-0 left-0 z-40 w-72 bg-fortress-900 border-r border-fortress-800 pt-16 lg:pt-0 transform transition-transform duration-300 flex flex-col h-[calc(100vh-4rem)]',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         ]"
       >
@@ -258,7 +258,7 @@
       </aside>
 
       <!-- Main Chat View -->
-      <main class="flex-1 overflow-hidden h-full">
+      <main class="flex-1 overflow-hidden h-[calc(100vh-4rem)]">
         <router-view :key="activeChat?.id" />
       </main>
 
