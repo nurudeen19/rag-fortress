@@ -112,28 +112,13 @@
         </div>
 
         <!-- Filters & Search -->
-        <div class="px-4 py-3 border-b border-fortress-800 space-y-3">
+        <div class="px-4 py-3 border-b border-fortress-800">
           <input
             v-model="searchQuery"
             type="text"
             placeholder="Search conversations..."
             class="w-full bg-fortress-800 border border-fortress-700 rounded-lg px-3 py-2 text-sm text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure transition-colors"
           />
-          
-          <!-- Category Filter -->
-          <div class="flex items-center space-x-2 text-sm">
-            <span class="text-fortress-400">Category:</span>
-            <select
-              v-model="selectedCategory"
-              class="flex-1 bg-fortress-800 border border-fortress-700 rounded px-2 py-1 text-xs text-fortress-100 focus:outline-none focus:border-secure"
-            >
-              <option value="">All</option>
-              <option value="general">General</option>
-              <option value="research">Research</option>
-              <option value="support">Support</option>
-              <option value="analysis">Analysis</option>
-            </select>
-          </div>
         </div>
 
         <!-- Chat History Section -->
@@ -272,7 +257,6 @@ const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 const chatSettingsOpen = ref(false)
 const searchQuery = ref('')
-const selectedCategory = ref('')
 
 const userInitials = computed(() => {
   if (!authStore.user) return '?'
@@ -281,12 +265,11 @@ const userInitials = computed(() => {
   return (first + last).toUpperCase()
 })
 
-// Filter chats based on search and category
+// Filter chats based on search (removed category filter)
 const filteredChats = computed(() => {
   return chats.value.filter(chat => {
     const matchesSearch = chat.title.toLowerCase().includes(searchQuery.value.toLowerCase())
-    const matchesCategory = !selectedCategory.value || chat.category === selectedCategory.value
-    return matchesSearch && matchesCategory
+    return matchesSearch
   })
 })
 

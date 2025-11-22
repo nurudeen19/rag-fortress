@@ -1,7 +1,7 @@
 <template>
-  <div class="h-full flex flex-col bg-fortress-950">
+  <div class="flex flex-col h-screen bg-fortress-950">
     <!-- Conversation Header -->
-    <div class="bg-fortress-900 border-b border-fortress-800 px-6 py-4 flex items-center justify-between">
+    <div class="bg-fortress-900 border-b border-fortress-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
       <div class="flex-1">
         <div class="flex items-center space-x-3">
           <div>
@@ -15,7 +15,7 @@
       <div class="flex items-center space-x-2">
         <button
           @click="showChatOptions = !showChatOptions"
-          class="p-2 rounded-lg text-fortress-400 hover:text-fortress-100 hover:bg-fortress-800 transition-colors relative"
+          class="p-2 rounded-lg text-fortress-400 hover:text-fortress-100 hover:bg-fortress-800 transition-colors"
           title="Conversation options"
         >
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -31,7 +31,7 @@
         >
           <div class="p-2 space-y-1">
             <button
-              @click="renameChat"
+              @click="showRenameModal = true; showChatOptions = false"
               class="w-full text-left px-3 py-2 text-sm text-fortress-300 hover:bg-fortress-800 rounded transition-colors flex items-center space-x-2"
             >
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -54,7 +54,7 @@
     </div>
 
     <!-- Messages Container -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto p-6 space-y-4">
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto p-6 space-y-4 flex-shrink-1 basis-auto">
       <!-- Empty State -->
       <div v-if="messages.length === 0" class="h-full flex items-center justify-center">
         <div class="text-center">
@@ -127,25 +127,44 @@
     </div>
 
     <!-- Input Area -->
-    <div class="bg-fortress-900 border-t border-fortress-800 px-6 py-4">
+    <div class="bg-fortress-900 border-t border-fortress-800 px-6 py-5 flex-shrink-0">
+      <!-- Info Message -->
+      <div v-if="messages.length === 0" class="mb-4 p-3 bg-fortress-800/50 rounded-lg border border-fortress-700">
+        <p class="text-fortress-400 text-sm">
+          💡 <span class="font-medium">Tip:</span> Ask specific questions about your documents for better results. You can ask about concepts, facts, or relationships in your knowledge base.
+        </p>
+      </div>
+
       <form @submit.prevent="sendMessage" class="space-y-3">
+        <!-- Input Field with Enhanced Design -->
         <div class="flex items-end space-x-3">
-          <input
-            v-model="inputMessage"
-            type="text"
-            placeholder="Ask a question about your documents..."
-            class="flex-1 bg-fortress-800 border border-fortress-700 rounded-lg px-4 py-3 text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure focus:ring-1 focus:ring-secure transition-colors"
-            :disabled="loading"
-            @keydown.enter="sendMessage"
-          />
+          <div class="flex-1 relative group">
+            <input
+              v-model="inputMessage"
+              type="text"
+              placeholder="Ask a question about your documents..."
+              class="w-full bg-fortress-800 border border-fortress-700 rounded-xl px-5 py-3.5 text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure focus:ring-2 focus:ring-secure/20 transition-all duration-200 shadow-sm group-hover:border-fortress-600"
+              :disabled="loading"
+              @keydown.enter.exact="sendMessage"
+              @keydown.shift.enter=""
+            />
+            <!-- Subtle gradient underline effect -->
+            <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-secure/0 via-secure to-secure/0 opacity-0 group-focus-within:opacity-100 transition-opacity rounded-b-xl"></div>
+          </div>
           <button
             type="submit"
-            class="bg-secure hover:bg-secure/90 disabled:bg-secure/50 disabled:cursor-not-allowed px-6 py-3 rounded-lg text-white font-medium transition-colors"
+            class="bg-gradient-to-br from-secure to-secure/90 hover:from-secure/95 hover:to-secure disabled:from-secure/50 disabled:to-secure/40 disabled:cursor-not-allowed px-7 py-3.5 rounded-xl text-white font-semibold transition-all duration-200 shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:shadow-none flex items-center justify-center min-w-[100px] gap-2"
             :disabled="loading || !inputMessage.trim()"
+            title="Send message (Enter to send, Shift+Enter for new line)"
           >
-            <span v-if="!loading">Send</span>
-            <span v-else class="flex items-center space-x-1">
-              <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <span v-if="!loading" class="flex items-center gap-2">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+              </svg>
+              <span>Send</span>
+            </span>
+            <span v-else class="flex items-center gap-2">
+              <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
               <span>Sending</span>
@@ -153,27 +172,63 @@
           </button>
         </div>
 
-        <!-- Character Count -->
-        <div class="flex justify-between items-center text-xs">
+        <!-- Character Count & Clear -->
+        <div class="flex justify-between items-center text-xs px-1">
           <p class="text-fortress-500">
-            {{ inputMessage.length }} / 2000 characters
+            <span :class="inputMessage.length > 1800 ? 'text-alert' : ''">{{ inputMessage.length }}</span> / 2000
           </p>
           <button
             v-if="messages.length > 0"
             type="button"
             @click="clearHistory"
-            class="text-fortress-500 hover:text-fortress-400 transition-colors"
+            class="text-fortress-500 hover:text-fortress-300 transition-colors flex items-center gap-1"
           >
-            Clear History
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+            Clear
           </button>
         </div>
       </form>
+    </div>
 
-      <!-- Info Message -->
-      <div v-if="messages.length === 0" class="mt-4 p-3 bg-fortress-800/50 rounded-lg border border-fortress-700">
-        <p class="text-fortress-400 text-sm">
-          💡 <span class="font-medium">Tip:</span> Ask specific questions about your documents for better results. You can ask about concepts, facts, or relationships in your knowledge base.
-        </p>
+    <!-- Rename Modal -->
+    <div
+      v-if="showRenameModal"
+      @click.self="showRenameModal = false"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
+      <div class="bg-fortress-900 border border-fortress-800 rounded-xl shadow-2xl w-full max-w-md animate-fade-in">
+        <div class="border-b border-fortress-800 px-6 py-4">
+          <h2 class="text-xl font-bold text-fortress-100">Rename Conversation</h2>
+          <p class="text-sm text-fortress-400 mt-1">Enter a new title for this conversation</p>
+        </div>
+        <div class="p-6 space-y-4">
+          <input
+            v-model="renameInput"
+            type="text"
+            :placeholder="currentChatTitle"
+            class="w-full bg-fortress-800 border border-fortress-700 rounded-lg px-4 py-3 text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure focus:ring-1 focus:ring-secure transition-colors"
+            @keydown.enter="submitRename"
+            @keydown.escape="showRenameModal = false"
+            autofocus
+          />
+        </div>
+        <div class="border-t border-fortress-800 px-6 py-4 flex justify-end gap-3">
+          <button
+            @click="showRenameModal = false"
+            class="px-4 py-2 rounded-lg text-fortress-300 hover:bg-fortress-800 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            @click="submitRename"
+            :disabled="!renameInput.trim()"
+            class="px-6 py-2 bg-secure hover:bg-secure/90 disabled:bg-secure/50 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors"
+          >
+            Rename
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -196,6 +251,8 @@ const inputMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
 const showChatOptions = ref(false)
+const showRenameModal = ref(false)
+const renameInput = ref('')
 
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
 
@@ -317,12 +374,17 @@ const clearHistory = () => {
   }
 }
 
-// Rename chat
-const renameChat = async () => {
-  const newTitle = prompt('Enter new conversation title:', currentChatTitle.value)
-  if (newTitle && newTitle.trim() && activeChat.value) {
-    await renameChatFromHistory(activeChat.value.id, newTitle.trim())
+// Rename chat with modal
+const submitRename = async () => {
+  if (!renameInput.value.trim() || !activeChat.value) return
+  
+  try {
+    await renameChatFromHistory(activeChat.value.id, renameInput.value.trim())
+    showRenameModal.value = false
+    renameInput.value = ''
     showChatOptions.value = false
+  } catch (error) {
+    console.error('Rename failed:', error)
   }
 }
 
