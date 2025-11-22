@@ -41,8 +41,8 @@ export function useDashboardMetrics() {
     error.value = null
     
     try {
-      const response = await api.get('/dashboard/admin/metrics')
-      if (response.status === 'ok') {
+      const response = await api.get('/v1/dashboard/admin/metrics')
+      if (response && response.status === 'ok') {
         adminMetrics.value = response.data
         cacheStatus.value = response.cached ? 'cached' : 'fresh'
       }
@@ -59,8 +59,8 @@ export function useDashboardMetrics() {
     error.value = null
     
     try {
-      const response = await api.get('/dashboard/user/metrics')
-      if (response.status === 'ok') {
+      const response = await api.get('/v1/dashboard/user/metrics')
+      if (response && response.status === 'ok') {
         userMetrics.value = response.data
       }
     } catch (err) {

@@ -79,7 +79,7 @@ class DashboardService:
         metrics["jobs_pending"] = result.scalar() or 0
         
         result = await session.execute(
-            select(func.count(Job.id)).where(Job.status == JobStatus.IN_PROGRESS)
+            select(func.count(Job.id)).where(Job.status == JobStatus.PROCESSING)
         )
         metrics["jobs_in_progress"] = result.scalar() or 0
         

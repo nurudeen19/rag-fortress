@@ -38,7 +38,7 @@ async def get_admin_metrics(
         HTTPException: If user is not admin.
     """
     # Check if user is admin
-    if not current_user.is_admin:
+    if not current_user.has_role("admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only admins can access admin metrics"
