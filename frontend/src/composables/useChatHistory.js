@@ -126,8 +126,9 @@ export function useChatHistory() {
       // Update cache
       setCache(chats.value)
       
-      // Navigate to the chat
-      await router.push({ name: 'chat-conversation', params: { id: newChat.id } })
+      // Navigate to the chat using path
+      console.log('[useChatHistory] Navigating to /chat/' + newChat.id)
+      await router.push('/chat/' + newChat.id)
     } catch (err) {
       error.value = err.message || 'Failed to create conversation'
       console.error('Error creating conversation:', err)
@@ -143,8 +144,8 @@ export function useChatHistory() {
   const selectChat = async (chat) => {
     console.log('[useChatHistory] Selecting chat:', chat.id, chat.title)
     activeChat.value = chat
-    console.log('[useChatHistory] Navigating to chat-conversation with id:', chat.id)
-    await router.push({ name: 'chat-conversation', params: { id: chat.id } })
+    console.log('[useChatHistory] Navigating to /chat/' + chat.id)
+    await router.push('/chat/' + chat.id)
     console.log('[useChatHistory] Navigation completed')
   }
 
