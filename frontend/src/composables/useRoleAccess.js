@@ -72,7 +72,6 @@ export function useRoleAccess() {
         icon: 'chat',
         roles: ['user', 'manager', 'admin'],
         group: 'main',
-        badge: '2',
       },
     ]
 
