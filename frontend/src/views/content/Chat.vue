@@ -6,7 +6,7 @@
         <div class="flex items-center space-x-3">
           <div>
             <h1 class="text-2xl font-bold text-fortress-100">{{ currentChatTitle }}</h1>
-            <p class="text-sm text-fortress-400 mt-1">Query your documents with AI-powered retrieval</p>
+            <p class="text-sm text-fortress-400 mt-1">{{ currentChatSubtitle }}</p>
           </div>
         </div>
       </div>
@@ -145,11 +145,11 @@
       </div>
 
       <!-- Messages -->
-      <div class="max-w-4xl mx-auto space-y-6">
+      <div class="max-w-6xl mx-auto space-y-6">
         <template v-for="(message, index) in messages" :key="index">
           <!-- User Message -->
           <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
-            <div class="max-w-[75%] lg:max-w-[65%]">
+            <div class="w-full max-w-[90%] lg:max-w-[85%]">
               <div class="bg-gradient-to-br from-secure/30 to-secure/20 border border-secure/40 rounded-2xl rounded-tr-sm px-6 py-4 shadow-lg">
                 <div class="text-fortress-50 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
               </div>
@@ -163,7 +163,7 @@
 
           <!-- Assistant Message -->
           <div v-else class="flex justify-start animate-slide-in-left">
-            <div class="max-w-[85%] lg:max-w-[75%]">
+            <div class="w-full max-w-[95%] lg:max-w-[90%]">
               <div class="flex items-start gap-3">
                 <!-- AI Avatar -->
                 <div class="flex-shrink-0 mt-1">
@@ -234,7 +234,7 @@
       </div>
 
       <!-- Loading Indicator -->
-      <div v-if="loading" class="max-w-4xl mx-auto">
+      <div v-if="loading" class="max-w-6xl mx-auto">
         <div class="flex justify-start animate-slide-in-left">
           <div class="flex items-start gap-3">
             <!-- AI Avatar -->
@@ -263,7 +263,7 @@
 
     <!-- Input Area -->
     <div class="bg-transparent border-t border-fortress-800/50 px-4 py-4 flex-shrink-0">
-      <div class="max-w-4xl mx-auto">
+      <div class="max-w-6xl mx-auto">
         <form @submit.prevent="sendMessage" class="space-y-3">
           <!-- Input Field with Enhanced Design -->
           <div class="relative">
@@ -411,6 +411,15 @@ const renameInput = ref('')
 const loadingMessages = ref(false)
 
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
+
+const currentChatSubtitle = computed(() => {
+  if (activeChat.value) {
+    const messageCount = activeChat.value.message_count || 0
+    const messageText = messageCount === 1 ? 'message' : 'messages'
+    return `${messageCount} ${messageText}`
+  }
+  return 'Query your documents with AI-powered retrieval'
+})
 
 // Render markdown content
 const renderMarkdown = (content) => {
