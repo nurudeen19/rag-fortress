@@ -382,7 +382,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, computed } from 'vue'
+import { ref, nextTick, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../../stores/auth'
 import { useChatHistory } from '../../composables/useChatHistory'
@@ -390,7 +390,13 @@ import { useChatHistory } from '../../composables/useChatHistory'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const { activeChat, deleteChat: deleteChatFromHistory, renameChat: renameChatFromHistory } = useChatHistory()
+const { 
+  activeChat, 
+  deleteChat: deleteChatFromHistory, 
+  renameChat: renameChatFromHistory,
+  loadChatMessages,
+  addMessage
+} = useChatHistory()
 
 // State
 const messages = ref([])
@@ -401,6 +407,7 @@ const inputField = ref(null)
 const showChatOptions = ref(false)
 const showRenameModal = ref(false)
 const renameInput = ref('')
+const loadingMessages = ref(false)
 
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
 
@@ -410,6 +417,49 @@ const formatTime = (timestamp) => {
   const date = new Date(timestamp)
   return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 }
+
+// Load messages from backend
+const loadMessagesForConversation = async (conversationId) => {
+  if (!conversationId) {
+    messages.value = []
+    return
+  }
+
+  loadingMessages.value = true
+  try {
+    const messagesList = await loadChatMessages(conversationId, 50, 0)
+    
+    // Map backend messages to display format
+    messages.value = messagesList.map(msg => ({
+      id: msg.id,
+      role: msg.role.toLowerCase(),
+      content: msg.content,
+      timestamp: msg.created_at,
+      sources: msg.meta?.sources || [],
+      error: msg.meta?.error || null
+    }))
+
+    await scrollToBottom()
+  } catch (error) {
+    console.error('Failed to load messages:', error)
+    messages.value = []
+  } finally {
+    loadingMessages.value = false
+  }
+}
+
+// Watch for conversation changes when route changes
+watch(
+  () => route.params.id,
+  async (newId) => {
+    if (newId) {
+      await loadMessagesForConversation(newId)
+    } else {
+      messages.value = []
+    }
+  },
+  { immediate: true }
+)
 
 // Scroll to bottom when new messages arrive
 const scrollToBottom = async () => {
@@ -421,7 +471,7 @@ const scrollToBottom = async () => {
 
 // Send message
 const sendMessage = async () => {
-  if (!inputMessage.value.trim() || loading.value) return
+  if (!inputMessage.value.trim() || loading.value || !activeChat.value) return
 
   const userMessage = inputMessage.value.trim()
   inputMessage.value = ''
@@ -437,10 +487,19 @@ const sendMessage = async () => {
   await scrollToBottom()
 
   try {
+    // Save user message to backend
+    const userMsg = await addMessage(activeChat.value.id, userMessage, 'USER')
+    
+    // Update user message with server timestamp and id
+    if (messages.value[messages.value.length - 1].role === 'user') {
+      messages.value[messages.value.length - 1].id = userMsg.id
+      messages.value[messages.value.length - 1].timestamp = userMsg.created_at
+    }
+
     // TODO: Replace with actual API call to RAG backend
     // const response = await api.post('/v1/chat', {
     //   message: userMessage,
-    //   conversation_id: conversationId
+    //   conversation_id: activeChat.value.id
     // })
 
     // Simulate API response for now
@@ -493,11 +552,15 @@ I'll provide relevant sources for each answer.`
       sources = []
     }
 
+    // Save assistant message to backend
+    const assistantMsg = await addMessage(activeChat.value.id, responseContent, 'ASSISTANT', { sources })
+
     messages.value.push({
       role: 'assistant',
+      id: assistantMsg.id,
       content: responseContent,
       sources: sources,
-      timestamp: new Date().toISOString()
+      timestamp: assistantMsg.created_at
     })
   } catch (error) {
     console.error('Chat error:', error)
