@@ -281,7 +281,7 @@ import { useChatHistory } from '../composables/useChatHistory'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
-const { chats, activeChat, selectChat, createNewChat, loadChats } = useChatHistory()
+const { chats, activeChat, selectChat, openNewChat, loadChats } = useChatHistory()
 
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
@@ -344,7 +344,7 @@ watch(() => route.path, () => {
 })
 
 const newChat = async () => {
-  await createNewChat()
+  await openNewChat()
   sidebarOpen.value = false
 }
 

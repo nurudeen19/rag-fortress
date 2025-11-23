@@ -105,18 +105,28 @@ export function useChatHistory() {
   }
 
   /**
-   * Create a new chat conversation
+   * Open new chat window (doesn't create conversation yet)
    */
-  const createNewChat = async (title = null) => {
+  const openNewChat = async () => {
+    activeChat.value = null
+    await router.push('/chat/new')
+  }
+
+  /**
+   * Create a new chat conversation with first message
+   */
+  const createConversationWithMessage = async (firstMessage, role = 'USER') => {
     loading.value = true
     error.value = null
     
     try {
-      // Generate a default title if not provided
-      const chatTitle = title || `Conversation ${new Date().toLocaleTimeString()}`
+      // Generate title from first message (first 50 chars)
+      const title = firstMessage.length > 50 
+        ? firstMessage.substring(0, 47) + '...' 
+        : firstMessage
       
       const response = await api.post('/v1/conversations', {
-        title: chatTitle
+        title: title
       })
       
       const newChat = response.conversation
@@ -126,8 +136,19 @@ export function useChatHistory() {
       // Update cache
       setCache(chats.value)
       
-      // Navigate to the chat using path
+      // Add the first message
+      const messageResponse = await api.post(`/v1/conversations/${newChat.id}/messages`, {
+        role,
+        content: firstMessage
+      })
+      
+      // Navigate to the new chat
       await router.push('/chat/' + newChat.id)
+      
+      return {
+        conversation: newChat,
+        message: messageResponse.message
+      }
     } catch (err) {
       error.value = err.message || 'Failed to create conversation'
       console.error('Error creating conversation:', err)
@@ -263,7 +284,8 @@ export function useChatHistory() {
     
     // Methods
     loadChats,
-    createNewChat,
+    openNewChat,
+    createConversationWithMessage,
     selectChat,
     deleteChat,
     renameChat,

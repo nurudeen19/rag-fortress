@@ -397,7 +397,8 @@ const {
   deleteChat: deleteChatFromHistory, 
   renameChat: renameChatFromHistory,
   loadChatMessages,
-  addMessage
+  addMessage,
+  createConversationWithMessage
 } = useChatHistory()
 
 // State
@@ -481,11 +482,13 @@ const loadMessagesForConversation = async (conversationId) => {
 watch(
   () => route.params.id,
   async (newId) => {
-    if (newId) {
+    if (newId && newId !== 'new') {
       await loadMessagesForConversation(newId)
     } else {
       messages.value = []
-      activeChat.value = null
+      if (newId !== 'new') {
+        activeChat.value = null
+      }
     }
   },
   { immediate: true }
@@ -501,12 +504,12 @@ const scrollToBottom = async () => {
 
 // Send message
 const sendMessage = async () => {
-  if (!inputMessage.value.trim() || loading.value || !activeChat.value) return
+  if (!inputMessage.value.trim() || loading.value) return
 
   const userMessage = inputMessage.value.trim()
   inputMessage.value = ''
 
-  // Add user message
+  // Add user message to UI immediately
   messages.value.push({
     role: 'user',
     content: userMessage,
@@ -517,13 +520,28 @@ const sendMessage = async () => {
   await scrollToBottom()
 
   try {
-    // Save user message to backend
-    const userMsg = await addMessage(activeChat.value.id, userMessage, 'USER')
+    let userMsg
     
-    // Update user message with server timestamp and id
-    if (messages.value[messages.value.length - 1].role === 'user') {
-      messages.value[messages.value.length - 1].id = userMsg.id
-      messages.value[messages.value.length - 1].timestamp = userMsg.created_at
+    // Check if this is a new conversation
+    if (route.params.id === 'new' || !activeChat.value) {
+      // First message - create conversation with message
+      const result = await createConversationWithMessage(userMessage, 'USER')
+      userMsg = result.message
+      
+      // Update user message with server data
+      if (messages.value[messages.value.length - 1].role === 'user') {
+        messages.value[messages.value.length - 1].id = userMsg.id
+        messages.value[messages.value.length - 1].timestamp = userMsg.created_at
+      }
+    } else {
+      // Existing conversation - add message normally
+      userMsg = await addMessage(activeChat.value.id, userMessage, 'USER')
+      
+      // Update user message with server timestamp and id
+      if (messages.value[messages.value.length - 1].role === 'user') {
+        messages.value[messages.value.length - 1].id = userMsg.id
+        messages.value[messages.value.length - 1].timestamp = userMsg.created_at
+      }
     }
 
     // TODO: Replace with actual API call to RAG backend
