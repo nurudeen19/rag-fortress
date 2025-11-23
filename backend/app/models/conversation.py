@@ -18,10 +18,10 @@ if TYPE_CHECKING:
 
 class ConversationCategory(str, enum.Enum):
     """Categories for organizing conversations."""
-    GENERAL = "general"
-    RESEARCH = "research"
-    SUPPORT = "support"
-    ANALYSIS = "analysis"
+    GENERAL = "GENERAL"
+    RESEARCH = "RESEARCH"
+    SUPPORT = "SUPPORT"
+    ANALYSIS = "ANALYSIS"
 
 
 class Conversation(Base):

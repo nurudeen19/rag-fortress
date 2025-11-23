@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 
 class MessageRole(str, enum.Enum):
     """Role types for messages in a conversation."""
-    USER = "user"
-    ASSISTANT = "assistant"
-    SYSTEM = "system"
+    USER = "USER"
+    ASSISTANT = "ASSISTANT"
+    SYSTEM = "SYSTEM"
 
 
 class Message(Base):
