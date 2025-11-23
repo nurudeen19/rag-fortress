@@ -66,6 +66,7 @@ class MessageResponse(BaseModel):
 
 class MessageListResponse(BaseModel):
     """Response for message list with pagination."""
+    conversation: ConversationResponse
     total: int
     limit: int
     offset: int

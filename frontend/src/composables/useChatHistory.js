@@ -127,7 +127,6 @@ export function useChatHistory() {
       setCache(chats.value)
       
       // Navigate to the chat using path
-      console.log('[useChatHistory] Navigating to /chat/' + newChat.id)
       await router.push('/chat/' + newChat.id)
     } catch (err) {
       error.value = err.message || 'Failed to create conversation'
@@ -142,11 +141,8 @@ export function useChatHistory() {
    * Select an existing chat conversation
    */
   const selectChat = async (chat) => {
-    console.log('[useChatHistory] Selecting chat:', chat.id, chat.title)
     activeChat.value = chat
-    console.log('[useChatHistory] Navigating to /chat/' + chat.id)
     await router.push('/chat/' + chat.id)
-    console.log('[useChatHistory] Navigation completed')
   }
 
   /**
@@ -201,18 +197,17 @@ export function useChatHistory() {
 
   /**
    * Load messages for a specific chat conversation
+   * Returns { conversation, messages, total, limit, offset }
    */
   const loadChatMessages = async (chatId, limit = 50, offset = 0) => {
     try {
-      console.log('[useChatHistory] Loading messages for chat:', chatId, { limit, offset })
       const response = await api.get(`/v1/conversations/${chatId}/messages`, {
         params: { limit, offset }
       })
-      console.log('[useChatHistory] Messages response:', response)
-      return response.messages || []
+      return response
     } catch (err) {
-      console.error('[useChatHistory] Error loading messages:', err)
-      return []
+      console.error('Error loading messages:', err)
+      return { conversation: null, messages: [], total: 0, limit, offset }
     }
   }
 

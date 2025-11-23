@@ -392,7 +392,8 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const { 
-  activeChat, 
+  activeChat,
+  chats,
   deleteChat: deleteChatFromHistory, 
   renameChat: renameChatFromHistory,
   loadChatMessages,
@@ -450,10 +451,15 @@ const loadMessagesForConversation = async (conversationId) => {
 
   loadingMessages.value = true
   try {
-    const messagesList = await loadChatMessages(conversationId, 50, 0)
+    const response = await loadChatMessages(conversationId, 50, 0)
+    
+    // Update active chat with conversation details from response
+    if (response.conversation) {
+      activeChat.value = response.conversation
+    }
     
     // Map backend messages to display format
-    messages.value = messagesList.map(msg => ({
+    messages.value = response.messages.map(msg => ({
       id: msg.id,
       role: msg.role.toLowerCase(),
       content: msg.content,
@@ -464,7 +470,7 @@ const loadMessagesForConversation = async (conversationId) => {
 
     await scrollToBottom()
   } catch (error) {
-    console.error('[Chat] Failed to load messages:', error)
+    console.error('Failed to load messages:', error)
     messages.value = []
   } finally {
     loadingMessages.value = false
@@ -479,6 +485,7 @@ watch(
       await loadMessagesForConversation(newId)
     } else {
       messages.value = []
+      activeChat.value = null
     }
   },
   { immediate: true }

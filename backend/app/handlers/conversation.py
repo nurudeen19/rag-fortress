@@ -448,8 +448,21 @@ async def handle_get_messages(
         
         logger.info(f"Retrieved {len(message_list)} messages for conversation {conversation_id}")
         
+        # Convert conversation to dict
+        conversation_dict = {
+            "id": conversation.id,
+            "user_id": conversation.user_id,
+            "title": conversation.title,
+            "message_count": conversation.message_count,
+            "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
+            "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
+            "is_deleted": conversation.is_deleted
+        }
+        
         return {
             "success": True,
+            "conversation": conversation_dict,
             "total": total,
             "limit": limit,
             "offset": offset,

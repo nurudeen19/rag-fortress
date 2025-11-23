@@ -226,6 +226,7 @@ async def get_messages(
         )
     
     return MessageListResponse(
+        conversation=ConversationResponse(**result["conversation"]),
         total=result["total"],
         limit=result["limit"],
         offset=result["offset"],
