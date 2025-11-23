@@ -427,6 +427,7 @@ async def handle_get_messages(
         
         messages, total = await service.get_messages(
             conversation_id=conversation_id,
+            user_id=user_id,
             limit=limit,
             offset=offset
         )
@@ -503,6 +504,7 @@ async def handle_get_conversation_context(
         
         messages = await service.get_conversation_context(
             conversation_id=conversation_id,
+            user_id=user_id,
             last_n=last_n
         )
         
