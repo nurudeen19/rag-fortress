@@ -150,8 +150,8 @@
           <!-- User Message -->
           <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
             <div class="max-w-[75%] lg:max-w-[65%]">
-              <div class="bg-gradient-to-br from-secure/30 to-secure/20 border border-secure/40 rounded-2xl rounded-tr-sm px-5 py-3 shadow-lg">
-                <p class="text-fortress-50 leading-relaxed">{{ message.content }}</p>
+              <div class="bg-gradient-to-br from-secure/30 to-secure/20 border border-secure/40 rounded-2xl rounded-tr-sm px-6 py-4 shadow-lg">
+                <div class="text-fortress-50 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
               </div>
               <div class="flex items-center justify-end gap-2 mt-2 px-2">
                 <p class="text-xs text-fortress-500">{{ formatTime(message.timestamp) }}</p>
@@ -176,8 +176,8 @@
                 
                 <div class="flex-1">
                   <!-- Main Response -->
-                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-5 py-4 shadow-lg">
-                    <p class="text-fortress-100 leading-relaxed whitespace-pre-wrap">{{ message.content }}</p>
+                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg">
+                    <div class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
                   </div>
                   
                   <!-- Sources/References -->
@@ -384,6 +384,7 @@
 <script setup>
 import { ref, nextTick, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { marked } from 'marked'
 import { useAuthStore } from '../../stores/auth'
 import { useChatHistory } from '../../composables/useChatHistory'
 
@@ -411,6 +412,19 @@ const loadingMessages = ref(false)
 
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
 
+// Render markdown content
+const renderMarkdown = (content) => {
+  try {
+    return marked(content, {
+      breaks: true,
+      gfm: true
+    })
+  } catch (err) {
+    console.error('Markdown rendering error:', err)
+    return `<p>${content}</p>`
+  }
+}
+
 // Format time to HH:MM
 const formatTime = (timestamp) => {
   if (!timestamp) return ''
@@ -427,9 +441,7 @@ const loadMessagesForConversation = async (conversationId) => {
 
   loadingMessages.value = true
   try {
-    console.log('[Chat] Loading messages for conversation:', conversationId)
     const messagesList = await loadChatMessages(conversationId, 50, 0)
-    console.log('[Chat] Messages loaded:', messagesList)
     
     // Map backend messages to display format
     messages.value = messagesList.map(msg => ({
@@ -441,7 +453,6 @@ const loadMessagesForConversation = async (conversationId) => {
       error: msg.meta?.error || null
     }))
 
-    console.log('[Chat] Messages mapped and ready:', messages.value.length, 'messages')
     await scrollToBottom()
   } catch (error) {
     console.error('[Chat] Failed to load messages:', error)
@@ -455,7 +466,6 @@ const loadMessagesForConversation = async (conversationId) => {
 watch(
   () => route.params.id,
   async (newId) => {
-    console.log('[Chat] Route param changed to:', newId)
     if (newId) {
       await loadMessagesForConversation(newId)
     } else {
@@ -710,5 +720,134 @@ onMounted(() => {
 * {
   scrollbar-width: thin;
   scrollbar-color: #4b5563 transparent;
+}
+
+/* Prose styling for markdown content */
+:deep(.prose-invert) {
+  color: rgba(241, 245, 249, 1);
+}
+
+:deep(.prose-invert p) {
+  margin: 0.75rem 0;
+  line-height: 1.5;
+}
+
+:deep(.prose-invert h1) {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 1rem 0 0.5rem 0;
+  color: rgba(241, 245, 249, 1);
+}
+
+:deep(.prose-invert h2) {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0.875rem 0 0.5rem 0;
+  color: rgba(241, 245, 249, 1);
+}
+
+:deep(.prose-invert h3) {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0.75rem 0 0.375rem 0;
+  color: rgba(241, 245, 249, 1);
+}
+
+:deep(.prose-invert ul) {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+  list-style-type: disc;
+}
+
+:deep(.prose-invert ol) {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+  list-style-type: decimal;
+}
+
+:deep(.prose-invert li) {
+  margin: 0.375rem 0;
+  line-height: 1.5;
+}
+
+:deep(.prose-invert code) {
+  background-color: rgba(0, 0, 0, 0.3);
+  color: rgba(34, 197, 94, 1);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+:deep(.prose-invert pre) {
+  background-color: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+
+:deep(.prose-invert pre code) {
+  background-color: transparent;
+  color: rgba(226, 232, 240, 1);
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
+:deep(.prose-invert blockquote) {
+  border-left: 4px solid rgba(34, 197, 94, 0.5);
+  padding-left: 1rem;
+  color: rgba(148, 163, 184, 1);
+  margin: 0.75rem 0;
+  font-style: italic;
+}
+
+:deep(.prose-invert a) {
+  color: rgba(34, 197, 94, 1);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+:deep(.prose-invert a:hover) {
+  color: rgba(74, 222, 128, 1);
+}
+
+:deep(.prose-invert strong) {
+  font-weight: 600;
+  color: rgba(241, 245, 249, 1);
+}
+
+:deep(.prose-invert em) {
+  font-style: italic;
+  color: rgba(226, 232, 240, 1);
+}
+
+:deep(.prose-invert hr) {
+  border: 0;
+  border-top: 1px solid rgba(100, 116, 139, 0.5);
+  margin: 1rem 0;
+}
+
+:deep(.prose-invert table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 0.9em;
+}
+
+:deep(.prose-invert th) {
+  background-color: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  padding: 0.5rem;
+  text-align: left;
+  font-weight: 600;
+}
+
+:deep(.prose-invert td) {
+  border: 1px solid rgba(100, 116, 139, 0.5);
+  padding: 0.5rem;
 }
 </style>
