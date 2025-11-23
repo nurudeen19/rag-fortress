@@ -83,6 +83,7 @@ def create_app() -> FastAPI:
     from app.routes.departments import router as departments_router
     from app.routes.notifications import router as notifications_router
     from app.routes.dashboard import router as dashboard_router
+    from app.routes.conversation import router as conversation_router
     
     app.include_router(email_router)
     app.include_router(auth_router)
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     app.include_router(departments_router, prefix="/api/v1/admin")
     app.include_router(notifications_router)
     app.include_router(dashboard_router)
+    app.include_router(conversation_router)
     
     # Health check endpoint
     @app.get("/health")

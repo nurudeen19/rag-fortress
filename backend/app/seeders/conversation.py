@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 import uuid
 import json
 
-from app.models.conversation import Conversation, ConversationCategory
+from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.models.user import User
 from app.seeders.base import BaseSeed
@@ -26,7 +26,6 @@ class ConversationSeeder(BaseSeed):
     CONVERSATIONS = [
         {
             "title": "Machine Learning Project Implementation",
-            "category": ConversationCategory.RESEARCH,
             "messages": [
                 {"role": MessageRole.USER, "content": "How do I implement a neural network in Python?"},
                 {"role": MessageRole.ASSISTANT, "content": "You can use TensorFlow or PyTorch for neural networks. TensorFlow is more beginner-friendly with Keras API. Here's a basic example:\n\n```python\nimport tensorflow as tf\nfrom tensorflow import keras\n\nmodel = keras.Sequential([\n    keras.layers.Dense(128, activation='relu', input_shape=(28*28,)),\n    keras.layers.Dropout(0.2),\n    keras.layers.Dense(10, activation='softmax')\n])\n\nmodel.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])\nmodel.fit(x_train, y_train, epochs=10)\n```\n\nFor more complex architectures, consider using PyTorch for greater flexibility.", "token_count": 234, "meta": {"sources": [{"document": "tensorflow_docs.pdf", "score": 0.98}]}},
@@ -71,7 +70,6 @@ class ConversationSeeder(BaseSeed):
         },
         {
             "title": "Database Design and Optimization",
-            "category": ConversationCategory.SUPPORT,
             "messages": [
                 {"role": MessageRole.USER, "content": "What are the best practices for database schema design?"},
                 {"role": MessageRole.ASSISTANT, "content": "Key database design principles:\n\n1. **Normalization**: Reduce redundancy and improve data integrity\n   - 1NF: Atomic values only\n   - 2NF: Remove partial dependencies\n   - 3NF: Remove transitive dependencies\n   - BCNF: Advanced normalization\n\n2. **Entity-Relationship Model**: Design clear relationships\n   - One-to-One: Single related records\n   - One-to-Many: Single parent, multiple children\n   - Many-to-Many: Multiple parents, multiple children\n\n3. **Constraints**: Ensure data integrity\n   - PRIMARY KEY: Unique identifier\n   - FOREIGN KEY: Reference integrity\n   - UNIQUE: No duplicate values\n   - CHECK: Validate value ranges\n\n4. **Indexing**: Improve query performance\n   - Single column indexes for WHERE clauses\n   - Composite indexes for multi-column queries\n   - Avoid over-indexing (slows inserts/updates)", "token_count": 356, "meta": {"sources": [{"document": "database_design.pdf", "score": 0.98}]}},
@@ -95,7 +93,6 @@ class ConversationSeeder(BaseSeed):
         },
         {
             "title": "Docker and Containerization",
-            "category": ConversationCategory.GENERAL,
             "messages": [
                 {"role": MessageRole.USER, "content": "What is Docker and why should I use it?"},
                 {"role": MessageRole.ASSISTANT, "content": "Docker is a containerization platform that packages your application with all dependencies:\n\n**Benefits:**\n1. **Consistency**: Works the same on dev, test, and production\n2. **Isolation**: Each container runs independently\n3. **Scalability**: Easy to replicate containers\n4. **Portability**: Run anywhere Docker is installed\n5. **Lightweight**: Uses less resources than VMs\n\n**Core Concepts:**\n- **Image**: Blueprint for containers (immutable)\n- **Container**: Running instance of an image\n- **Registry**: Storage for images (Docker Hub, ECR, etc.)\n- **Dockerfile**: Instructions to build an image\n\n**Basic Dockerfile Example**:\n```dockerfile\nFROM python:3.11-slim\nWORKDIR /app\nCOPY requirements.txt .\nRUN pip install -r requirements.txt\nCOPY . .\nEXPOSE 8000\nCMD [\"python\", \"app.py\"]\n```", "token_count": 267, "meta": {"sources": [{"document": "docker_intro.pdf", "score": 0.97}]}},
@@ -119,7 +116,6 @@ class ConversationSeeder(BaseSeed):
         },
         {
             "title": "API Design and REST Principles",
-            "category": ConversationCategory.ANALYSIS,
             "messages": [
                 {"role": MessageRole.USER, "content": "What makes a good REST API design?"},
                 {"role": MessageRole.ASSISTANT, "content": "RESTful API design principles:\n\n**Core Concepts**:\n1. **Resources**: Use nouns (users, posts, comments)\n2. **HTTP Methods**: GET, POST, PUT, DELETE, PATCH\n3. **Status Codes**: 200 OK, 201 Created, 400 Bad Request, 404 Not Found, 500 Server Error\n4. **Versioning**: /api/v1/, /api/v2/\n5. **Pagination**: Limit, offset, cursor-based\n6. **Filtering**: Query parameters for filtering\n7. **Sorting**: Field and direction parameters\n\n**Endpoint Examples**:\n```\nGET    /api/v1/users                 # List users\nPOST   /api/v1/users                 # Create user\nGET    /api/v1/users/{id}            # Get user\nPUT    /api/v1/users/{id}            # Replace user\nPATCH  /api/v1/users/{id}            # Update user\nDELETE /api/v1/users/{id}            # Delete user\nGET    /api/v1/users?role=admin      # Filter\nGET    /api/v1/users?sort=created_at # Sort\nGET    /api/v1/users?limit=10&offset=20  # Pagination\n```\n\n**Response Format**:\n```json\n{\n  \"status\": \"success\",\n  \"data\": {\n    \"id\": 1,\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\"\n  },\n  \"meta\": {\n    \"timestamp\": \"2025-11-23T10:30:00Z\",\n    \"version\": \"1.0\"\n  }\n}\n```", "token_count": 378, "meta": {"sources": [{"document": "rest_api_design.pdf", "score": 0.98}]}},
@@ -141,7 +137,6 @@ class ConversationSeeder(BaseSeed):
         },
         {
             "title": "Performance Testing and Monitoring",
-            "category": ConversationCategory.RESEARCH,
             "messages": [
                 {"role": MessageRole.USER, "content": "How do I identify performance bottlenecks in my application?"},
                 {"role": MessageRole.ASSISTANT, "content": "Performance analysis approach:\n\n**1. Monitoring Tools**:\n- **APM (Application Performance Monitoring)**: New Relic, Datadog, Elastic\n- **Profilers**: Python cProfile, Java JProfiler\n- **Logging**: ELK Stack, Splunk\n- **Metrics**: Prometheus, Grafana\n\n**2. Key Metrics**:\n- Response Time (p50, p95, p99 percentiles)\n- Throughput (requests per second)\n- Error Rate\n- Resource Usage (CPU, Memory, Disk I/O, Network)\n- Database Query Time\n- Cache Hit Ratio\n\n**3. Python Profiling Example**:\n```python\nimport cProfile\nimport pstats\nfrom pstats import SortKey\n\n# Method 1: Using profiler\ncProfile.run('slow_function()', 'profstats')\nstats = pstats.Stats('profstats')\nstats.sort_stats(SortKey.CUMULATIVE).print_stats()\n\n# Method 2: Decorator\nimport time\ndef profile(func):\n    def wrapper(*args, **kwargs):\n        start = time.time()\n        result = func(*args, **kwargs)\n        print(f\"{func.__name__} took {time.time() - start:.2f}s\")\n        return result\n    return wrapper\n\n@profile\ndef slow_function():\n    pass\n```\n\n**4. Database Performance**:\n```sql\n-- Enable slow query log\nSET GLOBAL slow_query_log = 'ON';\nSET GLOBAL long_query_time = 1;\n\n-- Analyze query execution\nEXPLAIN ANALYZE SELECT * FROM large_table WHERE condition;\n```", "token_count": 389, "meta": {"sources": [{"document": "performance_monitoring.pdf", "score": 0.98}]}},
@@ -198,7 +193,6 @@ class ConversationSeeder(BaseSeed):
                     id=str(uuid.uuid4()),
                     user_id=admin_user_id,
                     title=conv_data["title"],
-                    category=conv_data["category"],
                     message_count=len(conv_data["messages"]),
                     last_message_at=base_time + timedelta(days=i),
                 )

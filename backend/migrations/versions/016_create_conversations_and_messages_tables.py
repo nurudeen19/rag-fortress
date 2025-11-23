@@ -21,7 +21,6 @@ def upgrade() -> None:
         sa.Column('id', sa.String(length=36), primary_key=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('title', sa.String(length=255), nullable=False),
-        sa.Column('category', sa.Enum('GENERAL', 'RESEARCH', 'SUPPORT', 'ANALYSIS', name='conversationcategory'), nullable=True, server_default='GENERAL'),
         sa.Column('message_count', sa.Integer(), nullable=False, server_default=sa.text('0')),
         sa.Column('last_message_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP'), index=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default=sa.text('0'), index=True),

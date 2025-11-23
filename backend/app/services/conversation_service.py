@@ -7,7 +7,7 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
 import uuid
 
-from app.models.conversation import Conversation, ConversationCategory
+from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.core import get_logger
 
@@ -26,14 +26,12 @@ class ConversationService:
         self,
         user_id: int,
         title: str = "New Conversation",
-        category: ConversationCategory = ConversationCategory.GENERAL,
     ) -> Conversation:
         """Create a new conversation for a user."""
         conversation = Conversation(
             id=str(uuid.uuid4()),
             user_id=user_id,
             title=title,
-            category=category,
             message_count=0,
             last_message_at=datetime.now(timezone.utc),
         )
@@ -61,7 +59,6 @@ class ConversationService:
     async def list_user_conversations(
         self,
         user_id: int,
-        category: Optional[ConversationCategory] = None,
         include_deleted: bool = False,
         limit: int = 50,
         offset: int = 0,
@@ -72,9 +69,6 @@ class ConversationService:
         if not include_deleted:
             stmt = stmt.where(Conversation.is_deleted == False)
         
-        if category:
-            stmt = stmt.where(Conversation.category == category)
-        
         # Order by most recent activity
         stmt = stmt.order_by(Conversation.last_message_at.desc())
         
@@ -82,8 +76,6 @@ class ConversationService:
         count_stmt = select(Conversation).where(Conversation.user_id == user_id)
         if not include_deleted:
             count_stmt = count_stmt.where(Conversation.is_deleted == False)
-        if category:
-            count_stmt = count_stmt.where(Conversation.category == category)
         
         count_result = await self.session.execute(count_stmt)
         total = len(count_result.scalars().all())
@@ -100,7 +92,6 @@ class ConversationService:
         conversation_id: str,
         user_id: int,
         title: Optional[str] = None,
-        category: Optional[ConversationCategory] = None,
     ) -> Optional[Conversation]:
         """Update conversation metadata."""
         conversation = await self.get_conversation(conversation_id, user_id)
@@ -109,8 +100,6 @@ class ConversationService:
         
         if title is not None:
             conversation.title = title
-        if category is not None:
-            conversation.category = category
         
         await self.session.flush()
         logger.info(f"Updated conversation {conversation_id}")
