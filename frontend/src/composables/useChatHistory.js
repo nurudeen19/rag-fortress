@@ -141,8 +141,11 @@ export function useChatHistory() {
    * Select an existing chat conversation
    */
   const selectChat = async (chat) => {
+    console.log('[useChatHistory] Selecting chat:', chat.id, chat.title)
     activeChat.value = chat
+    console.log('[useChatHistory] Navigating to chat-conversation with id:', chat.id)
     await router.push({ name: 'chat-conversation', params: { id: chat.id } })
+    console.log('[useChatHistory] Navigation completed')
   }
 
   /**
@@ -196,16 +199,18 @@ export function useChatHistory() {
   }
 
   /**
-   * Load messages for a specific chat
+   * Load messages for a specific chat conversation
    */
   const loadChatMessages = async (chatId, limit = 50, offset = 0) => {
     try {
+      console.log('[useChatHistory] Loading messages for chat:', chatId, { limit, offset })
       const response = await api.get(`/v1/conversations/${chatId}/messages`, {
         params: { limit, offset }
       })
+      console.log('[useChatHistory] Messages response:', response)
       return response.messages || []
     } catch (err) {
-      console.error('Error loading messages:', err)
+      console.error('[useChatHistory] Error loading messages:', err)
       return []
     }
   }

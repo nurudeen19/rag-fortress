@@ -427,7 +427,9 @@ const loadMessagesForConversation = async (conversationId) => {
 
   loadingMessages.value = true
   try {
+    console.log('[Chat] Loading messages for conversation:', conversationId)
     const messagesList = await loadChatMessages(conversationId, 50, 0)
+    console.log('[Chat] Messages loaded:', messagesList)
     
     // Map backend messages to display format
     messages.value = messagesList.map(msg => ({
@@ -439,9 +441,10 @@ const loadMessagesForConversation = async (conversationId) => {
       error: msg.meta?.error || null
     }))
 
+    console.log('[Chat] Messages mapped and ready:', messages.value.length, 'messages')
     await scrollToBottom()
   } catch (error) {
-    console.error('Failed to load messages:', error)
+    console.error('[Chat] Failed to load messages:', error)
     messages.value = []
   } finally {
     loadingMessages.value = false
@@ -452,6 +455,7 @@ const loadMessagesForConversation = async (conversationId) => {
 watch(
   () => route.params.id,
   async (newId) => {
+    console.log('[Chat] Route param changed to:', newId)
     if (newId) {
       await loadMessagesForConversation(newId)
     } else {
