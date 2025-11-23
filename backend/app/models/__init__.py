@@ -13,6 +13,8 @@ from app.models.user_invitation import UserInvitation
 from app.models.user_permission import UserPermission, PermissionLevel
 from app.models.permission_override import PermissionOverride, OverrideType
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
+from app.models.conversation import Conversation, ConversationCategory
+from app.models.message import Message, MessageRole
 
 __all__ = [
     "Base",
@@ -32,4 +34,8 @@ __all__ = [
     "FileUpload",
     "FileStatus",
     "SecurityLevel",
+    "Conversation",
+    "ConversationCategory",
+    "Message",
+    "MessageRole",
 ]

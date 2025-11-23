@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from app.models.department import Department
     from app.models.user_permission import UserPermission
     from app.models.permission_override import PermissionOverride
+    from app.models.conversation import Conversation
 
 
 class User(Base):
@@ -76,6 +77,12 @@ class User(Base):
         "PermissionOverride",
         back_populates="user",
         foreign_keys="PermissionOverride.user_id",
+        cascade="all, delete-orphan"
+    )
+    
+    conversations: Mapped[list["Conversation"]] = relationship(
+        "Conversation",
+        back_populates="user",
         cascade="all, delete-orphan"
     )
     
