@@ -8,7 +8,7 @@ Provides comprehensive audit trail with database persistence.
 import json
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc, func
 from sqlalchemy.orm import joinedload
@@ -132,7 +132,7 @@ async def get_activity_logs(
         conditions.append(ActivityLog.severity == severity)
     
     if days is not None:
-        since_date = datetime.utcnow() - timedelta(days=days)
+        since_date = datetime.now(timezone.utc) - timedelta(days=days)
         conditions.append(ActivityLog.created_at >= since_date)
     
     # Build base query with eager loading of relationships

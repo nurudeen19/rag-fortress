@@ -8,6 +8,12 @@ to avoid lazy loading issues in async contexts and improve query performance.
 from sqlalchemy.orm import joinedload, selectinload
 from typing import Any
 
+from app.models.conversation import Conversation
+from app.models.user import User
+from app.models.activity_log import ActivityLog
+from app.models.file_upload import FileUpload
+
+
 
 def with_user_relations(query: Any, include_profile: bool = True, include_department: bool = True, include_roles: bool = True) -> Any:
     """
@@ -36,7 +42,6 @@ def with_user_relations(query: Any, include_profile: bool = True, include_depart
         query = select(User)
         query = with_user_relations(query, include_profile=False, include_roles=False)
     """
-    from app.models.user import User
     
     if include_profile:
         query = query.options(joinedload(User.profile))
@@ -69,7 +74,6 @@ def with_full_user_context(query: Any) -> Any:
         result = await session.execute(query)
         user = result.scalar_one()
     """
-    from app.models.user import User
     
     return query.options(
         joinedload(User.profile),
@@ -99,11 +103,10 @@ def with_activity_log_relations(query: Any) -> Any:
         result = await session.execute(query)
         logs = result.unique().scalars().all()
     """
-    from app.models.activity_log import ActivityLog
     
     return query.options(
-        joinedload(ActivityLog.user).joinedload('profile'),
-        joinedload(ActivityLog.user).joinedload('department')
+        # joinedload(ActivityLog.user).joinedload(User.profile),
+        joinedload(ActivityLog.user).joinedload(User.department)
     )
 
 
@@ -125,11 +128,10 @@ def with_file_upload_relations(query: Any) -> Any:
         result = await session.execute(query)
         uploads = result.scalars().all()
     """
-    from app.models.file_upload import FileUpload
     
     return query.options(
-        joinedload(FileUpload.user).joinedload('profile'),
-        joinedload(FileUpload.user).joinedload('department'),
+        joinedload(FileUpload.user).joinedload(User.profile),
+        joinedload(FileUpload.user).joinedload(User.department),
         joinedload(FileUpload.department)
     )
 
@@ -152,8 +154,7 @@ def with_conversation_relations(query: Any) -> Any:
         result = await session.execute(query)
         conversations = result.scalars().all()
     """
-    from app.models.conversation import Conversation
     
     return query.options(
-        joinedload(Conversation.user).joinedload('profile')
+        joinedload(Conversation.user).joinedload(User.profile)
     )
