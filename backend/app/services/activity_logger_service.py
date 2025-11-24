@@ -1,265 +1,167 @@
 """
 Activity Logging Service
 
-Tracks user access attempts to documents, especially unauthorized access.
-Provides audit trail for compliance and security monitoring.
-
-Usage:
-    logger = get_activity_logger()
-    await logger.log_document_access(
-        user_id=user.id,
-        document_id=doc.id,
-        access_granted=False,
-        user_clearance=PermissionLevel.RESTRICTED,
-        doc_security_level=PermissionLevel.HIGHLY_CONFIDENTIAL
-    )
+Simplified service for tracking user actions and security incidents.
+Provides comprehensive audit trail with database persistence.
 """
 
+import json
 import logging
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, and_, desc, func
 
-from app.models.user_permission import PermissionLevel
+from app.models.activity_log import ActivityLog
 
 logger = logging.getLogger(__name__)
 
 
-class DocumentAccessLog:
+# ============================================================================
+# SIMPLIFIED ACTIVITY LOGGING
+# ============================================================================
+
+async def log_activity(
+    db: AsyncSession,
+    user_id: int,
+    incident_type: str,
+    severity: str,
+    description: str,
+    details: Optional[Dict[str, Any]] = None,
+    user_clearance_level: Optional[str] = None,
+    required_clearance_level: Optional[str] = None,
+    access_granted: Optional[bool] = None,
+    user_query: Optional[str] = None,
+    threat_type: Optional[str] = None,
+    conversation_id: Optional[str] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None
+) -> ActivityLog:
     """
-    Represents a document access attempt.
+    Log an activity/incident to the database.
     
-    Note: This is a simple in-memory representation.
-    TODO: Create actual database model for persistence.
-    """
-    def __init__(
-        self,
-        user_id: int,
-        document_id: int,
-        document_name: str,
-        access_granted: bool,
-        user_clearance: PermissionLevel,
-        doc_security_level: PermissionLevel,
-        reason: Optional[str] = None,
-        query: Optional[str] = None,
-        timestamp: Optional[datetime] = None
-    ):
-        self.user_id = user_id
-        self.document_id = document_id
-        self.document_name = document_name
-        self.access_granted = access_granted
-        self.user_clearance = user_clearance
-        self.doc_security_level = doc_security_level
-        self.reason = reason
-        self.query = query
-        self.timestamp = timestamp or datetime.utcnow()
-    
-    def to_dict(self) -> dict:
-        """Convert to dictionary for logging."""
-        return {
-            "user_id": self.user_id,
-            "document_id": self.document_id,
-            "document_name": self.document_name,
-            "access_granted": self.access_granted,
-            "user_clearance": self.user_clearance.name if self.user_clearance else None,
-            "doc_security_level": self.doc_security_level.name if self.doc_security_level else None,
-            "reason": self.reason,
-            "query": self.query[:100] if self.query else None,  # Truncate for logging
-            "timestamp": self.timestamp.isoformat()
-        }
-
-
-class ActivityLogger:
-    """
-    Logs user activity for audit trail and compliance.
-    
-    Current Implementation: Logs to application logger
-    Future Enhancement: Persist to database table
-    
-    Use Cases:
-    1. Track unauthorized access attempts
-    2. Compliance reporting (who accessed what when)
-    3. User behavior analytics
-    4. Security incident investigation
-    5. Access request workflows (user discovers restricted content)
-    """
-    
-    def __init__(self):
-        self._memory_logs: List[DocumentAccessLog] = []
-        self._max_memory_logs = 1000  # Keep last 1000 logs in memory
-    
-    async def log_document_access(
-        self,
-        user_id: int,
-        document_id: int,
-        document_name: str,
-        access_granted: bool,
-        user_clearance: PermissionLevel,
-        doc_security_level: PermissionLevel,
-        reason: Optional[str] = None,
-        query: Optional[str] = None,
-        db: Optional[AsyncSession] = None
-    ):
-        """
-        Log a document access attempt.
+    Args:
+        db: Database session
+        user_id: ID of user performing the action
+        incident_type: Type of incident (e.g., "malicious_query_blocked", "document_access_denied")
+        severity: Severity level ("info", "warning", "critical")
+        description: Human-readable description
+        details: Optional structured details (will be JSON-encoded)
+        user_clearance_level: Optional user's clearance level
+        required_clearance_level: Optional required clearance level
+        access_granted: Optional boolean for access decisions
+        user_query: Optional user query text
+        threat_type: Optional threat classification
+        conversation_id: Optional conversation context
+        ip_address: Optional IP address
+        user_agent: Optional user agent string
         
-        Args:
-            user_id: ID of user attempting access
-            document_id: ID of document being accessed
-            document_name: Name of document (for readability)
-            access_granted: Whether access was granted
-            user_clearance: User's effective permission level
-            doc_security_level: Document's security level
-            reason: Optional reason for denial
-            query: Optional user query that triggered access
-            db: Optional database session for persistence
-        """
-        
-        access_log = DocumentAccessLog(
-            user_id=user_id,
-            document_id=document_id,
-            document_name=document_name,
-            access_granted=access_granted,
-            user_clearance=user_clearance,
-            doc_security_level=doc_security_level,
-            reason=reason,
-            query=query
-        )
-        
-        # Log to application logger
-        log_level = logging.WARNING if not access_granted else logging.INFO
-        log_message = (
-            f"Document access: user_id={user_id}, doc_id={document_id}, "
-            f"granted={access_granted}, user_clearance={user_clearance.name}, "
-            f"doc_level={doc_security_level.name}"
-        )
-        
-        if not access_granted:
-            log_message += f", reason={reason}"
-        
-        logger.log(log_level, log_message)
-        
-        # Store in memory (for quick retrieval)
-        self._memory_logs.append(access_log)
-        if len(self._memory_logs) > self._max_memory_logs:
-            self._memory_logs.pop(0)  # Remove oldest
-        
-        # TODO: Persist to database
-        # if db:
-        #     await self._persist_to_db(access_log, db)
-    
-    async def log_bulk_access(
-        self,
-        user_id: int,
-        access_results: List[dict],
-        query: Optional[str] = None,
-        db: Optional[AsyncSession] = None
-    ):
-        """
-        Log multiple document access attempts at once (e.g., from vector search).
-        
-        Args:
-            user_id: ID of user attempting access
-            access_results: List of dicts with keys:
-                - document_id, document_name, access_granted,
-                - user_clearance, doc_security_level, reason
-            query: Optional user query
-            db: Optional database session
-        """
-        for result in access_results:
-            await self.log_document_access(
-                user_id=user_id,
-                document_id=result["document_id"],
-                document_name=result["document_name"],
-                access_granted=result["access_granted"],
-                user_clearance=result["user_clearance"],
-                doc_security_level=result["doc_security_level"],
-                reason=result.get("reason"),
-                query=query,
-                db=db
-            )
-    
-    def get_recent_logs(self, limit: int = 100) -> List[DocumentAccessLog]:
-        """Get recent access logs from memory."""
-        return self._memory_logs[-limit:]
-    
-    def get_unauthorized_attempts(self, user_id: Optional[int] = None) -> List[DocumentAccessLog]:
-        """Get unauthorized access attempts, optionally filtered by user."""
-        logs = [log for log in self._memory_logs if not log.access_granted]
-        
-        if user_id:
-            logs = [log for log in logs if log.user_id == user_id]
-        
-        return logs
-    
-    def get_user_activity_summary(self, user_id: int) -> dict:
-        """
-        Get summary of user's access activity.
-        
-        Returns:
-            Dict with keys:
-                - total_attempts: Total access attempts
-                - granted: Successful access count
-                - denied: Denied access count
-                - documents_accessed: List of document IDs
-                - clearance_violations: Count of attempts above clearance
-        """
-        user_logs = [log for log in self._memory_logs if log.user_id == user_id]
-        
-        granted = sum(1 for log in user_logs if log.access_granted)
-        denied = sum(1 for log in user_logs if not log.access_granted)
-        
-        # Clearance violations: attempted to access doc above clearance
-        violations = sum(
-            1 for log in user_logs
-            if not log.access_granted and log.doc_security_level > log.user_clearance
-        )
-        
-        documents = set(log.document_id for log in user_logs)
-        
-        return {
-            "user_id": user_id,
-            "total_attempts": len(user_logs),
-            "granted": granted,
-            "denied": denied,
-            "documents_accessed": list(documents),
-            "clearance_violations": violations,
-            "recent_logs": [log.to_dict() for log in user_logs[-10:]]  # Last 10
-        }
-    
-    # TODO: Database persistence methods
-    # async def _persist_to_db(self, access_log: DocumentAccessLog, db: AsyncSession):
-    #     """Persist access log to database."""
-    #     # Create DocumentAccessLog model in app/models/
-    #     # Insert into database with all fields
-    #     pass
-    # 
-    # async def get_access_logs_from_db(
-    #     self,
-    #     db: AsyncSession,
-    #     user_id: Optional[int] = None,
-    #     document_id: Optional[int] = None,
-    #     start_date: Optional[datetime] = None,
-    #     end_date: Optional[datetime] = None,
-    #     access_granted: Optional[bool] = None
-    # ) -> List[DocumentAccessLog]:
-    #     """Query access logs from database with filters."""
-    #     pass
-
-
-# Singleton instance
-_activity_logger = None
-
-
-def get_activity_logger() -> ActivityLogger:
-    """
-    Get singleton instance of ActivityLogger.
-    
     Returns:
-        ActivityLogger: Shared logger instance
+        ActivityLog: Created log entry
     """
-    global _activity_logger
-    if _activity_logger is None:
-        _activity_logger = ActivityLogger()
-    return _activity_logger
+    
+    # Create activity log entry
+    activity_log = ActivityLog(
+        user_id=user_id,
+        incident_type=incident_type,
+        severity=severity,
+        description=description,
+        details=json.dumps(details) if details else None,
+        user_clearance_level=user_clearance_level,
+        required_clearance_level=required_clearance_level,
+        access_granted=access_granted,
+        user_query=user_query,
+        threat_type=threat_type,
+        conversation_id=conversation_id,
+        ip_address=ip_address,
+        user_agent=user_agent
+    )
+    
+    db.add(activity_log)
+    await db.flush()
+    
+    # Log to application logger
+    log_level = getattr(logging, severity.upper(), logging.INFO)
+    logger.log(
+        log_level,
+        f"Activity logged: user_id={user_id}, type={incident_type}, severity={severity}"
+    )
+    
+    return activity_log
+
+
+async def get_activity_logs(
+    db: AsyncSession,
+    user_id: Optional[int] = None,
+    incident_type: Optional[str] = None,
+    severity: Optional[str] = None,
+    days: Optional[int] = 30,
+    limit: int = 100,
+    offset: int = 0
+) -> Dict[str, Any]:
+    """
+    Get activity logs with optional filters and pagination.
+    
+    Args:
+        db: Database session
+        user_id: Optional filter by user ID
+        incident_type: Optional filter by incident type
+        severity: Optional filter by severity level
+        days: Optional days to look back (default 30, None for all)
+        limit: Maximum number of results (default 100)
+        offset: Pagination offset (default 0)
+        
+    Returns:
+        Dict containing:
+            - logs: List of activity log entries
+            - total: Total count matching filters
+            - limit: Applied limit
+            - offset: Applied offset
+            - has_more: Whether more results exist
+    """
+    
+    # Build query with filters
+    conditions = []
+    
+    if user_id is not None:
+        conditions.append(ActivityLog.user_id == user_id)
+    
+    if incident_type:
+        conditions.append(ActivityLog.incident_type == incident_type)
+    
+    if severity:
+        conditions.append(ActivityLog.severity == severity)
+    
+    if days is not None:
+        since_date = datetime.utcnow() - timedelta(days=days)
+        conditions.append(ActivityLog.created_at >= since_date)
+    
+    # Build base query
+    query = select(ActivityLog)
+    if conditions:
+        query = query.where(and_(*conditions))
+    
+    # Get total count
+    count_query = select(func.count()).select_from(ActivityLog)
+    if conditions:
+        count_query = count_query.where(and_(*conditions))
+    count_result = await db.execute(count_query)
+    total = count_result.scalar() or 0
+    
+    # Apply ordering and pagination
+    query = query.order_by(desc(ActivityLog.created_at)).limit(limit).offset(offset)
+    
+    # Execute query
+    result = await db.execute(query)
+    logs = result.scalars().all()
+    
+    return {
+        "logs": [log.to_dict() for log in logs],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "has_more": total > (offset + limit)
+    }
+
+
+

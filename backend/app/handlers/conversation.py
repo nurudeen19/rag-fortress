@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.conversation_service import ConversationService
 from app.services.query_validator_service import get_query_validator
+from app.services import activity_logger_service
 
 logger = logging.getLogger(__name__)
 
@@ -344,6 +345,24 @@ async def handle_add_message(
                     f"threat={validation['threat_type']}, "
                     f"confidence={validation['confidence']:.2f}"
                 )
+                
+                # Log malicious query attempt to database
+                await activity_logger_service.log_activity(
+                    db=session,
+                    user_id=user_id,
+                    incident_type="malicious_query_blocked",
+                    severity="critical",
+                    description=f"Malicious query blocked: {validation['threat_type']}",
+                    details={
+                        "threat_type": validation["threat_type"],
+                        "confidence": validation["confidence"],
+                        "reason": validation["reason"]
+                    },
+                    user_query=content,
+                    threat_type=validation["threat_type"],
+                    conversation_id=conversation_id
+                )
+                
                 return {
                     "success": False,
                     "error": validation["reason"],

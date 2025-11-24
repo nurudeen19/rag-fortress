@@ -15,6 +15,7 @@ from app.models.permission_override import PermissionOverride, OverrideType
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
+from app.models.activity_log import ActivityLog
 
 __all__ = [
     "Base",
@@ -37,4 +38,5 @@ __all__ = [
     "Conversation",
     "Message",
     "MessageRole",
+    "ActivityLog",
 ]
