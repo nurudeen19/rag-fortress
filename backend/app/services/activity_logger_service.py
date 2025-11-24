@@ -11,8 +11,10 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc, func
+from sqlalchemy.orm import joinedload
 
 from app.models.activity_log import ActivityLog
+from app.utils import with_activity_log_relations
 
 logger = logging.getLogger(__name__)
 
@@ -133,8 +135,9 @@ async def get_activity_logs(
         since_date = datetime.utcnow() - timedelta(days=days)
         conditions.append(ActivityLog.created_at >= since_date)
     
-    # Build base query
+    # Build base query with eager loading of relationships
     query = select(ActivityLog)
+    query = with_activity_log_relations(query)
     if conditions:
         query = query.where(and_(*conditions))
     
@@ -150,7 +153,7 @@ async def get_activity_logs(
     
     # Execute query
     result = await db.execute(query)
-    logs = result.scalars().all()
+    logs = result.unique().scalars().all()
     
     return {
         "logs": logs,  # Return ActivityLog models directly for Pydantic serialization

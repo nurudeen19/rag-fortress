@@ -39,7 +39,6 @@ class ActivityLogResponse(BaseModel):
     access_granted: Optional[bool] = None
     user_query: Optional[str] = None
     threat_type: Optional[str] = None
-    conversation_id: Optional[str] = None
     ip_address: Optional[str] = None
     created_at: datetime
     updated_at: datetime
