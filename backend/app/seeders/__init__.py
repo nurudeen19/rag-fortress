@@ -7,6 +7,7 @@ from app.seeders.departments import DepartmentsSeeder
 from app.seeders.knowledge_base import KnowledgeBaseSeeder
 from app.seeders.jobs import JobsSeeder
 from app.seeders.conversation import ConversationSeeder
+from app.seeders.activity_logs import ActivityLogsSeeder
 
 # Available seeders mapping
 SEEDERS = {
@@ -16,6 +17,7 @@ SEEDERS = {
     "knowledge_base": KnowledgeBaseSeeder,
     "jobs": JobsSeeder,
     "conversations": ConversationSeeder,
+    "activity_logs": ActivityLogsSeeder,
 }
 
 __all__ = ["BaseSeed", "AdminSeeder", "RolesPermissionsSeeder", "DepartmentsSeeder", "KnowledgeBaseSeeder", "JobsSeeder", "ConversationSeeder", "SEEDERS"]
