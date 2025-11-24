@@ -98,13 +98,8 @@ class ActivityLog(Base):
         """Get user's full name from relationship."""
         if not self.user:
             return "Unknown"
-        # Try to get from user_profile first
-        if hasattr(self.user, 'user_profile') and self.user.user_profile:
-            first_name = getattr(self.user.user_profile, 'first_name', '')
-            last_name = getattr(self.user.user_profile, 'last_name', '')
-            full_name = f"{first_name} {last_name}".strip()
-            if full_name:
-                return full_name
+        if self.user.full_name:
+            return self.user.full_name
         # Fall back to email
         return self.user.email or "Unknown"
     
