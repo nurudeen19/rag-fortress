@@ -153,7 +153,7 @@ async def get_activity_logs(
     logs = result.scalars().all()
     
     return {
-        "logs": [log.to_dict() for log in logs],
+        "logs": logs,  # Return ActivityLog models directly for Pydantic serialization
         "total": total,
         "limit": limit,
         "offset": offset,

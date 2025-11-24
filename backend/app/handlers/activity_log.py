@@ -53,12 +53,9 @@ async def handle_get_activity_logs(
             offset=offset
         )
         
-        # Convert logs to dicts
-        logs_list = [log.to_dict() for log in result["logs"]]
-        
         return {
             "success": True,
-            "logs": logs_list,
+            "logs": result["logs"],
             "total": result["total"],
             "limit": result["limit"],
             "offset": result["offset"],
