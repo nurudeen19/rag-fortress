@@ -10,6 +10,8 @@ import uuid
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.core import get_logger
+from app.services.query_validator_service import get_query_validator
+from app.services import activity_logger_service
 
 logger = get_logger(__name__)
 
@@ -20,32 +22,74 @@ class ConversationService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    # ==================== Helper Methods ====================
+
+    def _serialize_conversation(self, conversation: Conversation) -> Dict[str, Any]:
+        """Convert Conversation model to dict."""
+        return {
+            "id": conversation.id,
+            "user_id": conversation.user_id,
+            "title": conversation.title,
+            "message_count": conversation.message_count,
+            "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
+            "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
+            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
+            "is_deleted": conversation.is_deleted,
+        }
+
+    def _serialize_message(self, message: Message) -> Dict[str, Any]:
+        """Convert Message model to dict."""
+        return {
+            "id": message.id,
+            "conversation_id": message.conversation_id,
+            "role": message.role.value,
+            "content": message.content,
+            "token_count": message.token_count,
+            "meta": message.meta,
+            "created_at": message.created_at.isoformat() if message.created_at else None,
+            "updated_at": message.updated_at.isoformat() if message.updated_at else None,
+        }
+
     # ==================== Conversation Operations ====================
 
     async def create_conversation(
         self,
         user_id: int,
         title: str = "New Conversation",
-    ) -> Conversation:
+    ) -> Dict[str, Any]:
         """Create a new conversation for a user."""
-        conversation = Conversation(
-            id=str(uuid.uuid4()),
-            user_id=user_id,
-            title=title,
-            message_count=0,
-            last_message_at=datetime.now(timezone.utc),
-        )
-        self.session.add(conversation)
-        await self.session.flush()
-        logger.info(f"Created conversation {conversation.id} for user {user_id}")
-        return conversation
+        try:
+            conversation = Conversation(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                title=title,
+                message_count=0,
+                last_message_at=datetime.now(timezone.utc),
+            )
+            self.session.add(conversation)
+            await self.session.flush()
+            await self.session.commit()
+            logger.info(f"Created conversation {conversation.id} for user {user_id}")
+            
+            return {
+                "success": True,
+                "conversation": self._serialize_conversation(conversation)
+            }
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error creating conversation: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "conversation": None
+            }
 
     async def get_conversation(
         self, 
         conversation_id: str, 
         user_id: int
     ) -> Optional[Conversation]:
-        """Get a conversation by ID, ensuring it belongs to the user."""
+        """Get a conversation by ID, ensuring it belongs to the user (returns model)."""
         stmt = select(Conversation).where(
             and_(
                 Conversation.id == conversation_id,
@@ -56,70 +100,151 @@ class ConversationService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_conversation_dict(
+        self, 
+        conversation_id: str, 
+        user_id: int
+    ) -> Dict[str, Any]:
+        """Get a conversation by ID as dict with success/error handling."""
+        try:
+            conversation = await self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                logger.warning(f"Conversation not found: {conversation_id}")
+                return {
+                    "success": False,
+                    "error": "Conversation not found",
+                    "conversation": None
+                }
+            
+            return {
+                "success": True,
+                "conversation": self._serialize_conversation(conversation)
+            }
+        except Exception as e:
+            logger.error(f"Error getting conversation: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "conversation": None
+            }
+
     async def list_user_conversations(
         self,
         user_id: int,
         include_deleted: bool = False,
         limit: int = 50,
         offset: int = 0,
-    ) -> Tuple[List[Conversation], int]:
+    ) -> Dict[str, Any]:
         """List all conversations for a user with pagination."""
-        stmt = select(Conversation).where(Conversation.user_id == user_id)
-        
-        if not include_deleted:
-            stmt = stmt.where(Conversation.is_deleted == False)
-        
-        # Order by most recent activity
-        stmt = stmt.order_by(Conversation.last_message_at.desc())
-        
-        # Count total (without pagination)
-        count_stmt = select(Conversation).where(Conversation.user_id == user_id)
-        if not include_deleted:
-            count_stmt = count_stmt.where(Conversation.is_deleted == False)
-        
-        count_result = await self.session.execute(count_stmt)
-        total = len(count_result.scalars().all())
-        
-        # Apply pagination
-        stmt = stmt.limit(limit).offset(offset)
-        result = await self.session.execute(stmt)
-        conversations = result.scalars().all()
-        
-        return list(conversations), total
+        try:
+            stmt = select(Conversation).where(Conversation.user_id == user_id)
+            
+            if not include_deleted:
+                stmt = stmt.where(Conversation.is_deleted == False)
+            
+            # Order by most recent activity
+            stmt = stmt.order_by(Conversation.last_message_at.desc())
+            
+            # Count total (without pagination)
+            count_stmt = select(Conversation).where(Conversation.user_id == user_id)
+            if not include_deleted:
+                count_stmt = count_stmt.where(Conversation.is_deleted == False)
+            
+            count_result = await self.session.execute(count_stmt)
+            total = len(count_result.scalars().all())
+            
+            # Apply pagination
+            stmt = stmt.limit(limit).offset(offset)
+            result = await self.session.execute(stmt)
+            conversations = result.scalars().all()
+            
+            logger.info(f"Retrieved {len(conversations)} conversations for user {user_id}")
+            
+            return {
+                "success": True,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "conversations": [self._serialize_conversation(c) for c in conversations]
+            }
+        except Exception as e:
+            logger.error(f"Error listing conversations: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "conversations": [],
+                "total": 0
+            }
 
     async def update_conversation(
         self,
         conversation_id: str,
         user_id: int,
         title: Optional[str] = None,
-    ) -> Optional[Conversation]:
+    ) -> Dict[str, Any]:
         """Update conversation metadata."""
-        conversation = await self.get_conversation(conversation_id, user_id)
-        if not conversation:
-            return None
-        
-        if title is not None:
-            conversation.title = title
-        
-        await self.session.flush()
-        logger.info(f"Updated conversation {conversation_id}")
-        return conversation
+        try:
+            conversation = await self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                logger.warning(f"Conversation not found: {conversation_id}")
+                return {
+                    "success": False,
+                    "error": "Conversation not found",
+                    "conversation": None
+                }
+            
+            if title is not None:
+                conversation.title = title
+            
+            await self.session.flush()
+            await self.session.commit()
+            logger.info(f"Updated conversation {conversation_id}")
+            
+            return {
+                "success": True,
+                "conversation": self._serialize_conversation(conversation)
+            }
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error updating conversation: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "conversation": None
+            }
 
     async def soft_delete_conversation(
         self, 
         conversation_id: str, 
         user_id: int
-    ) -> bool:
+    ) -> Dict[str, Any]:
         """Soft delete a conversation."""
-        conversation = await self.get_conversation(conversation_id, user_id)
-        if not conversation:
-            return False
-        
-        conversation.is_deleted = True
-        conversation.deleted_at = datetime.now(timezone.utc)
-        await self.session.flush()
-        logger.info(f"Soft deleted conversation {conversation_id}")
-        return True
+        try:
+            conversation = await self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                logger.warning(f"Conversation not found: {conversation_id}")
+                return {
+                    "success": False,
+                    "error": "Conversation not found"
+                }
+            
+            conversation.is_deleted = True
+            conversation.deleted_at = datetime.now(timezone.utc)
+            await self.session.flush()
+            await self.session.commit()
+            logger.info(f"Soft deleted conversation {conversation_id}")
+            
+            return {
+                "success": True,
+                "message": "Conversation deleted successfully"
+            }
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error deleting conversation: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
     # ==================== Message Operations ====================
 
@@ -131,32 +256,88 @@ class ConversationService:
         content: str,
         token_count: Optional[int] = None,
         meta: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Message]:
+    ) -> Dict[str, Any]:
         """Add a message to a conversation and update denormalized fields."""
-        # Verify conversation exists and belongs to user
-        conversation = await self.get_conversation(conversation_id, user_id)
-        if not conversation:
-            logger.warning(f"Conversation {conversation_id} not found for user {user_id}")
-            return None
-        
-        # Create message
-        message = Message(
-            id=str(uuid.uuid4()),
-            conversation_id=conversation_id,
-            role=role,
-            content=content,
-            token_count=token_count,
-            meta=meta,
-        )
-        self.session.add(message)
-        
-        # Update denormalized fields in conversation
-        conversation.message_count += 1
-        conversation.last_message_at = datetime.now(timezone.utc)
-        
-        await self.session.flush()
-        logger.info(f"Added {role} message to conversation {conversation_id}")
-        return message
+        try:
+            # SECURITY: Validate user query for malicious patterns (only for USER role)
+            if role == MessageRole.USER:
+                validator = get_query_validator()
+                validation = await validator.validate_query(content, user_id)
+                
+                if not validation["valid"]:
+                    logger.warning(
+                        f"Malicious query blocked: user_id={user_id}, "
+                        f"conversation_id={conversation_id}, "
+                        f"threat={validation['threat_type']}, "
+                        f"confidence={validation['confidence']:.2f}"
+                    )
+                    
+                    # Log malicious query attempt to database
+                    await activity_logger_service.log_activity(
+                        db=self.session,
+                        user_id=user_id,
+                        incident_type="malicious_query_blocked",
+                        severity="critical",
+                        description=f"Malicious query blocked: {validation['threat_type']}",
+                        details={
+                            "threat_type": validation["threat_type"],
+                            "confidence": validation["confidence"],
+                            "reason": validation["reason"],
+                            "conversation_id": conversation_id
+                        },
+                        user_query=content,
+                        threat_type=validation["threat_type"]
+                    )
+                    await self.session.commit()
+                    
+                    return {
+                        "success": False,
+                        "error": validation["reason"],
+                        "threat_type": validation["threat_type"],
+                        "message": None
+                    }
+            
+            # Verify conversation exists and belongs to user
+            conversation = await self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                logger.warning(f"Conversation {conversation_id} not found for user {user_id}")
+                return {
+                    "success": False,
+                    "error": "Conversation not found",
+                    "message": None
+                }
+            
+            # Create message
+            message = Message(
+                id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                role=role,
+                content=content,
+                token_count=token_count,
+                meta=meta,
+            )
+            self.session.add(message)
+            
+            # Update denormalized fields in conversation
+            conversation.message_count += 1
+            conversation.last_message_at = datetime.now(timezone.utc)
+            
+            await self.session.flush()
+            await self.session.commit()
+            logger.info(f"Added {role.value} message to conversation {conversation_id}")
+            
+            return {
+                "success": True,
+                "message": self._serialize_message(message)
+            }
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error adding message: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "message": None
+            }
 
     async def get_messages(
         self,
@@ -164,50 +345,108 @@ class ConversationService:
         user_id: int,
         limit: int = 50,
         offset: int = 0,
-    ) -> Tuple[List[Message], int]:
+    ) -> Dict[str, Any]:
         """Get messages for a conversation with pagination (reverse chronological)."""
-        # Verify conversation exists and belongs to user
-        conversation = await self.get_conversation(conversation_id, user_id)
-        if not conversation:
-            return [], 0
-        
-        # Get messages ordered by newest first
-        stmt = select(Message).where(
-            Message.conversation_id == conversation_id
-        ).order_by(Message.created_at.desc()).limit(limit).offset(offset)
-        
-        result = await self.session.execute(stmt)
-        messages = result.scalars().all()
-        
-        # Total count
-        count_stmt = select(Message).where(Message.conversation_id == conversation_id)
-        count_result = await self.session.execute(count_stmt)
-        total = len(count_result.scalars().all())
-        
-        return list(messages), total
+        try:
+            # Verify conversation exists and belongs to user
+            conversation = await self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                logger.warning(f"Conversation not found: {conversation_id}")
+                return {
+                    "success": False,
+                    "error": "Conversation not found",
+                    "messages": [],
+                    "total": 0
+                }
+            
+            # Get messages ordered by newest first
+            stmt = select(Message).where(
+                Message.conversation_id == conversation_id
+            ).order_by(Message.created_at.desc()).limit(limit).offset(offset)
+            
+            result = await self.session.execute(stmt)
+            messages = result.scalars().all()
+            
+            # Total count
+            count_stmt = select(Message).where(Message.conversation_id == conversation_id)
+            count_result = await self.session.execute(count_stmt)
+            total = len(count_result.scalars().all())
+            
+            logger.info(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
+            
+            return {
+                "success": True,
+                "conversation": self._serialize_conversation(conversation),
+                "total": total,
+                "limit": limit,
+                "offset": offset,
+                "messages": [self._serialize_message(m) for m in messages]
+            }
+        except Exception as e:
+            logger.error(f"Error getting messages: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "messages": [],
+                "total": 0
+            }
 
     async def get_conversation_context(
         self,
         conversation_id: str,
         user_id: int,
         last_n: int = 6,
-    ) -> List[Message]:
+    ) -> Dict[str, Any]:
         """
         Get the last N messages for LLM context window.
         Returns messages in chronological order (oldest first) for proper context.
         """
-        # Verify conversation exists and belongs to user
-        conversation = await self.get_conversation(conversation_id, user_id)
-        if not conversation:
-            return []
-        
-        # Get last N messages (newest first, then reverse)
-        stmt = select(Message).where(
-            Message.conversation_id == conversation_id
-        ).order_by(Message.created_at.desc()).limit(last_n)
-        
-        result = await self.session.execute(stmt)
-        messages = result.scalars().all()
-        
-        # Reverse to get chronological order for LLM
-        return list(reversed(messages))
+        try:
+            # Verify conversation exists and belongs to user
+            conversation = await self.get_conversation(conversation_id, user_id)
+            if not conversation:
+                logger.warning(f"Conversation not found: {conversation_id}")
+                return {
+                    "success": False,
+                    "error": "Conversation not found",
+                    "context": [],
+                    "conversation_id": conversation_id
+                }
+            
+            # Get last N messages (newest first, then reverse)
+            stmt = select(Message).where(
+                Message.conversation_id == conversation_id
+            ).order_by(Message.created_at.desc()).limit(last_n)
+            
+            result = await self.session.execute(stmt)
+            messages = result.scalars().all()
+            
+            # Reverse to get chronological order for LLM
+            messages = list(reversed(messages))
+            
+            context = [
+                {
+                    "id": m.id,
+                    "role": m.role.value,
+                    "content": m.content,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                }
+                for m in messages
+            ]
+            
+            logger.info(f"Retrieved context with {len(context)} messages for conversation {conversation_id}")
+            
+            return {
+                "success": True,
+                "conversation_id": conversation_id,
+                "context": context,
+                "message_count": len(context)
+            }
+        except Exception as e:
+            logger.error(f"Error getting conversation context: {str(e)}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+                "context": [],
+                "conversation_id": conversation_id
+            }
