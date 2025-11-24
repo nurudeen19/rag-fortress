@@ -1,5 +1,5 @@
 import { ref, computed } from 'vue'
-import axios from 'axios'
+import api from '../services/api'
 
 // Singleton state - shared across all components
 const activityLogs = ref([])
@@ -9,18 +9,63 @@ const loading = ref(false)
 const error = ref(null)
 
 /**
+ * ActivityLog Response Schema
+ * @typedef {Object} ActivityLog
+ * @property {number} id - Unique identifier
+ * @property {number} user_id - ID of the user who performed the action
+ * @property {string} user_name - Name of the user
+ * @property {string} user_department - Department of the user
+ * @property {string} incident_type - Type of incident (e.g., "document_access_denied", "malicious_query_blocked")
+ * @property {string} severity - Severity level ("info", "warning", "critical")
+ * @property {string} description - Human-readable description of the event
+ * @property {string|null} details - Additional structured details (JSON string)
+ * @property {string|null} user_clearance_level - Clearance level of the user (GENERAL, RESTRICTED, CONFIDENTIAL, HIGHLY_CONFIDENTIAL)
+ * @property {string|null} required_clearance_level - Required clearance level for the resource
+ * @property {boolean|null} access_granted - Whether access was granted
+ * @property {string|null} user_query - The user's query (truncated for privacy)
+ * @property {string|null} threat_type - Type of threat detected (prompt_injection, sql_injection, etc.)
+ * @property {string|null} ip_address - IP address of the request
+ * @property {string} created_at - ISO timestamp of when the event occurred
+ * @property {string} updated_at - ISO timestamp of when the record was last updated
+ */
+
+/**
+ * Get Activity Logs Response Schema
+ * @typedef {Object} GetActivityLogsResponse
+ * @property {boolean} success - Whether the request was successful
+ * @property {ActivityLog[]} logs - Array of activity log entries
+ * @property {number} total - Total count of logs matching the filters
+ * @property {number} limit - Results per page
+ * @property {number} offset - Current pagination offset
+ * @property {boolean} has_more - Whether more results are available
+ * @property {string|null} error - Error message if success is false
+ */
+
+/**
  * Composable for managing user activity logs and security monitoring
  */
 export function useActivityLogs() {
   /**
    * Get activity logs with optional filters and pagination
+   * 
    * @param {Object} options - Query options
-   * @param {number} options.userId - Filter by user ID
-   * @param {string} options.incidentType - Filter by incident type
-   * @param {string} options.severity - Filter by severity (info, warning, critical)
-   * @param {number} options.days - Number of days to look back (default 30)
-   * @param {number} options.limit - Results per page (default 100)
+   * @param {number|null} options.userId - Filter by user ID (defaults to current user if not provided)
+   * @param {string|null} options.incidentType - Filter by incident type
+   * @param {string|null} options.severity - Filter by severity (info, warning, critical)
+   * @param {number} options.days - Number of days to look back (1-365, default 30)
+   * @param {number} options.limit - Results per page (1-500, default 100)
    * @param {number} options.offset - Pagination offset (default 0)
+   * 
+   * @returns {Promise<GetActivityLogsResponse>} Activity logs with pagination info
+   * 
+   * @example
+   * const logs = await fetchActivityLogs({
+   *   incidentType: 'document_access_denied',
+   *   severity: 'critical',
+   *   days: 7,
+   *   limit: 50,
+   *   offset: 0
+   * })
    */
   const fetchActivityLogs = async (options = {}) => {
     loading.value = true
@@ -31,29 +76,49 @@ export function useActivityLogs() {
       incidentType = null,
       severity = null,
       days = 30,
-      limit = 100,
+      limit = 50,
       offset = 0
     } = options
     
     try {
-      const params = { days, limit, offset }
-      if (userId !== null) params.user_id = userId
-      if (incidentType) params.incident_type = incidentType
-      if (severity) params.severity = severity
+      // Build query parameters
+      const params = {}
       
-      const response = await axios.get('/api/v1/activity', { params })
+      // Always pass days and limit
+      if (days) params.days = parseInt(days)
+      if (limit) params.limit = parseInt(limit)
+      if (offset) params.offset = parseInt(offset)
       
-      if (response.data.success) {
-        activityLogs.value = response.data.logs
-        totalLogs.value = response.data.total
-        hasMore.value = response.data.has_more
-        return response.data
+      // Pass filters if provided
+      if (userId !== null && userId !== undefined) {
+        params.user_id = parseInt(userId)
+      }
+      if (incidentType) {
+        params.incident_type = incidentType
+      }
+      if (severity) {
+        params.severity = severity
+      }
+      
+      const response = await api.get('/v1/activity', { params })
+      
+      if (response.success) {
+        activityLogs.value = response.logs || []
+        totalLogs.value = response.total || 0
+        hasMore.value = response.has_more || false
+        return response
       } else {
-        throw new Error(response.data.error || 'Failed to fetch activity logs')
+        throw new Error(response.error || 'Failed to fetch activity logs')
       }
     } catch (err) {
       console.error('Error fetching activity logs:', err)
-      error.value = err.response?.data?.error || err.message
+      error.value = err.response?.error || err.message
+      
+      // Set empty state on error
+      activityLogs.value = []
+      totalLogs.value = 0
+      hasMore.value = false
+      
       throw err
     } finally {
       loading.value = false
@@ -61,16 +126,26 @@ export function useActivityLogs() {
   }
   
   /**
-   * Get available incident types
+   * Get available incident types for filtering
+   * 
+   * @returns {Promise<Object[]>} Array of incident type objects with value, name, and description
+   * 
+   * @example
+   * const types = await fetchIncidentTypes()
+   * // Returns: [
+   * //   { value: 'document_access_denied', name: 'Document Access Denied', description: '...' },
+   * //   { value: 'malicious_query_blocked', name: 'Malicious Query Blocked', description: '...' },
+   * //   ...
+   * // ]
    */
   const fetchIncidentTypes = async () => {
     try {
-      const response = await axios.get('/api/v1/activity/incident-types')
+      const response = await api.get('/v1/activity/incident-types')
       
-      if (response.data.success) {
-        return response.data.incident_types
+      if (response.success) {
+        return response.incident_types || []
       } else {
-        throw new Error(response.data.error || 'Failed to fetch incident types')
+        throw new Error(response.error || 'Failed to fetch incident types')
       }
     } catch (err) {
       console.error('Error fetching incident types:', err)

@@ -106,7 +106,7 @@
               <label class="block text-sm text-fortress-400 mb-2">Incident Type</label>
               <select 
                 v-model="filters.incidentType" 
-                @change="loadLogs"
+                @change="loadLogs(true)"
                 class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:outline-none focus:border-secure transition-colors"
               >
                 <option :value="null">All Types</option>
@@ -121,7 +121,7 @@
               <label class="block text-sm text-fortress-400 mb-2">Severity</label>
               <select 
                 v-model="filters.severity" 
-                @change="loadLogs"
+                @change="loadLogs(true)"
                 class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:outline-none focus:border-secure transition-colors"
               >
                 <option :value="null">All Levels</option>
@@ -136,7 +136,7 @@
               <label class="block text-sm text-fortress-400 mb-2">Time Period</label>
               <select 
                 v-model="filters.days" 
-                @change="loadLogs"
+                @change="loadLogs(true)"
                 class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:outline-none focus:border-secure transition-colors"
               >
                 <option :value="7">Last 7 days</option>
@@ -151,7 +151,7 @@
               <label class="block text-sm text-fortress-400 mb-2">Results Per Page</label>
               <select 
                 v-model="filters.limit" 
-                @change="loadLogs"
+                @change="loadLogs(true)"
                 class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:outline-none focus:border-secure transition-colors"
               >
                 <option :value="25">25</option>
@@ -170,10 +170,12 @@
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-semibold text-fortress-100">Recent Activity</h3>
             <button 
-              @click="loadLogs" 
-              class="px-3 py-1.5 text-sm bg-secure/10 border border-secure/30 text-secure rounded-lg hover:bg-secure/20 transition-colors"
+              @click="loadLogs(false)" 
+              :disabled="loading"
+              class="px-3 py-1.5 text-sm bg-secure/10 border border-secure/30 text-secure rounded-lg hover:bg-secure/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Refresh
+              <span v-if="loading">Loading...</span>
+              <span v-else>Refresh</span>
             </button>
           </div>
 
@@ -204,16 +206,36 @@
                 </span>
               </div>
 
+              <!-- User Info -->
+              <div class="flex items-center gap-2 mb-2 text-xs text-fortress-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                <span>{{ log.user_name }}</span>
+                <span v-if="log.user_department" class="text-fortress-500">• {{ log.user_department }}</span>
+              </div>
+
               <!-- Description -->
               <p class="text-sm text-fortress-300 mb-2">{{ log.description }}</p>
 
               <!-- Additional Details -->
-              <div v-if="log.user_query || log.threat_type || log.details" class="mt-2 pt-2 border-t border-fortress-700">
-                <div v-if="log.user_query" class="text-xs text-fortress-400 mb-1">
+              <div v-if="log.user_query || log.threat_type || log.user_clearance_level || log.required_clearance_level" class="mt-2 pt-2 border-t border-fortress-700 space-y-1">
+                <div v-if="log.user_clearance_level || log.required_clearance_level" class="text-xs text-fortress-400">
+                  <span class="font-medium">Clearance:</span> 
+                  <span v-if="log.user_clearance_level">User: {{ log.user_clearance_level }}</span>
+                  <span v-if="log.required_clearance_level"> | Required: {{ log.required_clearance_level }}</span>
+                  <span v-if="log.access_granted !== null" :class="log.access_granted ? 'text-secure' : 'text-danger'">
+                    {{ log.access_granted ? ' ✓ Granted' : ' ✗ Denied' }}
+                  </span>
+                </div>
+                <div v-if="log.user_query" class="text-xs text-fortress-400">
                   <span class="font-medium">Query:</span> {{ log.user_query }}
                 </div>
                 <div v-if="log.threat_type" class="text-xs text-fortress-400">
-                  <span class="font-medium">Threat:</span> {{ log.threat_type }}
+                  <span class="font-medium">Threat Type:</span> {{ log.threat_type }}
+                </div>
+                <div v-if="log.ip_address" class="text-xs text-fortress-400">
+                  <span class="font-medium">IP:</span> {{ log.ip_address }}
                 </div>
               </div>
             </div>
@@ -289,28 +311,36 @@ const filters = ref({
 // Incident types for dropdown
 const incidentTypes = ref([])
 
-// Load logs
-const loadLogs = async () => {
+// Load logs with reset flag
+const loadLogs = async (resetOffset = false) => {
   try {
-    // Reset offset when filters change (except when explicitly paginating)
-    if (filters.value.offset === 0) {
+    // Reset offset when filters change (but not during pagination)
+    if (resetOffset) {
       filters.value.offset = 0
     }
-    await fetchActivityLogs(filters.value)
+    
+    await fetchActivityLogs({
+      userId: filters.value.userId,
+      incidentType: filters.value.incidentType,
+      severity: filters.value.severity,
+      days: filters.value.days,
+      limit: filters.value.limit,
+      offset: filters.value.offset
+    })
   } catch (err) {
     console.error('Error loading activity logs:', err)
   }
 }
 
 // Pagination
-const nextPage = () => {
+const nextPage = async () => {
   filters.value.offset += filters.value.limit
-  loadLogs()
+  await loadLogs(false) // Don't reset offset during pagination
 }
 
-const previousPage = () => {
+const previousPage = async () => {
   filters.value.offset = Math.max(0, filters.value.offset - filters.value.limit)
-  loadLogs()
+  await loadLogs(false) // Don't reset offset during pagination
 }
 
 // Initialize
