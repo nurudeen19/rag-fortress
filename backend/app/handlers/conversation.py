@@ -14,6 +14,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.conversation_service import ConversationService
+from app.services.query_validator_service import get_query_validator
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,25 @@ async def handle_add_message(
     """
     try:
         logger.info(f"Adding message to conversation {conversation_id}")
+        
+        # SECURITY: Validate user query for malicious patterns (only for USER role)
+        if role.upper() == "USER":
+            validator = get_query_validator()
+            validation = await validator.validate_query(content, user_id)
+            
+            if not validation["valid"]:
+                logger.warning(
+                    f"Malicious query blocked: user_id={user_id}, "
+                    f"conversation_id={conversation_id}, "
+                    f"threat={validation['threat_type']}, "
+                    f"confidence={validation['confidence']:.2f}"
+                )
+                return {
+                    "success": False,
+                    "error": validation["reason"],
+                    "threat_type": validation["threat_type"],
+                    "message": None
+                }
         
         service = ConversationService(session)
         
