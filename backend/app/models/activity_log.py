@@ -70,10 +70,8 @@ class ActivityLog(Base):
     # Query/action context
     user_query = Column(Text, nullable=True)
     threat_type = Column(String(100), nullable=True)  # prompt_injection, sql_injection, etc.
-    
-    # Conversation context (if applicable)
-    conversation_id = Column(String(36), ForeignKey("conversations.id", ondelete="SET NULL"), nullable=True)
-    
+
+
     # IP address and user agent for security tracking
     ip_address = Column(String(45), nullable=True)  # IPv6 compatible
     user_agent = Column(String(500), nullable=True)
@@ -136,7 +134,6 @@ class ActivityLog(Base):
             "access_granted": self.access_granted,
             "user_query": self.user_query[:100] if self.user_query else None,  # Truncate for privacy
             "threat_type": self.threat_type,
-            "conversation_id": self.conversation_id,
             "ip_address": self.ip_address,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
