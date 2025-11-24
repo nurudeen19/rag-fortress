@@ -42,7 +42,7 @@ class ActivityLogsSeeder(BaseSeed):
 
         for _ in range(100):  # Generate 100 entries
             log = ActivityLog(
-                user_id=random.randint(1, 5),  # Simulate 5 users
+                user_id=random.choice([1,5]),
                 incident_type=random.choice(incident_types),
                 severity=random.choice(severities),
                 description=f"Sample description for incident {_}",

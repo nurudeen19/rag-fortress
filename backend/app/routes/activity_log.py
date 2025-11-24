@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.database import get_db
+from app.core.database import get_session
 from app.core.security import get_current_user
 from app.models.user import User
 from app.handlers import activity_log as activity_log_handler
@@ -30,7 +30,7 @@ async def get_activity_logs(
     limit: int = Query(100, ge=1, le=500, description="Maximum number of results per page"),
     offset: int = Query(0, ge=0, description="Number of results to skip for pagination"),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_session)
 ):
     """
     Get activity logs with optional filters and pagination.

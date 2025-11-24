@@ -216,7 +216,7 @@ class StartupController:
             logger.info(f"✓ Vector store initialized (provider: {settings.VECTOR_DB_PROVIDER})")
         
         except Exception as e:
-            logger.warning(f"⚠ Vector store initialization skipped: {e}")
+            logger.warning(f"⚠ Vector store initialization skipped: {e}", exc_info=True)
     
     async def _initialize_llm(self):
         """Initialize LLM provider (optional - catches errors without blocking startup)."""
