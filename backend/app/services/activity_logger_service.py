@@ -33,7 +33,6 @@ async def log_activity(
     access_granted: Optional[bool] = None,
     user_query: Optional[str] = None,
     threat_type: Optional[str] = None,
-    conversation_id: Optional[str] = None,
     ip_address: Optional[str] = None,
     user_agent: Optional[str] = None
 ) -> ActivityLog:
@@ -52,7 +51,6 @@ async def log_activity(
         access_granted: Optional boolean for access decisions
         user_query: Optional user query text
         threat_type: Optional threat classification
-        conversation_id: Optional conversation context
         ip_address: Optional IP address
         user_agent: Optional user agent string
         
@@ -72,7 +70,6 @@ async def log_activity(
         access_granted=access_granted,
         user_query=user_query,
         threat_type=threat_type,
-        conversation_id=conversation_id,
         ip_address=ip_address,
         user_agent=user_agent
     )

@@ -80,7 +80,6 @@ class ActivityLog(Base):
     
     # Relationships
     user = relationship("User", foreign_keys=[user_id], backref="activity_logs")
-    conversation = relationship("Conversation", foreign_keys=[conversation_id])
     
     # Indexes for performance (removed document_id index as field removed)
     __table_args__ = (
