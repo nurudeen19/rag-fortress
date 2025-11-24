@@ -54,8 +54,11 @@
     </div>
 
     <!-- Messages Container -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-6 space-y-6 bg-transparent">
-      <!-- Empty State with Suggestions -->
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-6 bg-transparent">
+      <!-- Transition wrapper to prevent flicker -->
+      <transition name="fade" mode="out-in">
+        <div :key="route.params.id || 'new'" class="space-y-6">
+          <!-- Empty State with Suggestions -->
       <div v-if="messages.length === 0" class="h-full flex items-center justify-center">
         <div class="max-w-3xl mx-auto text-center px-4">
           <!-- Animated Icon -->
@@ -68,84 +71,41 @@
             </div>
           </div>
           
-          <h2 class="text-3xl font-bold text-fortress-100 mb-3">What can I help you with?</h2>
-          <p class="text-fortress-400 text-lg mb-8">Ask questions about your documents and get AI-powered answers</p>
+          <h2 class="text-3xl font-semibold text-fortress-100 mb-3">
+            <span class="bg-gradient-to-r from-secure via-fortress-100 to-secure bg-clip-text text-transparent">
+              Knowledge Assistant
+            </span>
+          </h2>
+          <p class="text-fortress-400 text-lg max-w-xl mx-auto leading-relaxed">
+            Ask questions and receive concise, sourced answers backed by relevant sources.
+          </p>
           
-          <!-- Quick Suggestions -->
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
-            <button
-              @click="inputMessage = 'What are the key points in the sales playbook?'; focusInput()"
-              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
-            >
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
-                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Summarize documents</p>
-                  <p class="text-sm text-fortress-500 mt-1">Get key insights from your files</p>
-                </div>
-              </div>
-            </button>
-            
-            <button
-              @click="inputMessage = 'Find information about our company policies'; focusInput()"
-              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
-            >
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
-                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Search knowledge</p>
-                  <p class="text-sm text-fortress-500 mt-1">Find specific information</p>
-                </div>
-              </div>
-            </button>
-            
-            <button
-              @click="inputMessage = 'Compare different approaches in the documentation'; focusInput()"
-              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
-            >
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
-                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Analyze & compare</p>
-                  <p class="text-sm text-fortress-500 mt-1">Deep dive into content</p>
-                </div>
-              </div>
-            </button>
-            
-            <button
-              @click="inputMessage = 'Explain the process described in the guidelines'; focusInput()"
-              class="group text-left p-4 bg-fortress-800/50 hover:bg-fortress-800 border border-fortress-700/50 hover:border-secure/50 rounded-xl transition-all duration-200 hover:shadow-lg hover:scale-[1.02]"
-            >
-              <div class="flex items-start gap-3">
-                <div class="p-2 bg-secure/10 rounded-lg group-hover:bg-secure/20 transition-colors">
-                  <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <div>
-                  <p class="font-medium text-fortress-200 group-hover:text-fortress-100 transition-colors">Get explanations</p>
-                  <p class="text-sm text-fortress-500 mt-1">Understand complex topics</p>
-                </div>
-              </div>
-            </button>
+          <!-- Decorative Features -->
+          <div class="mt-10 flex items-center justify-center gap-8 text-fortress-500 text-sm">
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              <span>Instant Answers</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>Accurate Results</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              <span>Contextual Understanding</span>
+            </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Messages -->
-      <div class="max-w-6xl mx-auto space-y-6">
+        <!-- Messages -->
+        <div class="max-w-6xl mx-auto space-y-6">
         <template v-for="(message, index) in messages" :key="index">
           <!-- User Message -->
           <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
@@ -230,35 +190,37 @@
               </div>
             </div>
           </div>
-        </template>
-      </div>
+          </template>
+        </div>
 
-      <!-- Loading Indicator -->
-      <div v-if="loading" class="max-w-6xl mx-auto">
-        <div class="flex justify-start animate-slide-in-left">
-          <div class="flex items-start gap-3">
-            <!-- AI Avatar -->
-            <div class="flex-shrink-0 mt-1">
-              <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center animate-pulse">
-                <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-            </div>
-            
-            <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-5 py-4 shadow-lg">
-              <div class="flex items-center gap-3">
-                <div class="flex gap-1.5">
-                  <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0s; animation-duration: 0.6s;"></div>
-                  <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
-                  <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
+        <!-- Loading Indicator -->
+        <div v-if="loading" class="max-w-6xl mx-auto">
+          <div class="flex justify-start animate-slide-in-left">
+            <div class="flex items-start gap-3">
+              <!-- AI Avatar -->
+              <div class="flex-shrink-0 mt-1">
+                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center animate-pulse">
+                  <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
                 </div>
-                <span class="text-fortress-300 text-sm font-medium">Analyzing your documents...</span>
+              </div>
+              
+              <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-5 py-4 shadow-lg">
+                <div class="flex items-center gap-3">
+                  <div class="flex gap-1.5">
+                    <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0s; animation-duration: 0.6s;"></div>
+                    <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
+                    <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
+                  </div>
+                  <span class="text-fortress-300 text-sm font-medium">Analyzing your documents...</span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+        </div>
+      </transition>
     </div>
 
     <!-- Input Area -->
@@ -378,6 +340,48 @@
         </div>
       </div>
     </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div
+      v-if="showDeleteModal"
+      @click.self="showDeleteModal = false"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    >
+      <div class="bg-fortress-900 border border-fortress-800 rounded-xl shadow-2xl w-full max-w-md animate-fade-in">
+        <div class="border-b border-fortress-800 px-6 py-4">
+          <h2 class="text-xl font-bold text-red-400">Delete Conversation</h2>
+          <p class="text-sm text-fortress-400 mt-1">This action cannot be undone</p>
+        </div>
+        <div class="p-6">
+          <p class="text-fortress-300">
+            Are you sure you want to delete <span class="font-semibold text-fortress-100">"{{ currentChatTitle }}"</span>?
+            All messages in this conversation will be permanently removed.
+          </p>
+        </div>
+        <div class="border-t border-fortress-800 px-6 py-4 flex justify-end gap-3">
+          <button
+            @click="showDeleteModal = false"
+            class="px-4 py-2 rounded-lg text-fortress-300 hover:bg-fortress-800 transition-colors font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            @click="confirmDelete"
+            :disabled="deleting"
+            class="px-6 py-2 bg-red-600 hover:bg-red-700 disabled:bg-red-800 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors flex items-center gap-2"
+          >
+            <svg v-if="!deleting" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <svg v-else class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -405,12 +409,14 @@ const {
 const messages = ref([])
 const inputMessage = ref('')
 const loading = ref(false)
+const loadingMessages = ref(false)
+const deleting = ref(false)
 const messagesContainer = ref(null)
 const inputField = ref(null)
 const showChatOptions = ref(false)
 const showRenameModal = ref(false)
+const showDeleteModal = ref(false)
 const renameInput = ref('')
-const loadingMessages = ref(false)
 
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
 
@@ -420,7 +426,7 @@ const currentChatSubtitle = computed(() => {
     const messageText = messageCount === 1 ? 'message' : 'messages'
     return `${messageCount} ${messageText}`
   }
-  return 'Query your documents with AI-powered retrieval'
+  return 'Start a conversation to unlock insights'
 })
 
 // Render markdown content
@@ -454,10 +460,17 @@ const loadMessagesForConversation = async (conversationId) => {
   try {
     const response = await loadChatMessages(conversationId, 50, 0)
     
-    // Update active chat with conversation details from response
-    if (response.conversation) {
-      activeChat.value = response.conversation
+    // Check if conversation doesn't exist
+    if (!response.conversation) {
+      console.warn(`Conversation ${conversationId} not found`)
+      messages.value = []
+      activeChat.value = null
+      await router.push('/chat')
+      return
     }
+    
+    // Update active chat with conversation details from response
+    activeChat.value = response.conversation
     
     // Map backend messages to display format
     messages.value = response.messages.map(msg => ({
@@ -472,7 +485,14 @@ const loadMessagesForConversation = async (conversationId) => {
     await scrollToBottom()
   } catch (error) {
     console.error('Failed to load messages:', error)
-    messages.value = []
+    // If 404, conversation doesn't exist - navigate away
+    if (error.response?.status === 404) {
+      messages.value = []
+      activeChat.value = null
+      await router.push('/chat')
+    } else {
+      messages.value = []
+    }
   } finally {
     loadingMessages.value = false
   }
@@ -647,13 +667,27 @@ const submitRename = async () => {
   }
 }
 
-// Delete chat
-const deleteChat = async () => {
-  if (confirm('Are you sure you want to delete this conversation? This action cannot be undone.')) {
-    if (activeChat.value) {
-      await deleteChatFromHistory(activeChat.value.id)
-      showChatOptions.value = false
-    }
+// Open delete modal
+const deleteChat = () => {
+  showDeleteModal.value = true
+  showChatOptions.value = false
+}
+
+// Confirm and execute delete
+const confirmDelete = async () => {
+  if (!activeChat.value || deleting.value) return
+  
+  deleting.value = true
+  try {
+    await deleteChatFromHistory(activeChat.value.id)
+    // Close modal and reset state
+    showDeleteModal.value = false
+    deleting.value = false
+    // Navigation happens automatically in deleteChat()
+  } catch (error) {
+    console.error('Failed to delete conversation:', error)
+    deleting.value = false
+    // Keep modal open on error so user can retry
   }
 }
 
@@ -883,5 +917,16 @@ onMounted(() => {
 :deep(.prose-invert td) {
   border: 1px solid rgba(100, 116, 139, 0.5);
   padding: 0.5rem;
+}
+
+/* Fade transition for smooth conversation switching */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

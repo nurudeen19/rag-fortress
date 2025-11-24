@@ -281,7 +281,7 @@ async def handle_soft_delete_conversation(
                 "error": "Conversation not found"
             }
         
-        await service.soft_delete_conversation(conversation_id)
+        await service.soft_delete_conversation(conversation_id, user_id)
         await session.commit()
         
         logger.info(f"Conversation {conversation_id} soft deleted")

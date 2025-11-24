@@ -6,14 +6,15 @@ import { useAuthStore } from '../stores/auth'
 const CACHE_KEY = 'fortress_conversations_cache'
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
+// Singleton state - shared across all components
+const chats = ref([])
+const activeChat = ref(null)
+const loading = ref(false)
+const error = ref(null)
+
 export function useChatHistory() {
   const router = useRouter()
   const authStore = useAuthStore()
-  
-  const chats = ref([])
-  const activeChat = ref(null)
-  const loading = ref(false)
-  const error = ref(null)
 
   /**
    * Get cache from local storage
@@ -170,20 +171,37 @@ export function useChatHistory() {
    * Delete a chat conversation
    */
   const deleteChat = async (chatId) => {
+    const deletedChat = chats.value.find(c => c.id === chatId)
+    
     try {
-      await api.delete(`/v1/conversations/${chatId}`)
+      // Optimistic deletion: Remove from local state and storage immediately
       chats.value = chats.value.filter(c => c.id !== chatId)
-      
-      // Update cache
       setCache(chats.value)
       
+      // Clear active chat if it's the one being deleted
       if (activeChat.value?.id === chatId) {
         activeChat.value = null
+      }
+      
+      // Navigate away if we're deleting the active chat
+      if (router.currentRoute.value.params.id === chatId) {
         await router.push('/chat')
       }
+      
+      // Send delete request to server (in background)
+      await api.delete(`/v1/conversations/${chatId}`)
+      
+      // Success! The optimistic update was correct, no need to reload
     } catch (err) {
       error.value = err.message || 'Failed to delete conversation'
       console.error('Error deleting conversation:', err)
+      
+      // Rollback: Restore the deleted chat to local state if request failed
+      if (deletedChat) {
+        chats.value.unshift(deletedChat)
+        setCache(chats.value)
+      }
+      
       throw err
     }
   }
@@ -228,7 +246,7 @@ export function useChatHistory() {
       return response
     } catch (err) {
       console.error('Error loading messages:', err)
-      return { conversation: null, messages: [], total: 0, limit, offset }
+      throw err
     }
   }
 

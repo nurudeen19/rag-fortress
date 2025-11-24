@@ -111,21 +111,6 @@
           </button>
         </div>
 
-        <!-- Filters & Search -->
-        <div class="px-4 py-3 border-b border-fortress-800/50">
-          <div class="relative group">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fortress-500 group-focus-within:text-secure transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search conversations..."
-              class="w-full bg-fortress-800/60 border border-fortress-700/50 rounded-xl pl-9 pr-3 py-2.5 text-sm text-fortress-100 placeholder-fortress-500 focus:outline-none focus:border-secure/50 focus:ring-2 focus:ring-secure/20 transition-all"
-            />
-          </div>
-        </div>
-
         <!-- Chat History Section -->
         <div class="flex-1 overflow-y-auto scrollbar-thin">
           <!-- Today -->
@@ -286,7 +271,6 @@ const { chats, activeChat, selectChat, openNewChat, loadChats } = useChatHistory
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 const chatSettingsOpen = ref(false)
-const searchQuery = ref('')
 
 const userInitials = computed(() => {
   if (!authStore.user) return '?'
@@ -295,12 +279,9 @@ const userInitials = computed(() => {
   return (first + last).toUpperCase()
 })
 
-// Filter chats based on search (removed category filter)
+// Return all chats (search removed)
 const filteredChats = computed(() => {
-  return chats.value.filter(chat => {
-    const matchesSearch = chat.title.toLowerCase().includes(searchQuery.value.toLowerCase())
-    return matchesSearch
-  })
+  return chats.value
 })
 
 // Group chats by time period
