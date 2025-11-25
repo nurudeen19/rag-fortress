@@ -375,12 +375,55 @@ class JobQueueIntegration:
                 sync_session.add(notification)
                 sync_session.commit()
                 logger.info(f"Created completion notification for admin {admin_id}, job {job_id}")
+                
+                # Invalidate notification cache (use sync redis client)
+                self._invalidate_notification_cache_sync(admin_id)
             
             finally:
                 sync_session.close()
         
         except Exception as e:
             logger.error(f"Failed to create completion notification: {e}", exc_info=True)
+    
+    def _invalidate_notification_cache_sync(self, user_id: int) -> None:
+        """
+        Invalidate notification cache using sync Redis client.
+        
+        CRITICAL: Uses sync operations because this is called from background job thread.
+        Cannot use async cache operations due to event loop isolation.
+        """
+        try:
+            from app.config.cache_settings import cache_settings
+            
+            # Only attempt if cache is enabled
+            if not cache_settings.CACHE_ENABLED:
+                return
+            
+            # Create sync Redis connection for this operation
+            try:
+                import redis
+                redis_client = redis.from_url(
+                    cache_settings.get_redis_url(),
+                    encoding="utf-8",
+                    decode_responses=True,
+                    socket_connect_timeout=5
+                )
+                
+                # Delete cache keys synchronously
+                redis_client.delete(f"notif:unread_count:{user_id}")
+                redis_client.delete(f"dashboard:user:metrics:{user_id}")
+                redis_client.delete("dashboard:admin:metrics")
+                
+                redis_client.close()
+                logger.info(f"Invalidated notification cache for user {user_id}")
+            
+            except ImportError:
+                logger.debug("Redis not available for cache invalidation (in-memory cache mode)")
+            except Exception as redis_err:
+                logger.warning(f"Redis cache invalidation failed: {redis_err} (cache may be stale)")
+        
+        except Exception as e:
+            logger.error(f"Failed to invalidate notification cache: {e}", exc_info=True)
     
     def _create_batch_failure_notification(
         self,
@@ -418,6 +461,9 @@ class JobQueueIntegration:
                 sync_session.add(notification)
                 sync_session.commit()
                 logger.info(f"Created failure notification for admin {admin_id}, job {job_id}")
+                
+                # Invalidate notification cache (use sync redis client)
+                self._invalidate_notification_cache_sync(admin_id)
             
             finally:
                 sync_session.close()

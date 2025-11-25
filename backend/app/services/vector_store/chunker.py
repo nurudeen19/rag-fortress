@@ -90,6 +90,8 @@ class DocumentChunker:
         Uses field_selection if present, else flattens data.
         """
         content = file_data.get("content")
+        file_name = file_data.get("file_name", "unknown")
+        
         if content is None:
             return []
 
@@ -98,7 +100,14 @@ class DocumentChunker:
 
         # Normalize to list of dicts
         if isinstance(content, list):
-            records = content if (content and isinstance(content[0], dict)) else [{"value": v} for v in content]
+            if not content:
+                return []
+            # Check if first item is a dict (CSV/JSON data)
+            if isinstance(content[0], dict):
+                records = content
+            else:
+                # List of primitives
+                records = [{"value": v} for v in content]
         elif isinstance(content, dict):
             records = [content]
         else:
@@ -118,7 +127,11 @@ class DocumentChunker:
                 item = {k: item.get(k) for k in field_selection if k in item}
             
             # Convert to string
-            doc_strings.append(self._stringify_record(item))
+            doc_str = self._stringify_record(item)
+            if doc_str and doc_str.strip():
+                doc_strings.append(doc_str)
+
+        logger.info(f"File {file_name}: Generated {len(doc_strings)} doc strings from {len(records)} records")
 
         # Create documents and split
         docs = [
@@ -126,8 +139,11 @@ class DocumentChunker:
             for s in doc_strings
             if isinstance(s, str) and s.strip()
         ]
-
-        return self.splitter.split_documents(docs)
+        
+        result = self.splitter.split_documents(docs)
+        logger.info(f"File {file_name}: Chunked into {len(result)} final chunks")
+        
+        return result
 
     def _flatten_dict(self, d: Dict[str, Any], parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
         """Recursively flatten nested dicts/lists."""

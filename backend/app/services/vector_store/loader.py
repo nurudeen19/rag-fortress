@@ -108,12 +108,20 @@ class DocumentLoader:
             "file_size_bytes": file_upload.file_size,
         }
         
+        # Parse field_selection JSON string to list
+        field_selection_parsed = None
+        if file_upload.field_selection:
+            try:
+                field_selection_parsed = json.loads(file_upload.field_selection)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse field_selection for file {file_upload.id}: {file_upload.field_selection}")
+        
         return {
             "file_id": file_upload.id,
             "file_name": file_upload.file_name,
             "file_type": file_upload.file_type,
             "content": content,            
-            "field_selection": file_upload.field_selection or None,
+            "field_selection": field_selection_parsed,
             "meta": meta,
         }
     
