@@ -108,6 +108,12 @@ const router = createRouter({
           meta: { requiresRoles: ['admin'] }
         },
         {
+          path: 'admin/settings',
+          name: 'admin-settings',
+          component: () => import('../views/admin/Settings.vue'),
+          meta: { requiresRoles: ['admin'] }
+        },
+        {
           path: 'activity-logs',
           name: 'activity-logs',
           component: () => import('../views/system/ActivityLogs.vue'),

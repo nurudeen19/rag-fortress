@@ -16,12 +16,12 @@
         <p class="text-fortress-400 text-sm mb-6">
           Configure custom application settings that will be enforced across the system. These settings control system behavior and defaults.
         </p>
-        <button 
-          class="px-4 py-2 bg-secure hover:bg-secure/90 text-white rounded-lg font-medium transition-colors"
-          disabled
+        <router-link 
+          to="/admin/settings"
+          class="inline-block px-4 py-2 bg-secure hover:bg-secure/90 text-white rounded-lg font-medium transition-colors"
         >
-          Configure Settings (Coming Soon)
-        </button>
+          Configure Settings
+        </router-link>
       </div>
 
       <!-- Job Management Card -->
