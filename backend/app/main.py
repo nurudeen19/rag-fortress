@@ -86,6 +86,7 @@ def create_app() -> FastAPI:
     from app.routes.conversation import router as conversation_router
     from app.routes.activity_log import router as activity_log_router
     from app.routes.admin import router as admin_router
+    from app.routes.settings import router as settings_router
     
     app.include_router(email_router)
     app.include_router(auth_router)
@@ -98,6 +99,7 @@ def create_app() -> FastAPI:
     app.include_router(conversation_router)
     app.include_router(activity_log_router)
     app.include_router(admin_router)
+    app.include_router(settings_router)
     
     # Health check endpoint
     @app.get("/health")
