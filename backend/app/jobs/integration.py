@@ -291,6 +291,7 @@ class JobQueueIntegration:
             payload = json.loads(job.payload) if job.payload else {}
             file_id = payload.get("file_id") or job.reference_id
             batch_mode = payload.get("batch_mode", False)
+            triggered_by_admin_id = payload.get("triggered_by_admin_id")
             
             logger.info(f"Starting file ingestion job: file_id={file_id}, batch_mode={batch_mode}")
             
@@ -300,6 +301,14 @@ class JobQueueIntegration:
             if batch_mode:
                 # Process all approved files
                 result = await ingestion_service.ingest_batch()
+                
+                # Create completion notification for admin if triggered by admin
+                if triggered_by_admin_id:
+                    await self._create_batch_completion_notification(
+                        admin_id=triggered_by_admin_id,
+                        job_id=job.id,
+                        result=result
+                    )
             else:
                 # Process single file
                 result = await ingestion_service.ingest_single_file(file_id)
@@ -309,7 +318,86 @@ class JobQueueIntegration:
         
         except Exception as e:
             logger.error(f"Error in file ingestion handler: {e}", exc_info=True)
+            
+            # Create failure notification for admin if triggered by admin
+            payload = json.loads(job.payload) if job.payload else {}
+            triggered_by_admin_id = payload.get("triggered_by_admin_id")
+            if triggered_by_admin_id and payload.get("batch_mode"):
+                try:
+                    await self._create_batch_failure_notification(
+                        admin_id=triggered_by_admin_id,
+                        job_id=job.id,
+                        error=str(e)
+                    )
+                except Exception as notif_err:
+                    logger.error(f"Failed to create failure notification: {notif_err}")
+            
             raise
+    
+    async def _create_batch_completion_notification(
+        self,
+        admin_id: int,
+        job_id: int,
+        result: dict
+    ) -> None:
+        """Create notification for admin when batch ingestion completes."""
+        try:
+            from app.services.notification_service import NotificationService
+            
+            async with self.session_factory() as session:
+                notification_service = NotificationService(session)
+                
+                errors = result.get("errors", [])
+                error_count = len(errors)
+                
+                if error_count == 0:
+                    message = f"✅ Batch ingestion completed successfully (Job #{job_id})"
+                else:
+                    message = f"⚠️ Batch ingestion completed with some errors (Job #{job_id})"
+                
+                await notification_service.create(
+                    user_id=admin_id,
+                    message=message,
+                    notification_type="batch_ingestion_completed",
+                    related_file_id=None
+                )
+                
+                await session.commit()
+                logger.info(f"Created completion notification for admin {admin_id}, job {job_id}")
+        
+        except Exception as e:
+            logger.error(f"Failed to create completion notification: {e}", exc_info=True)
+    
+    async def _create_batch_failure_notification(
+        self,
+        admin_id: int,
+        job_id: int,
+        error: str
+    ) -> None:
+        """Create notification for admin when batch ingestion fails."""
+        try:
+            from app.services.notification_service import NotificationService
+            
+            async with self.session_factory() as session:
+                notification_service = NotificationService(session)
+                
+                message = (
+                    f"❌ Batch ingestion failed (Job #{job_id}). "
+                    f"Error: {error[:100]}"
+                )
+                
+                await notification_service.create(
+                    user_id=admin_id,
+                    message=message,
+                    notification_type="batch_ingestion_failed",
+                    related_file_id=None
+                )
+                
+                await session.commit()
+                logger.info(f"Created failure notification for admin {admin_id}, job {job_id}")
+        
+        except Exception as e:
+            logger.error(f"Failed to create failure notification: {e}", exc_info=True)
     
     async def _handle_embedding(self, job: Job) -> dict:
         """Handle embedding generation job."""

@@ -1,5 +1,4 @@
-"""
-CLI utility for managing background jobs.
+"""CLI utility for managing background jobs.
 
 Usage:
     python run_jobs.py retry-pending     # Retry all pending jobs
