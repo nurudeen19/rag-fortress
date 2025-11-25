@@ -7,19 +7,23 @@ Handlers delegate to service layer for:
 - Listing user conversations with pagination
 - Updating conversation metadata
 - Soft deleting conversations
+- Generating AI responses (with context retrieval and LLM routing)
 
 Service layer handles:
 - Business logic (query validation, authorization)
 - Serialization (model to dict)
 - Transaction management
 - Error handling
+- LLM orchestration (context, history, routing, generation)
 """
 
 import logging
-from typing import Optional
+from typing import Optional, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.conversation_service import ConversationService
+from app.services.conversation import ConversationService, get_conversation_response_service
+from app.models.user_permission import PermissionLevel
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -247,3 +251,98 @@ async def handle_get_conversation_context(
         user_id=user_id,
         last_n=last_n
     )
+
+
+# ============================================================================
+# AI RESPONSE GENERATION HANDLERS
+# ============================================================================
+
+async def handle_generate_response(
+    conversation_id: str,
+    user_id: int,
+    user_query: str,
+    user: User,
+    session: AsyncSession,
+    stream: bool = True
+) -> dict:
+    """
+    Handle AI response generation for user query.
+    
+    Complete flow:
+    1. Validate and save user message
+    2. Retrieve context from vector store
+    3. Load conversation history from cache
+    4. Route to appropriate LLM based on security
+    5. Generate response (streaming or complete)
+    6. Cache messages and save to database
+    
+    Args:
+        conversation_id: Conversation ID
+        user_id: User ID
+        user_query: User's query text
+        user: User object with permission information
+        session: Database session
+        stream: Whether to stream the response
+        
+    Returns:
+        Dict with success status, messages, and optional stream generator
+    """
+    logger.info(f"Generating AI response for conversation {conversation_id}")
+    
+    # Get user's effective clearance level
+    user_clearance = PermissionLevel.GENERAL
+    if user.permission:
+        user_clearance = user.permission.effective_permission_level
+    
+    # Get response service
+    response_service = get_conversation_response_service(session)
+    
+    # Generate response
+    return await response_service.generate_response(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        user_query=user_query,
+        user_clearance=user_clearance,
+        stream=stream
+    )
+
+
+async def handle_stream_response(
+    conversation_id: str,
+    user_id: int,
+    user_query: str,
+    user: User,
+    session: AsyncSession
+) -> AsyncGenerator[str, None]:
+    """
+    Handle streaming AI response generation.
+    
+    Convenience wrapper for handle_generate_response with streaming enabled.
+    Returns async generator that yields response chunks.
+    
+    Args:
+        conversation_id: Conversation ID
+        user_id: User ID
+        user_query: User's query text
+        user: User object with permission information
+        session: Database session
+        
+    Yields:
+        Response chunks as they're generated
+    """
+    result = await handle_generate_response(
+        conversation_id=conversation_id,
+        user_id=user_id,
+        user_query=user_query,
+        user=user,
+        session=session,
+        stream=True
+    )
+    
+    if result["success"] and result.get("streaming"):
+        async for chunk in result["generator"]:
+            yield chunk
+    else:
+        # If generation failed, yield error message
+        error_msg = result.get("error", "Unknown error occurred")
+        yield f"Error: {error_msg}"
