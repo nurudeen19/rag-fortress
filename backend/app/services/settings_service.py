@@ -1,5 +1,8 @@
 """
 Settings Service - Business logic for application settings operations.
+
+Handles encryption/decryption of sensitive settings (API keys, passwords).
+Updates invalidate memory cache and Redis cache for individual setting keys.
 """
 
 import json
@@ -10,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core import get_logger
 from app.models.application_setting import ApplicationSetting
-
+from app.utils.encryption import encrypt_value, decrypt_value
 
 logger = get_logger(__name__)
 
@@ -76,7 +79,7 @@ class SettingsService:
     
     async def get_value(self, key: str, default: Any = None) -> Any:
         """
-        Get setting value parsed by data type.
+        Get setting value parsed by data type (decrypts if sensitive).
         
         Args:
             key: Setting key
@@ -87,10 +90,12 @@ class SettingsService:
         """
         setting = await self.get_by_key(key)
         
-        if not setting:
+        if not setting or not setting.value:
             return default
         
-        return self._parse_value(setting.value, setting.data_type)
+        # Decrypt if sensitive
+        value = decrypt_value(setting.value) if setting.is_sensitive else setting.value
+        return self._parse_value(value, setting.data_type)
     
     async def create(
         self,
@@ -125,20 +130,29 @@ class SettingsService:
                 raise ValueError(f"Invalid data_type '{data_type}'. Must be one of: {', '.join(valid_types)}")
             
             # Validate value can be parsed
-            self._validate_value(value, data_type)
+            if value is not None:
+                self._validate_value(value, data_type)
+            
+            # Encrypt sensitive values (API keys, passwords)
+            is_sensitive = self._is_sensitive_key(key)
+            stored_value = encrypt_value(value) if (is_sensitive and value) else value
             
             setting = ApplicationSetting(
                 key=key,
-                value=value,
+                value=stored_value,
                 data_type=data_type,
                 description=description,
                 category=category,
-                is_mutable=is_mutable
+                is_mutable=is_mutable,
+                is_sensitive=is_sensitive
             )
             
             self.session.add(setting)
             await self.session.commit()
             await self.session.refresh(setting)
+            
+            # Invalidate cache after creation
+            await self._invalidate_cache()
             
             logger.info(f"Created setting '{key}' in category '{category}'")
             return setting
@@ -178,9 +192,14 @@ class SettingsService:
             # Validate new value matches data type
             self._validate_value(value, setting.data_type)
             
-            setting.value = value
+            # Encrypt if sensitive
+            stored_value = encrypt_value(value) if setting.is_sensitive else value
+            setting.value = stored_value
             await self.session.commit()
             await self.session.refresh(setting)
+            
+            # Invalidate cache after update
+            await self._invalidate_cache(key=key)
             
             logger.info(f"Updated setting '{key}' to value '{value}'")
             return setting
@@ -221,6 +240,10 @@ class SettingsService:
                 errors.append({"key": key, "error": str(e)})
                 logger.warning(f"Failed to update setting '{key}': {e}")
         
+        # Invalidate cache after bulk updates (even if some failed)
+        if success_count > 0:
+            await self._invalidate_cache()
+        
         logger.info(f"Bulk update completed: {success_count} success, {len(errors)} errors")
         
         return {
@@ -254,6 +277,9 @@ class SettingsService:
             
             await self.session.delete(setting)
             await self.session.commit()
+            
+            # Invalidate cache after deletion
+            await self._invalidate_cache(key=key)
             
             logger.info(f"Deleted setting '{key}'")
             return True
@@ -324,4 +350,53 @@ class SettingsService:
             # string always valid
         except (ValueError, json.JSONDecodeError) as e:
             raise ValueError(f"Value '{value}' is not valid {data_type}: {str(e)}")
+    
+    def _is_sensitive_key(self, key: str) -> bool:
+        """Check if a setting key contains sensitive data (API keys, passwords)."""
+        sensitive_keywords = [
+            "api_key", "api_token", "password", "secret",
+            "private_key", "auth_token", "access_token"
+        ]
+        return any(keyword in key.lower() for keyword in sensitive_keywords)
+    
+    async def _invalidate_cache(self, key: Optional[str] = None) -> None:
+        """
+        Invalidate setting cache after updates.
+        
+        Updates both:
+        1. In-memory cache (used by Pydantic config classes)
+        2. Redis cache (persisted across restarts)
+        
+        Args:
+            key: Specific setting key to invalidate, or None to reload all
+        """
+        try:
+            from app.core.settings_cache import load_settings_into_memory
+            from app.core.cache import get_cache
+            
+            # Reload all settings into memory cache
+            result = await self.session.execute(select(ApplicationSetting))
+            settings = result.scalars().all()
+            settings_dict = {setting.key: setting.value for setting in settings}
+            load_settings_into_memory(settings_dict)
+            
+            # Update Redis cache
+            cache = get_cache()
+            if key:
+                # Update specific key
+                cache_key = f"app_setting:{key}"
+                if key in settings_dict:
+                    await cache.set(cache_key, settings_dict[key], ttl=None)
+                else:
+                    await cache.delete(cache_key)
+                logger.debug(f"Invalidated cache for setting '{key}'")
+            else:
+                # Update all keys
+                for k, v in settings_dict.items():
+                    cache_key = f"app_setting:{k}"
+                    await cache.set(cache_key, v, ttl=None)
+                logger.debug("Invalidated all settings cache")
+            
+        except Exception as e:
+            logger.warning(f"Failed to invalidate cache: {e}")
 

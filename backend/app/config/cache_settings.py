@@ -13,6 +13,8 @@ class CacheSettings(BaseSettings):
     
     Supports both Redis (production) and in-memory (development) backends.
     Automatically falls back to in-memory if Redis is unavailable.
+    
+    Priority: DB (cached) → ENV → Field default
     """
     
     model_config = SettingsConfigDict(
@@ -20,6 +22,25 @@ class CacheSettings(BaseSettings):
         env_file_encoding="utf-8",
         extra="ignore",
     )
+    
+    def __init__(self, **kwargs):
+        """Initialize with optional cached database values."""
+        # Get cached settings from parent if available
+        cached = kwargs.get('_cached_settings', {}).get('cache', {})
+        
+        # Override with cached values (DB takes priority)
+        if 'cache_backend' in cached and cached['cache_backend']:
+            kwargs.setdefault('CACHE_BACKEND', cached['cache_backend'])
+        if 'cache_redis_host' in cached and cached['cache_redis_host']:
+            kwargs.setdefault('CACHE_REDIS_HOST', cached['cache_redis_host'])
+        if 'cache_redis_port' in cached and cached['cache_redis_port']:
+            kwargs.setdefault('CACHE_REDIS_PORT', int(cached['cache_redis_port']))
+        if 'cache_redis_db' in cached and cached['cache_redis_db']:
+            kwargs.setdefault('CACHE_REDIS_DB', int(cached['cache_redis_db']))
+        if 'cache_redis_password' in cached and cached['cache_redis_password']:
+            kwargs.setdefault('CACHE_REDIS_PASSWORD', cached['cache_redis_password'])
+        
+        super().__init__(**kwargs)
     
     # Cache Behavior
     CACHE_ENABLED: bool = Field(True, env="CACHE_ENABLED")

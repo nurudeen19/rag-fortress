@@ -18,6 +18,8 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
     
     This provides a unified interface to all application configuration while
     keeping the implementation modular and maintainable.
+    
+    Supports loading from database cache with priority: DB → ENV → defaults
     """
     
     model_config = SettingsConfigDict(
@@ -25,6 +27,20 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         env_file_encoding="utf-8",
         extra="ignore",
     )
+    
+    def __init__(self, cached_settings: dict = None, **kwargs):
+        """
+        Initialize settings with optional cached values from database.
+        
+        Args:
+            cached_settings: Dict of {category: {key: value}} from database
+            **kwargs: Additional override values
+        """
+        # Store cached settings for child classes to use
+        self._cached_settings = cached_settings or {}
+        
+        # Initialize parent classes (Pydantic will handle Field defaults)
+        super().__init__(**kwargs)
     
     def validate_all(self):
         """
@@ -48,5 +64,19 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         
         # Validate email configuration
         EmailSettings.validate_config(self)
+    
+    def get_cached_value(self, category: str, key: str) -> any:
+        """
+        Get a cached value from database settings.
+        
+        Args:
+            category: Setting category (llm, cache, email, etc.)
+            key: Setting key
+        
+        Returns:
+            Cached value or None
+        """
+        return self._cached_settings.get(category, {}).get(key)
 
+# Global settings instance (will be initialized with cached values at startup)
 settings = Settings()

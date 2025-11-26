@@ -19,8 +19,8 @@ class ApplicationSetting(Base):
     # Setting key (e.g., "max_document_size", "ingestion_batch_size")
     key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     
-    # Setting value as string
-    value: Mapped[str] = mapped_column(Text, nullable=False)
+    # Setting value as string (nullable - users provide values via UI)
+    value: Mapped[str] = mapped_column(Text, nullable=True)
     
     # Data type of the setting (string, integer, boolean, json)
     data_type: Mapped[str] = mapped_column(String(50), default="string", nullable=False)
@@ -30,6 +30,9 @@ class ApplicationSetting(Base):
     
     # Whether this setting can be modified through the API
     is_mutable: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    
+    # Whether this setting contains sensitive data (API keys, passwords) - will be encrypted
+    is_sensitive: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Category for grouping related settings
     category: Mapped[str] = mapped_column(String(100), nullable=True, index=True)

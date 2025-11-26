@@ -75,26 +75,29 @@ class StartupController:
             # ========== STEP 1: Database (CRITICAL) ==========
             await self._initialize_database()
             
-            # ========== STEP 2: Embedding Provider (CRITICAL) ==========
+            # ========== STEP 2: Cache (CRITICAL for settings) ==========
+            await self._initialize_cache()
+            
+            # ========== STEP 3: Load Settings from DB (CRITICAL) ==========
+            await self._load_db_settings()
+            
+            # ========== STEP 4: Embedding Provider (CRITICAL) ==========
             await self._initialize_embeddings()
             
-            # ========== STEP 3: Vector Store (CRITICAL) ==========
+            # ========== STEP 5: Vector Store (CRITICAL) ==========
             await self._initialize_vector_store()
             
-            # ========== STEP 4: Retriever (CRITICAL) ==========
+            # ========== STEP 6: Retriever (CRITICAL) ==========
             # await self._initialize_retriever()
             
-            # ========== STEP 5: LLM Provider (CRITICAL) ==========
+            # ========== STEP 7: LLM Provider (CRITICAL) ==========
             # await self._initialize_llm()
             # await self._initialize_fallback_llm()
             
-            # ========== STEP 6: Cache (OPTIONAL but RECOMMENDED) ==========
-            await self._initialize_cache()
-            
-            # ========== STEP 7: Email Client (OPTIONAL) ==========
+            # ========== STEP 8: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
             
-            # ========== STEP 8: Job Queue (OPTIONAL, at end) ==========
+            # ========== STEP 9: Job Queue (OPTIONAL, at end) ==========
             await self._initialize_job_queue()
 
             self.initialized = True
@@ -131,6 +134,35 @@ class StartupController:
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}", exc_info=True)
             raise
+    
+    async def _load_db_settings(self):
+        """Load settings from database grouped by category and cache them."""
+        logger.info("Loading settings from database...")
+        
+        try:
+            from app.core.settings_loader import load_settings_by_category
+            from app.core.cache import get_cache
+            from app.config.settings import Settings
+            
+            # Load settings from DB grouped by category
+            async with self.async_session_factory() as session:
+                cached_settings = await load_settings_by_category(session)
+            
+            # Cache them for fast access
+            if cached_settings and self.cache_manager:
+                cache = get_cache()
+                cache_key = "app_settings:all"
+                await cache.set(cache_key, cached_settings, ttl=None)  # No expiry
+                logger.info(f"✓ Cached {sum(len(v) for v in cached_settings.values())} settings")
+            
+            # Re-initialize global settings with cached values
+            from app.config import settings as settings_module
+            settings_module.settings = Settings(cached_settings=cached_settings)
+            logger.info("✓ Settings loaded with database values")
+            
+        except Exception as e:
+            logger.warning(f"⚠ Failed to load DB settings: {e}. Using ENV/defaults only.")
+            # Don't block startup - ENV variables still work
     
     async def _initialize_job_queue(self):
         """Initialize job queue (optional - catches errors without blocking startup)."""
