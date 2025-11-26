@@ -32,14 +32,27 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         """
         Initialize settings with optional cached values from database.
         
+        Priority for each setting:
+        1. Explicit kwargs (highest priority - for testing/overrides)
+        2. Cached DB values (loaded at startup)
+        3. Environment variables (Pydantic reads from os.environ)
+        4. Field defaults (lowest priority)
+        
         Args:
             cached_settings: Dict of {category: {key: value}} from database
-            **kwargs: Additional override values
+            **kwargs: Explicit override values (highest priority)
         """
-        # Store cached settings for child classes to use
-        self._cached_settings = cached_settings or {}
+        # Inject cached DB values into kwargs (but don't override explicit kwargs)
+        if cached_settings:
+            for category, settings_dict in cached_settings.items():
+                for key, value in settings_dict.items():
+                    if value is not None:  # Only use non-null DB values
+                        # Convert snake_case key to UPPER_CASE env var format
+                        env_var_name = key.upper()
+                        # Only set if not already in kwargs (explicit kwargs take priority)
+                        kwargs.setdefault(env_var_name, value)
         
-        # Initialize parent classes (Pydantic will handle Field defaults)
+        # Initialize parent classes - Pydantic will use: kwargs → ENV → Field default
         super().__init__(**kwargs)
     
     def validate_all(self):

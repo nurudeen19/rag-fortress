@@ -8,7 +8,7 @@ from app.seeders.knowledge_base import KnowledgeBaseSeeder
 from app.seeders.jobs import JobsSeeder
 from app.seeders.conversation import ConversationSeeder
 from app.seeders.activity_logs import ActivityLogsSeeder
-from app.seeders.application_settings_async import ApplicationSettingsSeeder
+from app.seeders.application_settings import ApplicationSettingsSeeder
 
 # Available seeders mapping
 SEEDERS = {

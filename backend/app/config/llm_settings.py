@@ -10,30 +10,10 @@ class LLMSettings(BaseSettings):
     """
     LLM provider configuration.
     
-    Priority: DB (cached, encrypted keys decrypted) → ENV → Field default
+    Priority: DB (cached, encrypted keys decrypted, set via Settings class) → ENV → Field default
     """
     
     model_config = SettingsConfigDict(extra="ignore")
-    
-    def __init__(self, **kwargs):
-        """Initialize with optional cached database values."""
-        # Get cached settings from parent if available
-        cached = kwargs.get('_cached_settings', {}).get('llm', {})
-        
-        # Override with cached values (DB takes priority)
-        # API keys are decrypted when loaded from DB
-        if 'llm_provider' in cached and cached['llm_provider']:
-            kwargs.setdefault('LLM_PROVIDER', cached['llm_provider'])
-        if 'openai_api_key' in cached and cached['openai_api_key']:
-            kwargs.setdefault('OPENAI_API_KEY', cached['openai_api_key'])
-        if 'openai_model' in cached and cached['openai_model']:
-            kwargs.setdefault('OPENAI_MODEL', cached['openai_model'])
-        if 'google_api_key' in cached and cached['google_api_key']:
-            kwargs.setdefault('GOOGLE_API_KEY', cached['google_api_key'])
-        if 'hf_api_token' in cached and cached['hf_api_token']:
-            kwargs.setdefault('HF_API_TOKEN', cached['hf_api_token'])
-        
-        super().__init__(**kwargs)
     
     # Provider selection
     LLM_PROVIDER: str = Field("openai", env="LLM_PROVIDER")
