@@ -1,8 +1,33 @@
 <template>
   <div class="h-full flex flex-col">
+    <!-- Header with Back Navigation -->
     <div class="mb-6">
-      <h1 class="text-2xl font-bold text-fortress-100 mb-2">Application Settings</h1>
-      <p class="text-fortress-400">Configure system-wide settings for LLM, embeddings, caching, and more.</p>
+      <div class="flex items-center gap-3 mb-3">
+        <router-link 
+          to="/configuration" 
+          class="p-2 hover:bg-fortress-700 rounded-lg transition-colors"
+          title="Back to System Settings"
+        >
+          <svg class="w-5 h-5 text-fortress-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+          </svg>
+        </router-link>
+        <div>
+          <h1 class="text-2xl font-bold text-fortress-100">Application Settings</h1>
+          <p class="text-fortress-400 text-sm">Configure system-wide settings for LLM, embeddings, caching, and more.</p>
+        </div>
+      </div>
+      <div class="p-3 bg-info/10 border border-info/30 rounded-lg text-sm text-fortress-300">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-info flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+          </svg>
+          <div>
+            <strong class="text-info">How it works:</strong> Make changes to any editable setting below. 
+            Changes are tracked and shown with a "Reset" button. Click "Save Changes" at the bottom to apply all modifications.
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Loading State -->
