@@ -67,15 +67,23 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
                         # Convert snake_case key to UPPER_CASE env var format
                         env_var_name = key.upper()
                         
+                        # Skip settings that don't exist as Pydantic fields
+                        # This filters out test settings while allowing all real settings
+                        try:
+                            model_fields = self.model_fields
+                            if env_var_name not in model_fields:
+                                continue  # Skip non-existent fields
+                        except AttributeError:
+                            pass  # Fallback if model_fields doesn't exist
+                        
                         if is_sensitive:
                             # Store encrypted value for lazy decryption
                             self._encrypted_settings[env_var_name] = value
                             # Mark this attribute as having encrypted override
                             self._encrypted_overrides[env_var_name] = True
                         else:
-                            # Non-sensitive: set directly if not already set
-                            if not hasattr(self, env_var_name) or getattr(self, env_var_name) is None:
-                                setattr(self, env_var_name, value)
+                            # Non-sensitive: DB value overrides ENV/defaults unconditionally
+                            setattr(self, env_var_name, value)
     
     def __getattribute__(self, name: str):
         """

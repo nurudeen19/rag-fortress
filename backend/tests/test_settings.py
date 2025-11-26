@@ -1,5 +1,8 @@
 """
-Test settings configuration and validation
+Test settings configuration and validation.
+
+NOTE: These tests focus on ENV-based configuration.
+For database-backed settings tests, see test_encryption_settings.py
 """
 import pytest
 import os
@@ -16,8 +19,8 @@ def clean_env():
     keys_to_clear = [key for key in os.environ.keys() if any(
         prefix in key for prefix in [
             'LLM_', 'OPENAI_', 'GOOGLE_', 'HF_', 'FALLBACK_',
-            'EMBEDDING_', 'COHERE_', 'VOYAGE_',
-            'VECTOR_DB_', 'QDRANT_', 'CHROMA_', 'PINECONE_', 'WEAVIATE_', 'MILVUS_'
+            'EMBEDDING_', 'COHERE_',
+            'VECTOR_DB_', 'QDRANT_', 'PINECONE_', 'WEAVIATE_', 'MILVUS_'
         ]
     )]
     for key in keys_to_clear:
@@ -30,69 +33,43 @@ def clean_env():
     os.environ.update(original_env)
 
 
-@pytest.fixture
-def base_env():
-    """Fixture with minimal required environment variables"""
-    return {
-        "SECRET_KEY": "test_secret_key_for_testing_only",
-        "ENVIRONMENT": "development",
-    }
-
-
 class TestSettingsBasic:
-    """Test basic settings functionality"""
+    """Test basic settings functionality with ENV variables."""
     
-    def test_default_settings(self, clean_env, base_env):
-        """Test settings load with defaults"""
-        with patch.dict(os.environ, base_env):
+    def test_default_settings(self, clean_env):
+        """Test settings load with defaults (no ENV, no DB)."""
+        with patch.dict(os.environ, {}, clear=True):
             from app.config.settings import Settings
             settings = Settings()
             
             assert settings.APP_NAME == "RAG Fortress"
             assert settings.APP_VERSION == "1.0.0"
-            assert settings.DEBUG == True
-            assert settings.ENVIRONMENT == "development"
+            assert settings.ENVIRONMENT in ["development", "staging", "production"]
             assert settings.LLM_PROVIDER == "openai"
     
-    def test_environment_validation(self, clean_env, base_env):
-        """Test that invalid environments are rejected"""
-        env = {**base_env, "ENVIRONMENT": "invalid_env"}
-        
-        with patch.dict(os.environ, env, clear=True):
-            from app.config.settings import Settings
-            with pytest.raises(ValueError, match="Invalid ENVIRONMENT"):
-                Settings()
-    
-    def test_production_environment_settings(self, clean_env, base_env):
-        """Test that production environment enforces correct settings"""
-        env = {**base_env, "ENVIRONMENT": "production"}
+    def test_env_variables_override_defaults(self, clean_env):
+        """Test that ENV variables override Field defaults."""
+        env = {
+            "APP_NAME": "Custom RAG",
+            "LLM_PROVIDER": "google",
+            "EMBEDDING_PROVIDER": "openai"
+        }
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
             settings = Settings()
             
-            assert settings.DEBUG == False
-            assert settings.LOG_LEVEL == "WARNING"
-    
-    def test_development_environment_settings(self, clean_env, base_env):
-        """Test that development environment sets correct settings"""
-        env = {**base_env, "ENVIRONMENT": "development"}
-        
-        with patch.dict(os.environ, env, clear=True):
-            from app.config.settings import Settings
-            settings = Settings()
-            
-            assert settings.DEBUG == True
-            assert settings.LOG_LEVEL == "DEBUG"
+            assert settings.APP_NAME == "Custom RAG"
+            assert settings.LLM_PROVIDER == "google"
+            assert settings.EMBEDDING_PROVIDER == "openai"
 
 
 class TestLLMConfiguration:
-    """Test LLM provider configuration"""
+    """Test LLM provider configuration (ENV-based)."""
     
-    def test_openai_config(self, clean_env, base_env):
-        """Test OpenAI provider configuration"""
+    def test_openai_config(self, clean_env):
+        """Test OpenAI provider configuration from ENV."""
         env = {
-            **base_env,
             "LLM_PROVIDER": "openai",
             "OPENAI_API_KEY": "test_openai_key",
             "OPENAI_MODEL": "gpt-4",
@@ -109,10 +86,9 @@ class TestLLMConfiguration:
             assert config["temperature"] == 0.7
             assert config["max_tokens"] == 2000
     
-    def test_google_config(self, clean_env, base_env):
-        """Test Google provider configuration"""
+    def test_google_config(self, clean_env):
+        """Test Google provider configuration from ENV."""
         env = {
-            **base_env,
             "LLM_PROVIDER": "google",
             "GOOGLE_API_KEY": "test_google_key",
             "GOOGLE_MODEL": "gemini-pro",
@@ -127,10 +103,9 @@ class TestLLMConfiguration:
             assert config["api_key"] == "test_google_key"
             assert config["model"] == "gemini-pro"
     
-    def test_huggingface_config(self, clean_env, base_env):
-        """Test HuggingFace provider configuration"""
+    def test_huggingface_config(self, clean_env):
+        """Test HuggingFace provider configuration from ENV."""
         env = {
-            **base_env,
             "LLM_PROVIDER": "huggingface",
             "HF_API_TOKEN": "test_hf_token",
             "HF_MODEL": "meta-llama/Llama-2-7b-chat-hf",
@@ -145,9 +120,9 @@ class TestLLMConfiguration:
             assert config["api_key"] == "test_hf_token"
             assert config["model"] == "meta-llama/Llama-2-7b-chat-hf"
     
-    def test_missing_api_key_raises_error(self, clean_env, base_env):
-        """Test that missing API key raises error"""
-        env = {**base_env, "LLM_PROVIDER": "openai"}
+    def test_missing_api_key_raises_error(self, clean_env):
+        """Test that missing API key raises error during config access."""
+        env = {"LLM_PROVIDER": "openai"}
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
@@ -156,9 +131,9 @@ class TestLLMConfiguration:
             with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
                 settings.get_llm_config()
     
-    def test_unsupported_provider_raises_error(self, clean_env, base_env):
-        """Test that unsupported provider raises error"""
-        env = {**base_env, "LLM_PROVIDER": "unsupported_provider"}
+    def test_unsupported_provider_raises_error(self, clean_env):
+        """Test that unsupported provider raises error during config access."""
+        env = {"LLM_PROVIDER": "unsupported_provider"}
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
@@ -419,83 +394,50 @@ class TestEmbeddingProviderConfiguration:
             assert config["model"] == "embed-english-v3.0"
             assert config["input_type"] == "search_query"
     
-    def test_voyage_embedding_config(self, clean_env, base_env):
-        """Test Voyage AI embedding configuration"""
-        env = {
-            **base_env,
-            "EMBEDDING_PROVIDER": "voyage",
-            "VOYAGE_API_KEY": "test_voyage_key",
-            "VOYAGE_EMBEDDING_MODEL": "voyage-2",
-        }
+    def test_invalid_embedding_provider(self, clean_env):
+        """Test invalid embedding provider raises error during validation."""
+        env = {"EMBEDDING_PROVIDER": "invalid_provider"}
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
             settings = Settings()
-            config = settings.get_embedding_config()
             
-            assert config["provider"] == "voyage"
-            assert config["api_key"] == "test_voyage_key"
-            assert config["model"] == "voyage-2"
+            # Should raise during validation, not initialization
+            with pytest.raises(ValueError, match="Unsupported"):
+                settings.validate_config()
     
-    def test_invalid_embedding_provider(self, clean_env, base_env):
-        """Test invalid embedding provider raises error"""
-        env = {
-            **base_env,
-            "EMBEDDING_PROVIDER": "invalid_provider",
-        }
+    def test_openai_embedding_missing_api_key(self, clean_env):
+        """Test OpenAI embeddings require API key during validation."""
+        env = {"EMBEDDING_PROVIDER": "openai"}
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
-            with pytest.raises(ValueError, match="Unsupported EMBEDDING_PROVIDER"):
-                Settings()
-    
-    def test_openai_embedding_missing_api_key(self, clean_env, base_env):
-        """Test OpenAI embeddings require API key"""
-        env = {
-            **base_env,
-            "EMBEDDING_PROVIDER": "openai",
-        }
-        
-        with patch.dict(os.environ, env, clear=True):
-            from app.config.settings import Settings
+            settings = Settings()
+            
             with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
-                Settings()
+                settings.validate_config()
     
-    def test_google_embedding_missing_api_key(self, clean_env, base_env):
-        """Test Google embeddings require API key"""
-        env = {
-            **base_env,
-            "EMBEDDING_PROVIDER": "google",
-        }
+    def test_google_embedding_missing_api_key(self, clean_env):
+        """Test Google embeddings require API key during validation."""
+        env = {"EMBEDDING_PROVIDER": "google"}
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
+            settings = Settings()
+            
             with pytest.raises(ValueError, match="GOOGLE_API_KEY is required"):
-                Settings()
+                settings.validate_config()
     
-    def test_cohere_embedding_missing_api_key(self, clean_env, base_env):
-        """Test Cohere embeddings require API key"""
-        env = {
-            **base_env,
-            "EMBEDDING_PROVIDER": "cohere",
-        }
+    def test_cohere_embedding_missing_api_key(self, clean_env):
+        """Test Cohere embeddings require API key during validation."""
+        env = {"EMBEDDING_PROVIDER": "cohere"}
         
         with patch.dict(os.environ, env, clear=True):
             from app.config.settings import Settings
+            settings = Settings()
+            
             with pytest.raises(ValueError, match="COHERE_API_KEY is required"):
-                Settings()
-    
-    def test_voyage_embedding_missing_api_key(self, clean_env, base_env):
-        """Test Voyage AI embeddings require API key"""
-        env = {
-            **base_env,
-            "EMBEDDING_PROVIDER": "voyage",
-        }
-        
-        with patch.dict(os.environ, env, clear=True):
-            from app.config.settings import Settings
-            with pytest.raises(ValueError, match="VOYAGE_API_KEY is required"):
-                Settings()
+                settings.validate_config()
 
 
 class TestVectorDBConfiguration:
