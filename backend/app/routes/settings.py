@@ -9,6 +9,7 @@ from app.core.security import require_role
 from app.models.user import User
 from app.schemas.settings import (
     SettingResponse,
+    SettingCreateRequest,
     SettingUpdateRequest,
     SettingBulkUpdateRequest,
     SettingBulkUpdateResponse
@@ -16,6 +17,7 @@ from app.schemas.settings import (
 from app.handlers.settings import (
     handle_get_all_settings,
     handle_get_setting,
+    handle_create_setting,
     handle_update_setting,
     handle_update_settings_bulk,
     handle_get_categories
@@ -117,6 +119,38 @@ async def update_setting(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update setting: {str(e)}"
+        )
+
+
+@router.post("/", response_model=SettingResponse)
+async def create_setting(
+    request: SettingCreateRequest,
+    admin_user: User = Depends(require_role("admin")),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Create a new setting.
+    
+    Sensitive settings (API keys, passwords, secrets) are automatically encrypted.
+    Creates the setting and invalidates cache.
+    
+    **Requires:** Admin role
+    
+    **Returns:**
+    - Created setting details
+    """
+    try:
+        setting = await handle_create_setting(request, session)
+        return setting
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create setting: {str(e)}"
         )
 
 

@@ -37,6 +37,7 @@ async def handle_get_all_settings(
                 "description": s.description,
                 "category": s.category,
                 "is_mutable": s.is_mutable,
+                "is_sensitive": s.is_sensitive,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "updated_at": s.updated_at.isoformat() if s.updated_at else None
             }
@@ -77,12 +78,56 @@ async def handle_get_setting(
             "description": setting.description,
             "category": setting.category,
             "is_mutable": setting.is_mutable,
+            "is_sensitive": setting.is_sensitive,
             "created_at": setting.created_at.isoformat() if setting.created_at else None,
             "updated_at": setting.updated_at.isoformat() if setting.updated_at else None
         }
         
     except Exception as e:
         logger.error(f"Handle get setting '{key}' failed: {e}", exc_info=True)
+        raise
+
+
+async def handle_create_setting(
+    request,
+    session: AsyncSession
+) -> Dict:
+    """
+    Create a new setting.
+    
+    Args:
+        request: SettingCreateRequest with setting details
+        session: Database session
+        
+    Returns:
+        Created setting dict
+    """
+    try:
+        service = SettingsService(session)
+        setting = await service.create(
+            key=request.key,
+            value=request.value,
+            data_type=request.data_type,
+            description=request.description,
+            category=request.category,
+            is_mutable=request.is_mutable
+        )
+        
+        return {
+            "id": setting.id,
+            "key": setting.key,
+            "value": setting.value,
+            "data_type": setting.data_type,
+            "description": setting.description,
+            "category": setting.category,
+            "is_mutable": setting.is_mutable,
+            "is_sensitive": setting.is_sensitive,
+            "created_at": setting.created_at.isoformat() if setting.created_at else None,
+            "updated_at": setting.updated_at.isoformat() if setting.updated_at else None
+        }
+        
+    except Exception as e:
+        logger.error(f"Handle create setting failed: {e}", exc_info=True)
         raise
 
 
@@ -114,6 +159,7 @@ async def handle_update_setting(
             "description": setting.description,
             "category": setting.category,
             "is_mutable": setting.is_mutable,
+            "is_sensitive": setting.is_sensitive,
             "created_at": setting.created_at.isoformat() if setting.created_at else None,
             "updated_at": setting.updated_at.isoformat() if setting.updated_at else None
         }

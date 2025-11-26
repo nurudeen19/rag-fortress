@@ -13,8 +13,19 @@ class SettingResponse(BaseModel):
     description: Optional[str] = None
     category: Optional[str] = None
     is_mutable: bool
+    is_sensitive: bool = False
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
+
+
+class SettingCreateRequest(BaseModel):
+    """Setting creation request schema."""
+    key: str = Field(..., description="Unique setting key (lowercase_with_underscores)")
+    value: str = Field(..., description="Setting value")
+    data_type: str = Field("string", description="Data type: string, integer, boolean, json, float")
+    description: Optional[str] = Field(None, description="Human-readable description")
+    category: Optional[str] = Field(None, description="Category for grouping")
+    is_mutable: bool = Field(True, description="Whether setting can be modified")
 
 
 class SettingUpdateRequest(BaseModel):
