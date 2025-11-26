@@ -14,24 +14,24 @@ from app.core import get_logger
 logger = get_logger(__name__)
 
 
-async def load_settings_by_category(session: AsyncSession) -> Dict[str, Dict[str, str]]:
+async def load_settings_by_category(session: AsyncSession) -> Dict[str, Dict[str, dict]]:
     """
     Load all settings from database grouped by category.
     
-    Decrypts sensitive values (API keys, passwords) on load.
+    SECURITY: Keeps sensitive values encrypted. Decryption happens only when accessed.
     
     Args:
         session: Database session
     
     Returns:
-        Dict of {category: {key: value}}
-        Example: {"llm": {"openai_api_key": "sk-...", "llm_model": "gpt-4"}}
+        Dict of {category: {key: {"value": str, "is_sensitive": bool}}}
+        Example: {"llm": {"openai_api_key": {"value": "encrypted...", "is_sensitive": True}}}
     """
     try:
         result = await session.execute(select(ApplicationSetting))
         settings = result.scalars().all()
         
-        # Group by category
+        # Group by category with metadata
         grouped = {}
         for setting in settings:
             if not setting.category:
@@ -40,12 +40,12 @@ async def load_settings_by_category(session: AsyncSession) -> Dict[str, Dict[str
             if setting.category not in grouped:
                 grouped[setting.category] = {}
             
-            # Decrypt if sensitive and has value
-            value = setting.value
-            if value and setting.is_sensitive:
-                value = decrypt_value(value)
-            
-            grouped[setting.category][setting.key] = value
+            # Store encrypted value with is_sensitive flag
+            # Decryption will happen lazily when accessed
+            grouped[setting.category][setting.key] = {
+                "value": setting.value,
+                "is_sensitive": setting.is_sensitive
+            }
         
         logger.info(f"Loaded {len(settings)} settings across {len(grouped)} categories")
         return grouped

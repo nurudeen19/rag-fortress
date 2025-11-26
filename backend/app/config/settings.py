@@ -32,28 +32,76 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         """
         Initialize settings with optional cached values from database.
         
+        SECURITY: Sensitive values remain encrypted until accessed.
+        
         Priority for each setting:
         1. Explicit kwargs (highest priority - for testing/overrides)
-        2. Cached DB values (loaded at startup)
+        2. Cached DB values (loaded at startup, decrypted on access)
         3. Environment variables (Pydantic reads from os.environ)
         4. Field defaults (lowest priority)
         
         Args:
-            cached_settings: Dict of {category: {key: value}} from database
+            cached_settings: Dict of {category: {key: {"value": str, "is_sensitive": bool}}}
             **kwargs: Explicit override values (highest priority)
         """
-        # Inject cached DB values into kwargs (but don't override explicit kwargs)
+        # Initialize parent first so Pydantic sets up attributes
+        super().__init__(**kwargs)
+        
+        # NOW store encrypted metadata for lazy decryption (after Pydantic init)
+        self._encrypted_settings = {}
+        self._encrypted_overrides = {}  # Track which attrs have encrypted overrides
+        
+        # Process cached DB values
         if cached_settings:
             for category, settings_dict in cached_settings.items():
-                for key, value in settings_dict.items():
+                for key, metadata in settings_dict.items():
+                    if isinstance(metadata, dict):
+                        value = metadata.get("value")
+                        is_sensitive = metadata.get("is_sensitive", False)
+                    else:
+                        # Backward compatibility: plain value
+                        value = metadata
+                        is_sensitive = False
+                    
                     if value is not None:  # Only use non-null DB values
                         # Convert snake_case key to UPPER_CASE env var format
                         env_var_name = key.upper()
-                        # Only set if not already in kwargs (explicit kwargs take priority)
-                        kwargs.setdefault(env_var_name, value)
+                        
+                        if is_sensitive:
+                            # Store encrypted value for lazy decryption
+                            self._encrypted_settings[env_var_name] = value
+                            # Mark this attribute as having encrypted override
+                            self._encrypted_overrides[env_var_name] = True
+                        else:
+                            # Non-sensitive: set directly if not already set
+                            if not hasattr(self, env_var_name) or getattr(self, env_var_name) is None:
+                                setattr(self, env_var_name, value)
+    
+    def __getattribute__(self, name: str):
+        """
+        Override attribute access to decrypt sensitive values on-demand.
         
-        # Initialize parent classes - Pydantic will use: kwargs → ENV → Field default
-        super().__init__(**kwargs)
+        SECURITY: Decryption happens only when value is accessed, keeping
+        encrypted values in cache/memory until needed.
+        """
+        # Check if this is an encrypted setting that needs decryption
+        # Must check BEFORE getting the value to avoid infinite recursion
+        try:
+            encrypted_overrides = super().__getattribute__('_encrypted_overrides')
+            if name in encrypted_overrides:
+                # This attribute has an encrypted override - decrypt it
+                encrypted_settings = super().__getattribute__('_encrypted_settings')
+                encrypted_value = encrypted_settings[name]
+                
+                # Decrypt on access (happens in-process, not stored anywhere)
+                from app.utils.encryption import decrypt_value
+                return decrypt_value(encrypted_value)
+        except (AttributeError, KeyError):
+            # _encrypted_overrides not initialized yet, or key not encrypted
+            pass
+        
+        # Get the attribute normally
+        return super().__getattribute__(name)
     
     def validate_all(self):
         """
