@@ -31,6 +31,7 @@ from app.services.user import (
 )
 from app.core.startup import get_startup_controller
 from app.models.job import JobType
+from app.utils.user_clearance_cache import get_user_clearance_cache
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,16 @@ async def handle_login(
         # Calculate token expiry timestamp
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         expires_at = datetime.now(timezone.utc) + expires_delta
+        
+        # Cache user clearance (security level with overrides, department info)
+        clearance_cache = get_user_clearance_cache(session)
+        clearance = await clearance_cache.get_clearance(user.id)
+        if clearance:
+            logger.info(
+                f"Cached clearance for user {user.id}: "
+                f"level={clearance['security_level']}, "
+                f"department={clearance['department_name']}"
+            )
         
         # Format roles
         roles = [

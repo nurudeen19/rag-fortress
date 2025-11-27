@@ -112,6 +112,12 @@ class PermissionService:
 
         db.add(override)
         await db.flush()
+        
+        # Invalidate clearance cache since permission changed
+        from app.utils.user_clearance_cache import get_user_clearance_cache
+        clearance_cache = get_user_clearance_cache(db)
+        await clearance_cache.invalidate(user_id)
+        
         return override
 
     @staticmethod
@@ -135,8 +141,15 @@ class PermissionService:
         """
         override = await db.get(PermissionOverride, override_id)
         if override:
+            user_id = override.user_id
             override.revoke()
             await db.flush()
+            
+            # Invalidate clearance cache since permission changed
+            from app.utils.user_clearance_cache import get_user_clearance_cache
+            clearance_cache = get_user_clearance_cache(db)
+            await clearance_cache.invalidate(user_id)
+        
         return override
 
     @staticmethod
@@ -169,9 +182,19 @@ class PermissionService:
         )
         expired = result.scalars().all()
 
-        # Mark as inactive
-        for override in expired:
-            override.is_active = False
+        # Mark as inactive and invalidate caches
+        if expired:
+            from app.utils.user_clearance_cache import get_user_clearance_cache
+            clearance_cache = get_user_clearance_cache(db)
+            
+            affected_users = set()
+            for override in expired:
+                override.is_active = False
+                affected_users.add(override.user_id)
+            
+            # Invalidate cache for all affected users
+            for user_id in affected_users:
+                await clearance_cache.invalidate(user_id)
 
         await db.flush()
         return len(expired)

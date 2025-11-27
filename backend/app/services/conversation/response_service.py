@@ -145,29 +145,27 @@ class ConversationResponseService:
         """
         Get user info from cache (clearance, department).
         
-        TODO: Implement cache lookup. For now, this should be set after login
-        with any permission overrides applied.
+        Fetches from clearance cache which includes security level with overrides.
+        If not cached, automatically fetches from DB and caches it.
         
         Returns:
             Dict with 'clearance' (PermissionLevel) and 'department_id' (int or None)
         """
         try:
-            import json
+            from app.utils.user_clearance_cache import get_user_clearance_cache
             
-            cache_key = f"user:info:{user_id}"
-            cached_data = await self.cache.get(cache_key)
+            clearance_cache = get_user_clearance_cache(self.session)
+            clearance = await clearance_cache.get_clearance(user_id)
             
-            if cached_data:
-                data = json.loads(cached_data)
-                return {
-                    "clearance": PermissionLevel[data["clearance"]],
-                    "department_id": data.get("department_id")
-                }
+            if not clearance:
+                logger.warning(f"User clearance not found for user_id={user_id}")
+                return None
             
-            # If not in cache, fetch from DB and cache it
-            # TODO: Implement DB fetch and cache
-            logger.warning(f"User info not in cache for user_id={user_id}")
-            return None
+            # Convert security level string to PermissionLevel enum
+            return {
+                "clearance": PermissionLevel[clearance["security_level"]],
+                "department_id": clearance["department_id"]
+            }
         
         except Exception as e:
             logger.error(f"Failed to get user info: {e}")
