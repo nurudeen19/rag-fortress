@@ -1,28 +1,22 @@
 """
 Conversation Response Generation Service
 
-Handles the complete flow for generating AI responses:
-1. Retrieves relevant context from vector store
-2. Manages conversation history in Redis cache (last 3 exchanges = 6 messages)
-3. Routes to appropriate LLM based on security levels
-4. Generates and streams response
-5. Saves response to database as long-form history
-
-This service separates LLM orchestration from message persistence,
-keeping the conversation_service focused on CRUD operations.
+Simple orchestration:
+1. Get user info (clearance, department) from cache
+2. Retrieve context with user credentials  
+3. Route to appropriate LLM based on document security levels
+4. Get conversation history
+5. Generate streaming response using LangChain
+6. Return stream or error
 """
 
-import json
-import logging
-from typing import Dict, Any, List, Optional, AsyncGenerator
-from datetime import timedelta
+from typing import Dict, Any, AsyncGenerator, Optional, List
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.core.cache import get_cache
 from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm_router_service import get_llm_router
-from app.services.conversation.service import ConversationService
-from app.services import activity_logger_service
-from app.models.message import MessageRole
 from app.models.user_permission import PermissionLevel
 from app.core import get_logger
 
@@ -31,617 +25,320 @@ logger = get_logger(__name__)
 
 class ConversationResponseService:
     """
-    Orchestrates AI response generation for conversations.
+    Simple orchestrator for AI response generation.
     
-    Flow:
-    1. Validate query (handled by conversation_service.add_message)
-    2. Retrieve context from vector store
-    3. Load conversation history from cache (last 3 exchanges)
-    4. Route to appropriate LLM based on security
-    5. Generate response (streaming)
-    6. Cache user message and assistant response
-    7. Save response to database
+    Flow: User info → Context retrieval → LLM routing → History → Stream response
     """
     
-    # Cache configuration
-    HISTORY_MAX_EXCHANGES = 3  # Store last 3 exchanges (6 messages)
-    HISTORY_TTL = timedelta(hours=24)  # Cache expires after 24 hours
-    
     def __init__(self, session):
-        """
-        Initialize response service.
-        
-        Args:
-            session: Database session for conversation operations
-        """
         self.session = session
-        self.conversation_service = ConversationService(session)
-        self.retriever_service = get_retriever_service()
+        self.retriever = get_retriever_service()
         self.llm_router = get_llm_router()
         self.cache = get_cache()
-    
-    # ==================== Cache Management ====================
-    
-    def _get_history_cache_key(self, conversation_id: str) -> str:
-        """Generate cache key for conversation history."""
-        return f"conversation:history:{conversation_id}"
-    
-    async def _get_cached_history(self, conversation_id: str) -> List[Dict[str, str]]:
-        """
-        Retrieve conversation history from cache.
-        
-        Args:
-            conversation_id: Conversation ID
-            
-        Returns:
-            List of message dicts with 'role' and 'content'
-        """
-        try:
-            cache_key = self._get_history_cache_key(conversation_id)
-            cached_data = await self.cache.get(cache_key)
-            
-            if cached_data:
-                history = json.loads(cached_data)
-                logger.info(f"Retrieved {len(history)} messages from cache for conversation {conversation_id}")
-                return history
-            
-            logger.info(f"No cached history found for conversation {conversation_id}")
-            return []
-        
-        except Exception as e:
-            logger.warning(f"Failed to retrieve cached history: {e}")
-            return []
-    
-    async def _add_to_cache_history(
-        self, 
-        conversation_id: str, 
-        role: str, 
-        content: str
-    ) -> None:
-        """
-        Add message to cached history, maintaining max exchanges limit.
-        
-        Args:
-            conversation_id: Conversation ID
-            role: Message role (USER, ASSISTANT, SYSTEM)
-            content: Message content
-        """
-        try:
-            # Get current history
-            history = await self._get_cached_history(conversation_id)
-            
-            # Add new message
-            history.append({
-                "role": role,
-                "content": content
-            })
-            
-            # Keep only last N exchanges (2*N messages)
-            max_messages = self.HISTORY_MAX_EXCHANGES * 2
-            if len(history) > max_messages:
-                history = history[-max_messages:]
-            
-            # Save back to cache
-            cache_key = self._get_history_cache_key(conversation_id)
-            ttl_seconds = int(self.HISTORY_TTL.total_seconds())
-            await self.cache.set(
-                cache_key,
-                json.dumps(history),
-                ttl=ttl_seconds
-            )
-            
-            logger.info(
-                f"Added {role} message to cache for conversation {conversation_id} "
-                f"(total: {len(history)} messages)"
-            )
-        
-        except Exception as e:
-            logger.error(f"Failed to cache message: {e}")
-            # Don't fail the request if caching fails
-    
-    async def _clear_cache_history(self, conversation_id: str) -> None:
-        """Clear cached history for conversation."""
-        try:
-            cache_key = self._get_history_cache_key(conversation_id)
-            await self.cache.delete(cache_key)
-            logger.info(f"Cleared cached history for conversation {conversation_id}")
-        except Exception as e:
-            logger.warning(f"Failed to clear cached history: {e}")
-    
-    # ==================== Activity Logging ====================
-    
-    async def _log_clearance_violation(
-        self,
-        user_id: int,
-        user_clearance: PermissionLevel,
-        max_doc_level: PermissionLevel,
-        query: str,
-        doc_count: int,
-        conversation_id: Optional[str] = None
-    ) -> None:
-        """
-        Log activity when user accesses documents above their clearance level.
-        
-        Args:
-            user_id: User ID
-            user_clearance: User's clearance level
-            max_doc_level: Maximum security level in retrieved documents
-            query: User's query text
-            doc_count: Number of documents retrieved
-            conversation_id: Optional conversation ID
-        """
-        try:
-            severity = "warning" if max_doc_level == user_clearance.next_level() else "critical"
-            
-            await activity_logger_service.log_activity(
-                db=self.session,
-                user_id=user_id,
-                incident_type="insufficient_clearance",
-                severity=severity,
-                description=f"User accessed {doc_count} document(s) above clearance level",
-                details={
-                    "user_clearance_level": user_clearance.name,
-                    "max_document_level": max_doc_level.name,
-                    "document_count": doc_count,
-                    "conversation_id": conversation_id,
-                    "clearance_gap": max_doc_level.value - user_clearance.value
-                },
-                user_clearance_level=user_clearance.name,
-                required_clearance_level=max_doc_level.name,
-                access_granted=True,  # Documents were retrieved but flagged
-                user_query=query[:500]  # Truncate long queries
-            )
-            
-            logger.warning(
-                f"Clearance violation logged: user_id={user_id}, "
-                f"user_level={user_clearance.name}, "
-                f"doc_level={max_doc_level.name}, "
-                f"docs={doc_count}"
-            )
-        
-        except Exception as e:
-            logger.error(f"Failed to log clearance violation: {e}", exc_info=True)
-            # Don't fail request if logging fails
-    
-    async def _log_access_denial(
-        self,
-        user_id: int,
-        user_clearance: Optional[PermissionLevel],
-        user_department_id: Optional[int],
-        query: str,
-        error_type: str,
-        error_details: Dict[str, Any],
-        conversation_id: Optional[str] = None
-    ) -> None:
-        """
-        Log activity when user is denied access to documents.
-        
-        Args:
-            user_id: User ID
-            user_clearance: User's clearance level
-            user_department_id: User's department ID
-            query: User's query text
-            error_type: Type of access denial (insufficient_clearance, department_mismatch, etc.)
-            error_details: Full error details from retriever
-            conversation_id: Optional conversation ID
-        """
-        try:
-            # Determine severity based on error type
-            severity = "warning" if error_type == "department_mismatch" else "info"
-            
-            details = {
-                "user_clearance_level": user_clearance.name if user_clearance else "NONE",
-                "user_department_id": user_department_id,
-                "error_type": error_type,
-                "conversation_id": conversation_id,
-                "blocked_count": error_details.get("count", 0)
-            }
-            
-            # Add specific blocking details
-            if "blocked_by_clearance" in error_details:
-                details["blocked_by_clearance"] = error_details["blocked_by_clearance"]
-            if "blocked_by_department" in error_details:
-                details["blocked_by_department"] = error_details["blocked_by_department"]
-            
-            await activity_logger_service.log_activity(
-                db=self.session,
-                user_id=user_id,
-                incident_type="access_denied",
-                severity=severity,
-                description=f"User denied access to documents: {error_details.get('message', 'Unknown reason')}",
-                details=details,
-                user_clearance_level=user_clearance.name if user_clearance else None,
-                access_granted=False,
-                user_query=query[:500]  # Truncate long queries
-            )
-            
-            logger.info(
-                f"Access denial logged: user_id={user_id}, "
-                f"error_type={error_type}, "
-                f"clearance={user_clearance.name if user_clearance else 'NONE'}, "
-                f"department={user_department_id}"
-            )
-        
-        except Exception as e:
-            logger.error(f"Failed to log access denial: {e}", exc_info=True)
-            # Don't fail request if logging fails
-    
-    # ==================== Context Retrieval ====================
-    
-    async def _retrieve_context(
-        self, 
-        query: str, 
-        top_k: int = 5,
-        user_clearance: Optional[PermissionLevel] = None,
-        user_department_id: Optional[int] = None,
-        user_id: Optional[int] = None,
-        conversation_id: Optional[str] = None
-    ) -> tuple[List[Dict[str, Any]], List[PermissionLevel], bool]:
-        """
-        Retrieve relevant context from vector store with security filtering.
-        
-        Args:
-            query: User query
-            top_k: Number of documents to retrieve
-            user_clearance: User's clearance level for filtering
-            user_department_id: User's department ID for department-based filtering
-            user_id: User ID for activity logging
-            conversation_id: Conversation ID for activity logging
-            
-        Returns:
-            Tuple of (formatted_docs, security_levels, clearance_violation)
-            
-        Note:
-            Security filtering is now handled by the retriever service.
-            Clearance violations are blocked at retrieval time.
-        """
-        try:
-            # Retrieve documents with security filtering
-            retrieval_result = self.retriever_service.query(
-                query_text=query,
-                top_k=top_k,
-                user_security_level=user_clearance.value if user_clearance else None,
-                user_department_id=user_department_id
-            )
-            
-            # Handle retrieval failures
-            if not retrieval_result["success"]:
-                error_type = retrieval_result.get("error", "unknown")
-                error_msg = retrieval_result.get("message", "Unknown error")
-                
-                logger.warning(
-                    f"Document retrieval failed: {error_type} - {error_msg}"
-                )
-                
-                # Log access denial for audit
-                if error_type in ["insufficient_clearance", "department_mismatch", "access_denied"]:
-                    if user_id:
-                        await self._log_access_denial(
-                            user_id=user_id,
-                            user_clearance=user_clearance,
-                            user_department_id=user_department_id,
-                            query=query,
-                            error_type=error_type,
-                            error_details=retrieval_result,
-                            conversation_id=conversation_id
-                        )
-                
-                # Return empty results - caller will handle gracefully
-                return [], [], True  # clearance_violation=True to indicate access issue
-            
-            # Successful retrieval - extract documents
-            documents = retrieval_result["context"]
-            
-            # Extract security levels and format documents
-            security_levels = []
-            formatted_docs = []
-            
-            for doc in documents:
-                # Extract security level from metadata
-                security_level_str = doc.metadata.get("security_level", "GENERAL")
-                try:
-                    security_level = PermissionLevel[security_level_str]
-                except KeyError:
-                    security_level = PermissionLevel.GENERAL
-                
-                security_levels.append(security_level)
-                
-                # Format document for LLM
-                formatted_docs.append({
-                    "content": doc.page_content,
-                    "source": doc.metadata.get("source", "Unknown"),
-                    "security_level": security_level_str
-                })
-            
-            max_security_level = max(security_levels) if security_levels else None
-            
-            logger.info(
-                f"Retrieved {retrieval_result['count']} documents for query. "
-                f"Max security level: {max_security_level.name if max_security_level else 'NONE'}, "
-                f"User clearance: {user_clearance.name if user_clearance else 'NONE'}"
-            )
-            
-            # Note: Clearance violations are now prevented by retriever filtering
-            # All returned documents are guaranteed to be accessible to the user
-            return formatted_docs, security_levels, False  # clearance_violation=False
-        
-        except Exception as e:
-            logger.error(f"Context retrieval failed: {e}", exc_info=True)
-            return [], [], False
-    
-    # ==================== Response Generation ====================
     
     async def generate_response(
         self,
         conversation_id: str,
         user_id: int,
         user_query: str,
-        user_clearance: PermissionLevel,
-        user_department_id: Optional[int] = None,
         stream: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate AI response for user query with security-filtered context.
-        
-        Complete flow:
-        1. Save user message to database
-        2. Retrieve context from vector store (with security filtering)
-        3. Load conversation history from cache
-        4. Route to appropriate LLM
-        5. Generate response (streaming or non-streaming)
-        6. Cache user message and response
-        7. Save response to database
+        Generate AI response with security filtering.
         
         Args:
             conversation_id: Conversation ID
             user_id: User ID
-            user_query: User's query text
-            user_clearance: User's effective clearance level
-            stream: Whether to stream the response
+            user_query: User's question
+            stream: Whether to return streaming response
             
         Returns:
-            Dict with success status, response data, and optional stream generator
+            Dict with success status and either generator or error
         """
         try:
-            # Step 1: Save user message to database (includes validation)
-            logger.info(f"Saving user message for conversation {conversation_id}")
-            user_message_result = await self.conversation_service.add_message(
-                conversation_id=conversation_id,
-                user_id=user_id,
-                role=MessageRole.USER,
-                content=user_query,
-                token_count=None,
-                meta=None
-            )
-            
-            # Check if message was blocked (malicious query)
-            if not user_message_result["success"]:
-                logger.warning(f"User message blocked: {user_message_result.get('error')}")
-                return user_message_result
-            
-            # Step 2: Retrieve context from vector store with security filtering
-            logger.info(f"Retrieving context for query: {user_query[:50]}...")
-            context_docs, security_levels, clearance_violation = await self._retrieve_context(
-                query=user_query,
-                top_k=5,
-                user_clearance=user_clearance,
-                user_department_id=user_department_id,
-                user_id=user_id,
-                conversation_id=conversation_id
-            )
-            
-            # Step 3: Load conversation history from cache
-            logger.info(f"Loading conversation history from cache")
-            cached_history = await self._get_cached_history(conversation_id)
-            
-            # Step 4: Route to appropriate LLM
-            logger.info(f"Routing LLM based on security levels")
-            routing_decision = await self.llm_router.route_llm(
-                document_security_levels=security_levels,
-                user_clearance=user_clearance,
-                metadata={
-                    "conversation_id": conversation_id,
-                    "user_id": user_id
+            # Step 1: Get user info from cache (clearance, department)
+            user_info = await self._get_user_info(user_id)
+            if not user_info:
+                return {
+                    "success": False,
+                    "error": "user_not_found",
+                    "message": "User information not found"
                 }
+            
+            user_clearance = user_info["clearance"]
+            user_department_id = user_info.get("department_id")
+            
+            # Step 2: Retrieve context with user credentials
+            logger.info(f"Retrieving context for user_id={user_id}, clearance={user_clearance.name}")
+            retrieval_result = self.retriever.query(
+                query_text=user_query,
+                top_k=5,
+                user_security_level=user_clearance.value,
+                user_department_id=user_department_id
+            )
+            
+            # Handle retrieval errors (access denied, etc.)
+            if not retrieval_result["success"]:
+                logger.warning(f"Retrieval failed: {retrieval_result.get('error')}")
+                return {
+                    "success": False,
+                    "error": retrieval_result.get("error", "retrieval_error"),
+                    "message": retrieval_result.get("message", "Failed to retrieve context")
+                }
+            
+            # Extract documents and their max security level
+            documents = retrieval_result["context"]
+            max_doc_level = self._get_max_security_level(documents)
+            
+            logger.info(f"Retrieved {len(documents)} documents, max_level={max_doc_level.name if max_doc_level else 'NONE'}")
+            
+            # Step 3: Route to appropriate LLM based on document security
+            doc_levels = [max_doc_level] if max_doc_level else []
+            routing_decision = await self.llm_router.route_llm(
+                document_security_levels=doc_levels,
+                user_clearance=user_clearance,
+                metadata={"conversation_id": conversation_id, "user_id": user_id}
             )
             
             llm = routing_decision.llm
+            logger.info(f"Using LLM: {routing_decision.llm_type}")
             
-            # Step 5: Generate response
+            # Step 4: Get conversation history
+            history = await self._get_history(conversation_id)
+            
+            # Step 5: Generate streaming response using LangChain
             if stream:
-                # Return streaming generator
                 return {
                     "success": True,
                     "streaming": True,
-                    "generator": self._generate_streaming_response(
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        user_query=user_query,
-                        context_docs=context_docs,
-                        cached_history=cached_history,
+                    "generator": self._stream_response(
                         llm=llm,
-                        routing_decision=routing_decision
-                    ),
-                    "user_message": user_message_result["message"]
+                        user_query=user_query,
+                        documents=documents,
+                        history=history,
+                        conversation_id=conversation_id
+                    )
                 }
             else:
-                # Generate complete response
+                # Non-streaming (if needed)
                 response_text = await self._generate_complete_response(
+                    llm=llm,
                     user_query=user_query,
-                    context_docs=context_docs,
-                    cached_history=cached_history,
-                    llm=llm
+                    documents=documents,
+                    history=history
                 )
-                
-                # Step 6: Cache messages
-                await self._add_to_cache_history(conversation_id, "USER", user_query)
-                await self._add_to_cache_history(conversation_id, "ASSISTANT", response_text)
-                
-                # Step 7: Save response to database
-                response_message_result = await self.conversation_service.add_message(
-                    conversation_id=conversation_id,
-                    user_id=user_id,
-                    role=MessageRole.ASSISTANT,
-                    content=response_text,
-                    token_count=None,
-                    meta={
-                        "sources": [doc["source"] for doc in context_docs],
-                        "llm_type": routing_decision.llm_type,
-                        "security_levels": [level.name for level in security_levels]
-                    }
-                )
-                
                 return {
                     "success": True,
                     "streaming": False,
-                    "user_message": user_message_result["message"],
-                    "assistant_message": response_message_result["message"],
-                    "context_count": len(context_docs),
-                    "llm_type": routing_decision.llm_type
+                    "response": response_text
                 }
         
         except Exception as e:
             logger.error(f"Response generation failed: {e}", exc_info=True)
             return {
                 "success": False,
-                "error": str(e)
+                "error": "generation_error",
+                "message": str(e)
             }
     
-    async def _generate_streaming_response(
-        self,
-        conversation_id: str,
-        user_id: int,
-        user_query: str,
-        context_docs: List[Dict[str, Any]],
-        cached_history: List[Dict[str, str]],
-        llm: Any,
-        routing_decision: Any
-    ) -> AsyncGenerator[str, None]:
+    async def _get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
-        Generate streaming response.
+        Get user info from cache (clearance, department).
         
-        Yields response chunks and handles caching/saving after completion.
+        TODO: Implement cache lookup. For now, this should be set after login
+        with any permission overrides applied.
+        
+        Returns:
+            Dict with 'clearance' (PermissionLevel) and 'department_id' (int or None)
         """
         try:
-            # Build prompt
-            prompt = self._build_prompt(user_query, context_docs, cached_history)
+            import json
+            
+            cache_key = f"user:info:{user_id}"
+            cached_data = await self.cache.get(cache_key)
+            
+            if cached_data:
+                data = json.loads(cached_data)
+                return {
+                    "clearance": PermissionLevel[data["clearance"]],
+                    "department_id": data.get("department_id")
+                }
+            
+            # If not in cache, fetch from DB and cache it
+            # TODO: Implement DB fetch and cache
+            logger.warning(f"User info not in cache for user_id={user_id}")
+            return None
+        
+        except Exception as e:
+            logger.error(f"Failed to get user info: {e}")
+            return None
+    
+    def _get_max_security_level(self, documents: List[Any]) -> Optional[PermissionLevel]:
+        """Extract maximum security level from retrieved documents."""
+        if not documents:
+            return None
+        
+        levels = []
+        for doc in documents:
+            level_str = doc.metadata.get("security_level", "GENERAL")
+            try:
+                levels.append(PermissionLevel[level_str])
+            except KeyError:
+                levels.append(PermissionLevel.GENERAL)
+        
+        return max(levels) if levels else None
+    
+    async def _get_history(self, conversation_id: str) -> List[Dict[str, str]]:
+        """
+        Get conversation history from cache.
+        
+        Returns list of {'role': 'user'|'assistant', 'content': '...'} dicts.
+        """
+        try:
+            import json
+            
+            cache_key = f"conversation:history:{conversation_id}"
+            cached_data = await self.cache.get(cache_key)
+            
+            if cached_data:
+                history = json.loads(cached_data)
+                logger.info(f"Retrieved {len(history)} history messages")
+                return history
+            
+            return []
+        
+        except Exception as e:
+            logger.warning(f"Failed to get history: {e}")
+            return []
+    
+    async def _stream_response(
+        self,
+        llm: Any,
+        user_query: str,
+        documents: List[Any],
+        history: List[Dict[str, str]],
+        conversation_id: str
+    ) -> AsyncGenerator[str, None]:
+        """
+        Generate streaming response using LangChain.
+        
+        Uses native LangChain modules: prompt template, message history, streaming.
+        """
+        try:
+            # Build context from documents
+            context_text = "\n\n".join([
+                f"[Source: {doc.metadata.get('source', 'Unknown')}]\n{doc.page_content}"
+                for doc in documents
+            ])
+            
+            # Build prompt template with history placeholder
+            prompt = ChatPromptTemplate.from_messages([
+                SystemMessage(content="You are a helpful AI assistant. Use the provided context to answer questions accurately."),
+                MessagesPlaceholder(variable_name="history"),
+                ("human", "Context:\n{context}\n\nQuestion: {question}")
+            ])
+            
+            # Convert history to LangChain messages
+            history_messages = []
+            for msg in history:
+                if msg["role"] == "user":
+                    history_messages.append(HumanMessage(content=msg["content"]))
+                elif msg["role"] == "assistant":
+                    history_messages.append(AIMessage(content=msg["content"]))
+            
+            # Create chain with history
+            chain = prompt | llm
             
             # Stream response
             full_response = ""
-            async for chunk in llm.astream(prompt):
+            async for chunk in chain.astream({
+                "context": context_text if context_text else "No relevant context found.",
+                "question": user_query,
+                "history": history_messages
+            }):
                 content = chunk.content if hasattr(chunk, 'content') else str(chunk)
                 full_response += content
                 yield content
             
-            # After streaming completes, cache and save
-            await self._add_to_cache_history(conversation_id, "USER", user_query)
-            await self._add_to_cache_history(conversation_id, "ASSISTANT", full_response)
+            # Cache the exchange after streaming completes
+            await self._cache_exchange(conversation_id, user_query, full_response)
             
-            # Save response to database
-            await self.conversation_service.add_message(
-                conversation_id=conversation_id,
-                user_id=user_id,
-                role=MessageRole.ASSISTANT,
-                content=full_response,
-                token_count=None,
-                meta={
-                    "sources": [doc["source"] for doc in context_docs],
-                    "llm_type": routing_decision.llm_type,
-                    "security_levels": [level.name for level in routing_decision.document_security_levels] if hasattr(routing_decision, 'document_security_levels') else []
-                }
-            )
-            
-            logger.info(f"Streaming response completed and saved for conversation {conversation_id}")
+            logger.info(f"Streaming completed for conversation {conversation_id}")
         
         except Exception as e:
-            logger.error(f"Streaming response failed: {e}", exc_info=True)
-            yield f"\n\n[Error generating response: {str(e)}]"
+            logger.error(f"Streaming failed: {e}", exc_info=True)
+            yield f"\n\n[Error: {str(e)}]"
     
     async def _generate_complete_response(
         self,
+        llm: Any,
         user_query: str,
-        context_docs: List[Dict[str, Any]],
-        cached_history: List[Dict[str, str]],
-        llm: Any
+        documents: List[Any],
+        history: List[Dict[str, str]]
     ) -> str:
-        """
-        Generate complete (non-streaming) response.
+        """Generate complete non-streaming response (if needed)."""
+        # Build context
+        context_text = "\n\n".join([
+            f"[Source: {doc.metadata.get('source', 'Unknown')}]\n{doc.page_content}"
+            for doc in documents
+        ])
         
-        Args:
-            user_query: User's query
-            context_docs: Retrieved context documents
-            cached_history: Cached conversation history
-            llm: Language model instance
-            
-        Returns:
-            Generated response text
-        """
         # Build prompt
-        prompt = self._build_prompt(user_query, context_docs, cached_history)
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content="You are a helpful AI assistant."),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "Context:\n{context}\n\nQuestion: {question}")
+        ])
         
-        # Generate response
-        response = await llm.ainvoke(prompt)
+        # Convert history
+        history_messages = []
+        for msg in history:
+            if msg["role"] == "user":
+                history_messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                history_messages.append(AIMessage(content=msg["content"]))
+        
+        # Generate
+        chain = prompt | llm
+        response = await chain.ainvoke({
+            "context": context_text if context_text else "No relevant context found.",
+            "question": user_query,
+            "history": history_messages
+        })
         
         return response.content if hasattr(response, 'content') else str(response)
     
-    def _build_prompt(
-        self,
-        user_query: str,
-        context_docs: List[Dict[str, Any]],
-        cached_history: List[Dict[str, str]]
-    ) -> str:
-        """
-        Build prompt for LLM with context and history.
-        
-        Args:
-            user_query: Current user query
-            context_docs: Retrieved context documents
-            cached_history: Previous conversation messages
+    async def _cache_exchange(self, conversation_id: str, user_msg: str, assistant_msg: str) -> None:
+        """Cache the user-assistant exchange."""
+        try:
+            import json
+            from datetime import timedelta
             
-        Returns:
-            Formatted prompt string
-        """
-        # Format context
-        context_text = "\n\n".join([
-            f"[Source: {doc['source']}]\n{doc['content']}"
-            for doc in context_docs
-        ])
+            # Get current history
+            cache_key = f"conversation:history:{conversation_id}"
+            cached_data = await self.cache.get(cache_key)
+            history = json.loads(cached_data) if cached_data else []
+            
+            # Add new messages
+            history.append({"role": "user", "content": user_msg})
+            history.append({"role": "assistant", "content": assistant_msg})
+            
+            # Keep last 6 messages (3 exchanges)
+            history = history[-6:]
+            
+            # Save to cache (24 hour TTL)
+            await self.cache.set(
+                cache_key,
+                json.dumps(history),
+                ttl=int(timedelta(hours=24).total_seconds())
+            )
+            
+            logger.info(f"Cached exchange for {conversation_id}")
         
-        # Format history
-        history_text = "\n".join([
-            f"{msg['role']}: {msg['content']}"
-            for msg in cached_history
-        ])
-        
-        # Build prompt
-        prompt = f"""You are a helpful AI assistant with access to a knowledge base. Use the provided context to answer the user's question accurately.
-
-Context from knowledge base:
-{context_text if context_text else "No relevant context found."}
-
-Previous conversation:
-{history_text if history_text else "No previous messages."}
-
-User Question: {user_query}
-
-Assistant Response:"""
-        
-        return prompt
-
-
-# Singleton instance
-_response_service_factory: Optional[ConversationResponseService] = None
+        except Exception as e:
+            logger.error(f"Failed to cache exchange: {e}")
 
 
 def get_conversation_response_service(session) -> ConversationResponseService:
-    """
-    Get conversation response service instance.
-    
-    Args:
-        session: Database session
-        
-    Returns:
-        ConversationResponseService instance
-    """
-    # Note: Not using singleton pattern here since service needs session
+    """Get conversation response service instance."""
     return ConversationResponseService(session)
