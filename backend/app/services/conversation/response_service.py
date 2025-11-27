@@ -203,6 +203,69 @@ class ConversationResponseService:
             logger.error(f"Failed to log clearance violation: {e}", exc_info=True)
             # Don't fail request if logging fails
     
+    async def _log_access_denial(
+        self,
+        user_id: int,
+        user_clearance: Optional[PermissionLevel],
+        user_department_id: Optional[int],
+        query: str,
+        error_type: str,
+        error_details: Dict[str, Any],
+        conversation_id: Optional[str] = None
+    ) -> None:
+        """
+        Log activity when user is denied access to documents.
+        
+        Args:
+            user_id: User ID
+            user_clearance: User's clearance level
+            user_department_id: User's department ID
+            query: User's query text
+            error_type: Type of access denial (insufficient_clearance, department_mismatch, etc.)
+            error_details: Full error details from retriever
+            conversation_id: Optional conversation ID
+        """
+        try:
+            # Determine severity based on error type
+            severity = "warning" if error_type == "department_mismatch" else "info"
+            
+            details = {
+                "user_clearance_level": user_clearance.name if user_clearance else "NONE",
+                "user_department_id": user_department_id,
+                "error_type": error_type,
+                "conversation_id": conversation_id,
+                "blocked_count": error_details.get("count", 0)
+            }
+            
+            # Add specific blocking details
+            if "blocked_by_clearance" in error_details:
+                details["blocked_by_clearance"] = error_details["blocked_by_clearance"]
+            if "blocked_by_department" in error_details:
+                details["blocked_by_department"] = error_details["blocked_by_department"]
+            
+            await activity_logger_service.log_activity(
+                db=self.session,
+                user_id=user_id,
+                incident_type="access_denied",
+                severity=severity,
+                description=f"User denied access to documents: {error_details.get('message', 'Unknown reason')}",
+                details=details,
+                user_clearance_level=user_clearance.name if user_clearance else None,
+                access_granted=False,
+                user_query=query[:500]  # Truncate long queries
+            )
+            
+            logger.info(
+                f"Access denial logged: user_id={user_id}, "
+                f"error_type={error_type}, "
+                f"clearance={user_clearance.name if user_clearance else 'NONE'}, "
+                f"department={user_department_id}"
+            )
+        
+        except Exception as e:
+            logger.error(f"Failed to log access denial: {e}", exc_info=True)
+            # Don't fail request if logging fails
+    
     # ==================== Context Retrieval ====================
     
     async def _retrieve_context(
@@ -210,33 +273,68 @@ class ConversationResponseService:
         query: str, 
         top_k: int = 5,
         user_clearance: Optional[PermissionLevel] = None,
+        user_department_id: Optional[int] = None,
         user_id: Optional[int] = None,
         conversation_id: Optional[str] = None
     ) -> tuple[List[Dict[str, Any]], List[PermissionLevel], bool]:
         """
-        Retrieve relevant context from vector store.
+        Retrieve relevant context from vector store with security filtering.
         
         Args:
             query: User query
             top_k: Number of documents to retrieve
             user_clearance: User's clearance level for filtering
+            user_department_id: User's department ID for department-based filtering
             user_id: User ID for activity logging
             conversation_id: Conversation ID for activity logging
             
         Returns:
             Tuple of (formatted_docs, security_levels, clearance_violation)
+            
+        Note:
+            Security filtering is now handled by the retriever service.
+            Clearance violations are blocked at retrieval time.
         """
         try:
-            # Retrieve documents
-            documents = self.retriever_service.query(
+            # Retrieve documents with security filtering
+            retrieval_result = self.retriever_service.query(
                 query_text=query,
-                top_k=top_k
+                top_k=top_k,
+                user_security_level=user_clearance.value if user_clearance else None,
+                user_department_id=user_department_id
             )
+            
+            # Handle retrieval failures
+            if not retrieval_result["success"]:
+                error_type = retrieval_result.get("error", "unknown")
+                error_msg = retrieval_result.get("message", "Unknown error")
+                
+                logger.warning(
+                    f"Document retrieval failed: {error_type} - {error_msg}"
+                )
+                
+                # Log access denial for audit
+                if error_type in ["insufficient_clearance", "department_mismatch", "access_denied"]:
+                    if user_id:
+                        await self._log_access_denial(
+                            user_id=user_id,
+                            user_clearance=user_clearance,
+                            user_department_id=user_department_id,
+                            query=query,
+                            error_type=error_type,
+                            error_details=retrieval_result,
+                            conversation_id=conversation_id
+                        )
+                
+                # Return empty results - caller will handle gracefully
+                return [], [], True  # clearance_violation=True to indicate access issue
+            
+            # Successful retrieval - extract documents
+            documents = retrieval_result["context"]
             
             # Extract security levels and format documents
             security_levels = []
             formatted_docs = []
-            clearance_violation = False
             
             for doc in documents:
                 # Extract security level from metadata
@@ -248,10 +346,6 @@ class ConversationResponseService:
                 
                 security_levels.append(security_level)
                 
-                # Check for clearance violations
-                if user_clearance and security_level > user_clearance:
-                    clearance_violation = True
-                
                 # Format document for LLM
                 formatted_docs.append({
                     "content": doc.page_content,
@@ -262,23 +356,14 @@ class ConversationResponseService:
             max_security_level = max(security_levels) if security_levels else None
             
             logger.info(
-                f"Retrieved {len(documents)} documents for query. "
+                f"Retrieved {retrieval_result['count']} documents for query. "
                 f"Max security level: {max_security_level.name if max_security_level else 'NONE'}, "
                 f"User clearance: {user_clearance.name if user_clearance else 'NONE'}"
             )
             
-            # Log activity if clearance violation detected
-            if clearance_violation and user_id:
-                await self._log_clearance_violation(
-                    user_id=user_id,
-                    user_clearance=user_clearance,
-                    max_doc_level=max_security_level,
-                    query=query,
-                    doc_count=len(documents),
-                    conversation_id=conversation_id
-                )
-            
-            return formatted_docs, security_levels, clearance_violation
+            # Note: Clearance violations are now prevented by retriever filtering
+            # All returned documents are guaranteed to be accessible to the user
+            return formatted_docs, security_levels, False  # clearance_violation=False
         
         except Exception as e:
             logger.error(f"Context retrieval failed: {e}", exc_info=True)
@@ -292,14 +377,15 @@ class ConversationResponseService:
         user_id: int,
         user_query: str,
         user_clearance: PermissionLevel,
+        user_department_id: Optional[int] = None,
         stream: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate AI response for user query.
+        Generate AI response for user query with security-filtered context.
         
         Complete flow:
         1. Save user message to database
-        2. Retrieve context from vector store
+        2. Retrieve context from vector store (with security filtering)
         3. Load conversation history from cache
         4. Route to appropriate LLM
         5. Generate response (streaming or non-streaming)
@@ -333,12 +419,13 @@ class ConversationResponseService:
                 logger.warning(f"User message blocked: {user_message_result.get('error')}")
                 return user_message_result
             
-            # Step 2: Retrieve context from vector store
+            # Step 2: Retrieve context from vector store with security filtering
             logger.info(f"Retrieving context for query: {user_query[:50]}...")
             context_docs, security_levels, clearance_violation = await self._retrieve_context(
                 query=user_query,
                 top_k=5,
                 user_clearance=user_clearance,
+                user_department_id=user_department_id,
                 user_id=user_id,
                 conversation_id=conversation_id
             )

@@ -297,12 +297,13 @@ async def handle_generate_response(
     # Get response service
     response_service = get_conversation_response_service(session)
     
-    # Generate response
+    # Generate response with security filtering
     return await response_service.generate_response(
         conversation_id=conversation_id,
         user_id=user_id,
         user_query=user_query,
         user_clearance=user_clearance,
+        user_department_id=user.department_id,
         stream=stream
     )
 
