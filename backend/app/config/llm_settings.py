@@ -35,6 +35,8 @@ class LLMSettings(BaseSettings):
     HF_MODEL: str = Field("meta-llama/Llama-2-7b-chat-hf", env="HF_MODEL")
     HF_TEMPERATURE: float = Field(0.7, env="HF_TEMPERATURE")
     HF_MAX_TOKENS: int = Field(2000, env="HF_MAX_TOKENS")
+    HF_ENABLE_QUANTIZATION: bool = Field(True, env="HF_ENABLE_QUANTIZATION")
+    HF_QUANTIZATION_LEVEL: str = Field("4bit", env="HF_QUANTIZATION_LEVEL")
 
     # Fallback LLM configuration
     FALLBACK_LLM_PROVIDER: Optional[str] = Field(None, env="FALLBACK_LLM_PROVIDER")
@@ -48,6 +50,18 @@ class LLMSettings(BaseSettings):
     FALLBACK_HF_MODEL: str = Field("google/flan-t5-small", env="FALLBACK_HF_MODEL")
     FALLBACK_HF_TEMPERATURE: float = Field(0.7, env="FALLBACK_HF_TEMPERATURE")
     FALLBACK_HF_MAX_TOKENS: int = Field(512, env="FALLBACK_HF_MAX_TOKENS")
+
+    # Internal LLM Provider
+    USE_INTERNAL_LLM: bool = Field(False, env="USE_INTERNAL_LLM")
+    INTERNAL_LLM_PROVIDER: Optional[str] = Field(None, env="INTERNAL_LLM_PROVIDER")
+    INTERNAL_LLM_API_KEY: Optional[str] = Field(None, env="INTERNAL_LLM_API_KEY")
+    INTERNAL_LLM_MODEL: Optional[str] = Field(None, env="INTERNAL_LLM_MODEL")
+    INTERNAL_LLM_TEMPERATURE: float = Field(0.7, env="INTERNAL_LLM_TEMPERATURE")
+    INTERNAL_LLM_MAX_TOKENS: int = Field(1000, env="INTERNAL_LLM_MAX_TOKENS")
+    INTERNAL_LLM_MIN_SECURITY_LEVEL: int = Field(4, env="INTERNAL_LLM_MIN_SECURITY_LEVEL")
+    INTERNAL_LLM_ENABLE_QUANTIZATION: bool = Field(False, env="INTERNAL_LLM_ENABLE_QUANTIZATION")
+    INTERNAL_LLM_QUANTIZATION_LEVEL: Optional[str] = Field(None, env="INTERNAL_LLM_QUANTIZATION_LEVEL")
+    
 
     def get_llm_config(self) -> dict:
         """Get LLM configuration for the selected provider."""
@@ -82,6 +96,8 @@ class LLMSettings(BaseSettings):
                 "model": self.HF_MODEL,
                 "temperature": self.HF_TEMPERATURE,
                 "max_tokens": self.HF_MAX_TOKENS,
+                "enable_quantization": self.HF_ENABLE_QUANTIZATION,
+                "quantization_level": self.HF_QUANTIZATION_LEVEL,
             }
         else:
             raise ValueError(f"Unsupported LLM provider: {self.LLM_PROVIDER}. Supported: openai, google, huggingface")
@@ -181,3 +197,23 @@ class LLMSettings(BaseSettings):
                 f"Primary: {primary_config['provider']}/{primary_config['model']}, "
                 f"Fallback: {fallback_config['provider']}/{fallback_config['model']}"
             )
+
+
+    def get_internal_llm_config(self) -> Optional[dict]:
+        """Get internal LLM configuration if enabled."""
+        if not self.USE_INTERNAL_LLM:
+            return None
+        
+        if not self.INTERNAL_LLM_PROVIDER or not self.INTERNAL_LLM_MODEL:
+            raise ValueError("INTERNAL_LLM_PROVIDER and INTERNAL_LLM_MODEL are required when USE_INTERNAL_LLM is true")
+        
+        return {
+            "provider": self.INTERNAL_LLM_PROVIDER,
+            "api_key": self.INTERNAL_LLM_API_KEY,
+            "model": self.INTERNAL_LLM_MODEL,
+            "temperature": self.INTERNAL_LLM_TEMPERATURE,
+            "max_tokens": self.INTERNAL_LLM_MAX_TOKENS,
+            "min_security_level": self.INTERNAL_LLM_MIN_SECURITY_LEVEL,
+            "enable_quantization": self.INTERNAL_LLM_ENABLE_QUANTIZATION,
+            "quantization_level": self.INTERNAL_LLM_QUANTIZATION_LEVEL,
+        }
