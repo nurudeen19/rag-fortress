@@ -71,6 +71,16 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("fallback_llm_api_key", "string", "Fallback LLM API key (encrypted)", "llm", True, True),
             ("fallback_llm_model", "string", "Fallback LLM model", "llm", True, False),
             
+            # Internal LLM
+            ("internal_llm_provider", "string", "Internal LLM provider for sensitive data", "llm", True, False),
+            ("internal_llm_api_key", "string", "Internal LLM API key (encrypted)", "llm", True, True),
+            ("internal_llm_model", "string", "Internal LLM model name", "llm", True, False),
+            ("internal_llm_temperature", "float", "Internal LLM temperature (0.0-2.0)", "llm", True, False),
+            ("internal_llm_max_tokens", "integer", "Internal LLM max tokens", "llm", True, False),
+            
+            # New setting for controlling internal LLM usage
+            ("use_internal_llm", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),
+            
             # Embedding Settings
             ("embedding_provider", "string", "Embedding provider (openai, google, huggingface, cohere, ollama)", "embedding", True, False),
             ("embedding_model", "string", "Embedding model name", "embedding", True, False),
@@ -198,6 +208,6 @@ class ApplicationSettingsSeeder(BaseSeed):
         return count, skipped
 
 
-    
-    
-    
+
+
+
