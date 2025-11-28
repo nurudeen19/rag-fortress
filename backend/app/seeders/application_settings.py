@@ -65,6 +65,8 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("hf_model", "string", "HuggingFace model name", "llm", True, False),
             ("hf_temperature", "float", "HuggingFace temperature", "llm", True, False),
             ("hf_max_tokens", "integer", "HuggingFace max tokens", "llm", True, False),
+            ("hf_enable_quantization", "boolean", "Enable quantization for HuggingFace model", "llm", True, False),
+            ("hf_quantization_level", "string", "Quantization level for HuggingFace model (e.g., 4bit, 8bit)", "llm", True, False), 
             
             # Fallback LLM
             ("fallback_llm_provider", "string", "Fallback LLM provider", "llm", True, False),
@@ -77,6 +79,8 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("internal_llm_model", "string", "Internal LLM model name", "llm", True, False),
             ("internal_llm_temperature", "float", "Internal LLM temperature (0.0-2.0)", "llm", True, False),
             ("internal_llm_max_tokens", "integer", "Internal LLM max tokens", "llm", True, False),
+            ("internal_llm_enable_quantization", "boolean", "Enable quantization for internal LLM", "llm", True, False),
+            ("internal_llm_quantization_level", "string", "Quantization level for internal LLM (e.g., 4bit, 8bit)", "llm", True, False),
             
             # New setting for controlling internal LLM usage
             ("use_internal_llm", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),
