@@ -24,3 +24,8 @@ external files like s3 files etc
 
 Add detailed readme for setup, and other scripts plus their configurations
 
+Phase 1 - Basic CRUD (Conversation + Message models)
+Phase 2 - Pagination + Caching
+Phase 3 - Denormalized stats + Soft deletes
+Phase 4 - Advanced features (search, categories, auto-titles)
+

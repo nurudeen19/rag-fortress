@@ -17,14 +17,34 @@
           <p class="text-fortress-400 text-sm">Configure system-wide settings for LLM, embeddings, caching, and more.</p>
         </div>
       </div>
-      <div class="p-3 bg-info/10 border border-info/30 rounded-lg text-sm text-fortress-300">
-        <div class="flex items-start gap-2">
-          <svg class="w-5 h-5 text-info flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-          </svg>
-          <div>
-            <strong class="text-info">How it works:</strong> Make changes to any editable setting below. 
-            Changes are tracked and shown with a "Reset" button. Click "Save Changes" at the bottom to apply all modifications.
+      <div class="space-y-3">
+        <div class="p-3 bg-info/10 border border-info/30 rounded-lg text-sm text-fortress-300">
+          <div class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-info flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+            </svg>
+            <div>
+              <strong class="text-info">How it works:</strong> Make changes to any editable setting below. 
+              Changes are tracked and shown with a "Reset" button. Click "Save Changes" at the bottom to apply all modifications.
+            </div>
+          </div>
+        </div>
+        
+        <div class="p-3 bg-warning/10 border border-warning/30 rounded-lg text-sm text-fortress-300">
+          <div class="flex items-start gap-2">
+            <svg class="w-5 h-5 text-warning flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+            </svg>
+            <div>
+              <strong class="text-warning">Security:</strong> Settings marked with 
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-warning/20 text-warning rounded text-xs mx-1">
+                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                </svg>
+                Encrypted
+              </span>
+              are automatically encrypted in the database and cache. API keys, passwords, and secrets are stored securely and only decrypted when needed.
+            </div>
           </div>
         </div>
       </div>
@@ -96,6 +116,12 @@
                 <div class="flex items-center gap-2 mb-1">
                   <label class="font-medium text-fortress-100">{{ formatSettingName(setting.key) }}</label>
                   <span v-if="!setting.is_mutable" class="text-xs px-2 py-0.5 bg-fortress-700 text-fortress-300 rounded">Read-only</span>
+                  <span v-if="setting.is_sensitive" class="text-xs px-2 py-0.5 bg-warning/20 text-warning rounded flex items-center gap-1" title="This setting is encrypted in the database">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                      <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/>
+                    </svg>
+                    Encrypted
+                  </span>
                   <span class="text-xs px-2 py-0.5 bg-fortress-700 text-fortress-400 rounded font-mono">{{ setting.data_type }}</span>
                 </div>
                 <p v-if="setting.description" class="text-sm text-fortress-400 mb-3">{{ setting.description }}</p>
@@ -128,12 +154,28 @@
                   <!-- Text/Number/Float input -->
                   <input 
                     v-else
-                    :type="setting.data_type === 'integer' || setting.data_type === 'float' ? 'number' : 'text'"
+                    :type="setting.is_sensitive && !isEditingPassword[setting.key] ? 'password' : (setting.data_type === 'integer' || setting.data_type === 'float' ? 'number' : 'text')"
                     :step="setting.data_type === 'float' ? '0.1' : '1'"
                     v-model="editedValues[setting.key]"
                     :disabled="!setting.is_mutable || isSaving"
+                    :placeholder="setting.is_sensitive ? '••••••••••••••••' : ''"
                     class="flex-1 px-3 py-2 bg-fortress-800 border border-fortress-600 rounded-lg text-fortress-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-secure"
                   />
+                  <button 
+                    v-if="setting.is_sensitive && setting.is_mutable"
+                    @click="togglePasswordVisibility(setting.key)"
+                    type="button"
+                    class="p-2 hover:bg-fortress-700 rounded-lg transition-colors"
+                    :title="isEditingPassword[setting.key] ? 'Hide value' : 'Show value'"
+                  >
+                    <svg v-if="isEditingPassword[setting.key]" class="w-5 h-5 text-fortress-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"/>
+                    </svg>
+                    <svg v-else class="w-5 h-5 text-fortress-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
 
@@ -207,6 +249,7 @@ const categories = ref([])
 const selectedCategory = ref(null)
 const editedValues = ref({})
 const statusMessage = ref({ type: null, text: null })
+const isEditingPassword = ref({})
 
 // Computed
 const filteredSettings = computed(() => {
@@ -231,6 +274,10 @@ function formatSettingName(key) {
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
+}
+
+function togglePasswordVisibility(key) {
+  isEditingPassword.value[key] = !isEditingPassword.value[key]
 }
 
 function hasChanged(key, originalValue) {
@@ -346,12 +393,17 @@ async function loadSettings() {
       selectedCategory.value = categories.value[0]
     }
     
-    // Initialize edited values
+    // Initialize edited values and password visibility
     settings.value.forEach(setting => {
       if (setting.data_type === 'boolean') {
         editedValues.value[setting.key] = setting.value.toLowerCase() === 'true'
       } else {
         editedValues.value[setting.key] = setting.value
+      }
+      
+      // Initialize password visibility (hidden by default for sensitive settings)
+      if (setting.is_sensitive) {
+        isEditingPassword.value[setting.key] = false
       }
     })
     
