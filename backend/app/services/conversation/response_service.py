@@ -11,14 +11,19 @@ Simple orchestration:
 """
 
 from typing import Dict, Any, AsyncGenerator, Optional, List
+import json
+from datetime import timedelta
+from sqlalchemy import select, desc
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.core.cache import get_cache
 from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm_router_service import get_llm_router
+from app.services.conversation.service import ConversationService
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.models.user_permission import PermissionLevel
+from app.models.message import Message, MessageRole
 from app.core import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +41,7 @@ class ConversationResponseService:
         self.retriever = get_retriever_service()
         self.llm_router = get_llm_router()
         self.cache = get_cache()
+        self.conversation_service = ConversationService(session)
     
     async def generate_response(
         self,
@@ -115,7 +121,8 @@ class ConversationResponseService:
                         user_query=user_query,
                         documents=documents,
                         history=history,
-                        conversation_id=conversation_id
+                        conversation_id=conversation_id,
+                        user_id=user_id
                     )
                 }
             else:
@@ -125,6 +132,13 @@ class ConversationResponseService:
                     user_query=user_query,
                     documents=documents,
                     history=history
+                )
+                await self._cache_exchange(
+                    conversation_id,
+                    user_query,
+                    response_text,
+                    user_id=user_id,
+                    persist_to_db=True
                 )
                 return {
                     "success": True,
@@ -173,25 +187,56 @@ class ConversationResponseService:
     
     async def _get_history(self, conversation_id: str) -> List[Dict[str, str]]:
         """
-        Get conversation history from cache.
+        Load conversation history, preferring cache and falling back to the database.
         
-        Returns list of {'role': 'user'|'assistant', 'content': '...'} dicts.
+        Returns list of {'role': 'user'|'assistant'|'system', 'content': '...'} dicts.
         """
         try:
-            import json
-            
             cache_key = f"conversation:history:{conversation_id}"
             cached_data = await self.cache.get(cache_key)
-            
+
             if cached_data:
                 history = json.loads(cached_data)
-                logger.info(f"Retrieved {len(history)} history messages")
+                logger.info(f"Retrieved {len(history)} history messages from cache")
                 return history
-            
-            return []
-        
+
+            history = await self._load_history_from_db(conversation_id)
+            if history:
+                logger.info(f"Loaded {len(history)} history messages from database")
+            else:
+                logger.info("No conversation history found in cache or database")
+            return history
+
         except Exception as e:
             logger.warning(f"Failed to get history: {e}")
+            return []
+
+    async def _load_history_from_db(self, conversation_id: str) -> List[Dict[str, str]]:
+        """Load the most recent history entries from the database (up to three turns)."""
+        try:
+            stmt = (
+                select(Message)
+                .where(Message.conversation_id == conversation_id)
+                .order_by(desc(Message.created_at))
+                .limit(6)
+            )
+            result = await self.session.execute(stmt)
+            messages = result.scalars().all()
+
+            if not messages:
+                return []
+
+            messages.reverse()
+            history = [
+                {"role": msg.role.value.lower(), "content": msg.content}
+                for msg in messages
+            ]
+
+            await self._cache_history(conversation_id, history)
+            return history
+
+        except Exception as e:
+            logger.warning(f"Failed to load history from database: {e}")
             return []
     
     async def _stream_response(
@@ -200,7 +245,8 @@ class ConversationResponseService:
         user_query: str,
         documents: List[Any],
         history: List[Dict[str, str]],
-        conversation_id: str
+        conversation_id: str,
+        user_id: int
     ) -> AsyncGenerator[str, None]:
         """
         Generate streaming response using LangChain.
@@ -228,6 +274,8 @@ class ConversationResponseService:
                     history_messages.append(HumanMessage(content=msg["content"]))
                 elif msg["role"] == "assistant":
                     history_messages.append(AIMessage(content=msg["content"]))
+                elif msg["role"] == "system":
+                    history_messages.append(SystemMessage(content=msg["content"]))
             
             # Create chain with history
             chain = prompt | llm
@@ -244,7 +292,13 @@ class ConversationResponseService:
                 yield content
             
             # Cache the exchange after streaming completes
-            await self._cache_exchange(conversation_id, user_query, full_response)
+            await self._cache_exchange(
+                conversation_id,
+                user_query,
+                full_response,
+                user_id=user_id,
+                persist_to_db=True
+            )
             
             logger.info(f"Streaming completed for conversation {conversation_id}")
         
@@ -280,6 +334,8 @@ class ConversationResponseService:
                 history_messages.append(HumanMessage(content=msg["content"]))
             elif msg["role"] == "assistant":
                 history_messages.append(AIMessage(content=msg["content"]))
+            elif msg["role"] == "system":
+                history_messages.append(SystemMessage(content=msg["content"]))
         
         # Generate
         chain = prompt | llm
@@ -291,35 +347,88 @@ class ConversationResponseService:
         
         return response.content if hasattr(response, 'content') else str(response)
     
-    async def _cache_exchange(self, conversation_id: str, user_msg: str, assistant_msg: str) -> None:
-        """Cache the user-assistant exchange."""
+    async def _cache_exchange(
+        self,
+        conversation_id: str,
+        user_msg: str,
+        assistant_msg: str,
+        user_id: Optional[int] = None,
+        persist_to_db: bool = False
+    ) -> None:
+        """Cache the user-assistant exchange and optionally persist it to the database."""
         try:
-            import json
-            from datetime import timedelta
-            
-            # Get current history
             cache_key = f"conversation:history:{conversation_id}"
             cached_data = await self.cache.get(cache_key)
             history = json.loads(cached_data) if cached_data else []
-            
-            # Add new messages
+
             history.append({"role": "user", "content": user_msg})
             history.append({"role": "assistant", "content": assistant_msg})
-            
-            # Keep last 6 messages (3 exchanges)
             history = history[-6:]
-            
-            # Save to cache (24 hour TTL)
+
+            await self._cache_history(conversation_id, history)
+            logger.info(f"Cached exchange for {conversation_id}")
+
+            if persist_to_db:
+                await self._persist_messages_to_db(conversation_id, user_id, user_msg, assistant_msg)
+
+        except Exception as e:
+            logger.error(f"Failed to cache exchange: {e}")
+
+    async def _persist_messages_to_db(
+        self,
+        conversation_id: str,
+        user_id: Optional[int],
+        user_msg: str,
+        assistant_msg: str
+    ) -> None:
+        """Persist the user and assistant turns to the database via ConversationService."""
+        if user_id is None:
+            logger.warning("Cannot persist messages without user_id")
+            return
+
+        try:
+            user_result = await self.conversation_service.add_message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.USER,
+                content=user_msg
+            )
+
+            if not user_result.get("success"):
+                logger.warning(
+                    f"Failed to persist user message for conversation {conversation_id}: {user_result.get('error')}"
+                )
+
+            assistant_result = await self.conversation_service.add_message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.ASSISTANT,
+                content=assistant_msg
+            )
+
+            if not assistant_result.get("success"):
+                logger.warning(
+                    f"Failed to persist assistant message for conversation {conversation_id}: {assistant_result.get('error')}"
+                )
+
+        except Exception as e:
+            logger.error(f"Failed to persist messages to db: {e}")
+
+    async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
+        """Helper to persist conversation history to cache with a 24 hour TTL."""
+        if not history:
+            return
+
+        try:
+            cache_key = f"conversation:history:{conversation_id}"
             await self.cache.set(
                 cache_key,
                 json.dumps(history),
                 ttl=int(timedelta(hours=24).total_seconds())
             )
-            
-            logger.info(f"Cached exchange for {conversation_id}")
-        
+
         except Exception as e:
-            logger.error(f"Failed to cache exchange: {e}")
+            logger.error(f"Failed to cache history: {e}")
 
 
 def get_conversation_response_service(session) -> ConversationResponseService:
