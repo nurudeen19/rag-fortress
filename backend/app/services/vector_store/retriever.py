@@ -7,7 +7,8 @@ from typing import List, Optional, Dict, Any, Tuple
 from langchain_core.documents import Document
 
 from app.core.vector_store_factory import get_retriever
-from app.core import get_logger, get_settings
+from app.core import get_logger
+from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 
 
@@ -25,7 +26,7 @@ class RetrieverService:
     def __init__(self):
         """Initialize retriever service."""
         self.retriever = get_retriever()
-        self.settings = get_settings()
+        self.settings = settings
     
     def _filter_by_security(
         self,
@@ -58,8 +59,14 @@ class RetrieverService:
             # Check security clearance level
             doc_security_level = metadata.get("security_level", "GENERAL")
             try:
-                doc_level_value = PermissionLevel[doc_security_level].value
-            except KeyError:
+                # Handle both string enum names and integer values
+                if isinstance(doc_security_level, int):
+                    doc_level_value = doc_security_level
+                elif isinstance(doc_security_level, str) and doc_security_level.isdigit():
+                    doc_level_value = int(doc_security_level)
+                else:
+                    doc_level_value = PermissionLevel[doc_security_level].value
+            except (KeyError, ValueError):
                 logger.warning(f"Invalid security level '{doc_security_level}' in document metadata")
                 continue
             

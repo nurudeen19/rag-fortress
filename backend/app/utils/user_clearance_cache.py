@@ -199,17 +199,24 @@ class UserClearanceCache:
             logger.warning(f"User {user.id} has no permission record, defaulting to GENERAL")
             return PermissionLevel.GENERAL
         
+        # Helper to get int value from either int or enum
+        def get_level_value(level) -> int:
+            if isinstance(level, PermissionLevel):
+                return level.value
+            return int(level)  # Already an int from database
+        
         # Start with org-wide permission
-        levels = [user.permission.org_level_permission.value]
+        levels = [get_level_value(user.permission.org_level_permission)]
         
         # Add department-level permission if exists
         if user.permission.department_level_permission:
-            levels.append(user.permission.department_level_permission.value)
+            levels.append(get_level_value(user.permission.department_level_permission))
         
         # Add active overrides (highest priority)
+        # Note: override_permission_level is stored as int in database
         active_overrides = user.get_active_overrides()
         for override in active_overrides:
-            levels.append(override.override_permission_level)
+            levels.append(get_level_value(override.override_permission_level))
             logger.debug(
                 f"User {user.id} has active override: "
                 f"level={override.override_permission_level}, "
@@ -217,7 +224,7 @@ class UserClearanceCache:
                 f"reason={override.reason}"
             )
         
-        # Return highest level
+        # Return highest level as enum
         max_level_value = max(levels)
         return PermissionLevel(max_level_value)
     

@@ -38,9 +38,8 @@ class LLMRouter:
         return self._internal_llm
 
     def select_llm(self, max_security_level: Optional[int]) -> BaseLanguageModel:
-        llm_settings = settings.llm_settings
-
-        if not llm_settings.USE_INTERNAL_LLM:
+        # Settings inherits from LLMSettings, so attributes are directly on settings
+        if not settings.USE_INTERNAL_LLM:
             logger.info("Internal LLM disabled; using primary LLM")
             return self._get_primary_llm()
 
@@ -48,7 +47,7 @@ class LLMRouter:
             logger.info("No document security level provided; falling back to primary LLM")
             return self._get_primary_llm()
 
-        threshold = llm_settings.INTERNAL_LLM_MIN_SECURITY_LEVEL
+        threshold = settings.INTERNAL_LLM_MIN_SECURITY_LEVEL
         if max_security_level >= threshold:
             internal_llm = self._get_internal_llm()
             if internal_llm:
