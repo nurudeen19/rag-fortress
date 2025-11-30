@@ -4,8 +4,11 @@ from typing import List, Optional, Tuple, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
+import json
+
+from app.core.cache import get_cache
 
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
@@ -21,6 +24,7 @@ class ConversationService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+        self.cache = get_cache()
 
     # ==================== Helper Methods ====================
 
@@ -338,6 +342,104 @@ class ConversationService:
                 "error": str(e),
                 "message": None
             }
+
+    async def get_conversation_history(self, conversation_id: str, user_id: int) -> List[Dict[str, str]]:
+        """Return the cached conversation history or fetch the recent conversation context."""
+        cache_key = f"conversation:history:{conversation_id}"
+        try:
+            cached_data = await self.cache.get(cache_key)
+            if cached_data:
+                history = json.loads(cached_data)
+                logger.info(f"Retrieved {len(history)} history messages from cache for {conversation_id}")
+                return history
+        except Exception as exc:
+            logger.warning(f"Failed to read history cache: {exc}")
+
+        context_result = await self.get_conversation_context(conversation_id, user_id, last_n=6)
+        if not context_result.get("success"):
+            return []
+
+        history = [
+            {"role": entry["role"].lower(), "content": entry["content"]}
+            for entry in context_result.get("context", [])
+        ]
+
+        if history:
+            await self._cache_history(conversation_id, history)
+
+        return history
+
+    async def cache_conversation_exchange(
+        self,
+        conversation_id: str,
+        user_msg: str,
+        assistant_msg: str,
+        user_id: Optional[int] = None,
+        persist_to_db: bool = False
+    ) -> None:
+        """Persist the latest exchange to cache and optionally the database."""
+        cache_key = f"conversation:history:{conversation_id}"
+        try:
+            cached_data = await self.cache.get(cache_key)
+            history = json.loads(cached_data) if cached_data else []
+        except Exception as exc:
+            logger.warning(f"Failed to read history cache before update: {exc}")
+            history = []
+
+        history.append({"role": "user", "content": user_msg})
+        history.append({"role": "assistant", "content": assistant_msg})
+        history = history[-6:]
+
+        await self._cache_history(conversation_id, history)
+        logger.info(f"Cached exchange for {conversation_id}")
+
+        if persist_to_db and user_id is not None:
+            await self._persist_messages_to_db(conversation_id, user_id, user_msg, assistant_msg)
+
+    async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
+        """Helper to persist conversation history to cache with a 24-hour TTL."""
+        try:
+            cache_key = f"conversation:history:{conversation_id}"
+            await self.cache.set(
+                cache_key,
+                json.dumps(history),
+                ttl=int(timedelta(hours=24).total_seconds())
+            )
+        except Exception as exc:
+            logger.error(f"Failed to cache history for {conversation_id}: {exc}")
+
+    async def _persist_messages_to_db(
+        self,
+        conversation_id: str,
+        user_id: int,
+        user_msg: str,
+        assistant_msg: str
+    ) -> None:
+        """Persist the user and assistant turns to the database."""
+        try:
+            user_result = await self.add_message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.USER,
+                content=user_msg
+            )
+            if not user_result.get("success"):
+                logger.warning(
+                    f"Failed to persist user message for {conversation_id}: {user_result.get('error')}"
+                )
+
+            assistant_result = await self.add_message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.ASSISTANT,
+                content=assistant_msg
+            )
+            if not assistant_result.get("success"):
+                logger.warning(
+                    f"Failed to persist assistant message for {conversation_id}: {assistant_result.get('error')}"
+                )
+        except Exception as exc:
+            logger.error(f"Failed to persist exchange for {conversation_id}: {exc}")
 
     async def get_messages(
         self,
