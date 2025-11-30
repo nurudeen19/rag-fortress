@@ -16,7 +16,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.core.cache import get_cache
 from app.services.vector_store.retriever import get_retriever_service
-from app.services.llm_router_service import get_llm_router
+from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.models.user_permission import PermissionLevel
 from app.core import get_logger
 
@@ -88,14 +88,13 @@ class ConversationResponseService:
             
             # Extract documents and their max security level
             documents = retrieval_result["context"]
-            max_doc_level = self._get_max_security_level(documents)
+            max_doc_level = retrieval_result.get("max_security_level")
             
             logger.info(f"Retrieved {len(documents)} documents, max_level={max_doc_level.name if max_doc_level else 'NONE'}")
             
             # Step 3: Route to appropriate LLM based on document security
-            doc_levels = [max_doc_level] if max_doc_level else []
             routing_decision = await self.llm_router.route_llm(
-                document_security_levels=doc_levels,
+                document_security_levels=[max_doc_level] if max_doc_level else [],
                 user_clearance=user_clearance,
                 metadata={"conversation_id": conversation_id, "user_id": user_id}
             )
@@ -152,7 +151,6 @@ class ConversationResponseService:
             Dict with 'clearance' (PermissionLevel) and 'department_id' (int or None)
         """
         try:
-            from app.utils.user_clearance_cache import get_user_clearance_cache
             
             clearance_cache = get_user_clearance_cache(self.session)
             clearance = await clearance_cache.get_clearance(user_id)
@@ -171,20 +169,7 @@ class ConversationResponseService:
             logger.error(f"Failed to get user info: {e}")
             return None
     
-    def _get_max_security_level(self, documents: List[Any]) -> Optional[PermissionLevel]:
-        """Extract maximum security level from retrieved documents."""
-        if not documents:
-            return None
-        
-        levels = []
-        for doc in documents:
-            level_str = doc.metadata.get("security_level", "GENERAL")
-            try:
-                levels.append(PermissionLevel[level_str])
-            except KeyError:
-                levels.append(PermissionLevel.GENERAL)
-        
-        return max(levels) if levels else None
+
     
     async def _get_history(self, conversation_id: str) -> List[Dict[str, str]]:
         """

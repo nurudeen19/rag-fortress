@@ -3,7 +3,7 @@ Retriever service for querying the vector store.
 Handles document retrieval with optional filtering, re-ranking, and processing.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from langchain_core.documents import Document
 
 from app.core.vector_store_factory import get_retriever
@@ -32,7 +32,7 @@ class RetrieverService:
         documents: List[Document],
         user_security_level: int,
         user_department_id: Optional[int] = None
-    ) -> List[Document]:
+    ) -> Tuple[List[Document], Optional[int]]:
         """
         Filter documents based on user's security clearance and department access.
         
@@ -49,7 +49,8 @@ class RetrieverService:
         Returns:
             Filtered list of documents the user can access
         """
-        filtered_docs = []
+        filtered_docs: List[Document] = []
+        max_security_level: Optional[int] = None
         
         for doc in documents:
             metadata = doc.metadata
@@ -86,8 +87,12 @@ class RetrieverService:
             
             # Document passes all checks
             filtered_docs.append(doc)
+
+            # Track maximum security level among accessible documents
+            if max_security_level is None or doc_level_value > max_security_level:
+                max_security_level = doc_level_value
         
-        return filtered_docs
+        return filtered_docs, max_security_level
     
     def query(
         self,
@@ -132,13 +137,14 @@ class RetrieverService:
             logger.info(f"Retrieved {len(docs)} documents for query: '{query_text[:50]}...'")
             
             # Apply security filtering if user credentials provided
+            max_security_level = None
             if user_security_level is not None:
                 logger.debug(
                     f"Filtering documents for user_level={PermissionLevel(user_security_level).name}, "
                     f"dept={user_department_id}"
                 )
                 
-                filtered_docs = self._filter_by_security(
+                filtered_docs, max_security_level = self._filter_by_security(
                     docs,
                     user_security_level,
                     user_department_id
@@ -155,16 +161,18 @@ class RetrieverService:
                         "success": False,
                         "error": "insufficient_clearance",
                         "message": "You do not have sufficient clearance to access the retrieved documents.",
-                        "count": 0
+                        "count": 0,
+                        "max_security_level": max_security_level,
                     }
-                
+
                 docs = filtered_docs
                 logger.info(f"After security filtering: {len(docs)} accessible documents")
             
             return {
                 "success": True,
                 "context": docs,
-                "count": len(docs)
+                "count": len(docs),
+                "max_security_level": max_security_level,
             }
         
         except Exception as e:
@@ -218,10 +226,11 @@ class RetrieverService:
                 logger.info(f"Retrieved {len(results)} documents with scores")
                 
                 # Apply security filtering if user credentials provided
+                max_security_level = None
                 if user_security_level is not None:
                     # Extract documents for filtering
                     docs = [doc for doc, _ in results]
-                    filtered_docs = self._filter_by_security(
+                    filtered_docs, max_security_level = self._filter_by_security(
                         docs,
                         user_security_level,
                         user_department_id
@@ -237,7 +246,8 @@ class RetrieverService:
                             "success": False,
                             "error": "insufficient_clearance",
                             "message": "You do not have sufficient clearance to access the retrieved documents.",
-                            "count": 0
+                            "count": 0,
+                            "max_security_level": max_security_level,
                         }
                     
                     # Rebuild results with only accessible documents
@@ -248,7 +258,8 @@ class RetrieverService:
                 return {
                     "success": True,
                     "context": results,
-                    "count": len(results)
+                    "count": len(results),
+                    "max_security_level": max_security_level,
                 }
             
             except (AttributeError, NotImplementedError):
@@ -272,7 +283,8 @@ class RetrieverService:
                 return {
                     "success": True,
                     "context": docs_with_scores,
-                    "count": len(docs_with_scores)
+                    "count": len(docs_with_scores),
+                    "max_security_level": query_result.get("max_security_level"),
                 }
         
         except Exception as e:

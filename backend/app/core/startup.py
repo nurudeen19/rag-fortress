@@ -16,7 +16,12 @@ See app/seeders/ for seeding operations.
 from app.core import get_logger
 from app.core.email_client import init_email_client
 from app.core.embedding_factory import get_embedding_provider
-from app.core.llm_factory import get_llm_provider, get_fallback_llm_provider, test_llm_provider
+from app.core.llm_factory import (
+    get_internal_llm_provider,
+    get_llm_provider,
+    get_fallback_llm_provider,
+    test_llm_provider,
+)
 from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.core.database import DatabaseManager
 from app.config.settings import settings
@@ -47,6 +52,7 @@ class StartupController:
         self.fallback_llm_provider = None
         self.retriever = None
         self.cache_manager = None
+        self.internal_llm_provider = None
     
     async def initialize(self):
         """
@@ -87,17 +93,18 @@ class StartupController:
             # ========== STEP 5: Vector Store (CRITICAL) ==========
             await self._initialize_vector_store()
             
-            # ========== STEP 6: Retriever (CRITICAL) ==========
-            # await self._initialize_retriever()
-            
-            # ========== STEP 7: LLM Provider (CRITICAL) ==========
+            # ========== STEP 6: LLM Provider (CRITICAL) ==========
             # await self._initialize_llm()
             # await self._initialize_fallback_llm()
+
+            # ========== STEP 7: Internal LLM Provider (optional) ==========
+            if settings.llm_settings.USE_INTERNAL_LLM:
+                await self._initialize_internal_llm()
             
-            # ========== STEP 8: Email Client (OPTIONAL) ==========
+            # ========== STEP 7: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
             
-            # ========== STEP 9: Job Queue (OPTIONAL, at end) ==========
+            # ========== STEP 8: Job Queue (OPTIONAL, at end) ==========
             await self._initialize_job_queue()
 
             self.initialized = True
@@ -249,7 +256,7 @@ class StartupController:
         
         except Exception as e:
             logger.warning(f"⚠ Vector store initialization skipped: {e}", exc_info=True)
-    
+
     async def _initialize_llm(self):
         """Initialize LLM provider (optional - catches errors without blocking startup)."""
         logger.info("Initializing LLM provider...")
@@ -266,7 +273,7 @@ class StartupController:
         
         except Exception as e:
             logger.warning(f"⚠ LLM provider initialization skipped: {e}")
-    
+
     async def _initialize_fallback_llm(self):
         """Initialize and warm up fallback LLM provider."""
         logger.info("Initializing fallback LLM provider...")
@@ -287,6 +294,21 @@ class StartupController:
         except Exception as e:
             logger.error(f"Failed to initialize fallback LLM provider: {e}")
             raise
+
+    async def _initialize_internal_llm(self):
+        """Initialize internal LLM provider (optional)."""
+        logger.info("Initializing internal LLM provider...")
+
+        try:
+            self.internal_llm_provider = get_internal_llm_provider()
+
+            if self.internal_llm_provider:
+                logger.info("✓ Internal LLM provider initialized successfully")
+            else:
+                logger.info("Internal LLM provider is disabled or returned no instance")
+
+        except Exception as e:
+            logger.warning(f"⚠ Internal LLM initialization skipped: {e}")
     
     async def _initialize_retriever(self):
         """Initialize retriever (optional - catches errors without blocking startup)."""
