@@ -16,6 +16,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.core.cache import get_cache
 from app.services.vector_store.retriever import get_retriever_service
+from app.services.llm_router_service import get_llm_router
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.models.user_permission import PermissionLevel
 from app.core import get_logger
@@ -90,17 +91,16 @@ class ConversationResponseService:
             documents = retrieval_result["context"]
             max_doc_level = retrieval_result.get("max_security_level")
             
-            logger.info(f"Retrieved {len(documents)} documents, max_level={max_doc_level.name if max_doc_level else 'NONE'}")
-            
+            max_doc_label = "NONE"
+            if max_doc_level is not None:
+                try:
+                    max_doc_label = PermissionLevel(max_doc_level).name
+                except ValueError:
+                    max_doc_label = str(max_doc_level)
+            logger.info(f"Retrieved {len(documents)} documents, max_level={max_doc_label}")
+
             # Step 3: Route to appropriate LLM based on document security
-            routing_decision = await self.llm_router.route_llm(
-                document_security_levels=[max_doc_level] if max_doc_level else [],
-                user_clearance=user_clearance,
-                metadata={"conversation_id": conversation_id, "user_id": user_id}
-            )
-            
-            llm = routing_decision.llm
-            logger.info(f"Using LLM: {routing_decision.llm_type}")
+            llm = self.llm_router.select_llm(max_doc_level)
             
             # Step 4: Get conversation history
             history = await self._get_history(conversation_id)
