@@ -153,7 +153,7 @@ def render_password_reset_email(
 def render_invitation_email(
     recipient_name: str,
     inviter_name: str,
-    organization_name: str,
+    organization_name: str | None,
     invitation_url: str,
     custom_message: str = ""
 ) -> tuple[str, str]:
@@ -163,7 +163,7 @@ def render_invitation_email(
     Args:
         recipient_name: Name of the recipient
         inviter_name: Name of person sending invitation
-        organization_name: Name of organization/team
+        organization_name: Name of organization/team #todo later
         invitation_url: Invitation acceptance URL with token
         custom_message: Optional custom message from inviter
 
@@ -172,8 +172,8 @@ def render_invitation_email(
     """
     app_name = settings.APP_NAME
     app_description = settings.APP_DESCRIPTION
-    subject = f"You're Invited to Join {organization_name} on {app_name}"
-    preview = f"{inviter_name} invited you to join {organization_name} on {app_name}."
+    subject = f"You're Invited to Join {app_name}"
+    preview = f"{inviter_name} invited you to join {app_name}."
 
     custom_msg_html = ""
     if custom_message:
@@ -191,8 +191,8 @@ def render_invitation_email(
         <p class="text">Hi <strong>{recipient_name}</strong>,</p>
 
         <p class="text">
-            <strong>{inviter_name}</strong> has invited you to join <strong>{organization_name}</strong>
-            on {app_name}, {app_description}.
+            <strong>{inviter_name}</strong> has invited you to join <strong>{app_name}</strong>
+            , {app_description}.
         </p>
 
         {custom_msg_html}
