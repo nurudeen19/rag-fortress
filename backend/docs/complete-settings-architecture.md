@@ -100,6 +100,7 @@ RAG Fortress uses **TWO separate database systems**:
 ├────────────────────────────────────────────────────────────┤
 │ General application configuration                          │
 │ • APP_NAME, APP_VERSION, ENVIRONMENT                       │
+│ • APP_DESCRIPTION                                          │
 │ • HOST, PORT                                               │
 │ • CHUNK_SIZE, CHUNK_OVERLAP, TOP_K_RESULTS                 │
 │ • SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES       │

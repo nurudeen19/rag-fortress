@@ -131,6 +131,7 @@ from app.config import settings
 
 # Access any setting
 settings.APP_NAME
+settings.APP_DESCRIPTION
 settings.LLM_PROVIDER
 settings.OPENAI_API_KEY
 settings.get_llm_config()

@@ -21,6 +21,10 @@ class AppSettings(BaseSettings):
     
     # Application Info
     APP_NAME: str = Field("RAG Fortress", env="APP_NAME")
+    APP_DESCRIPTION: str = Field(
+        "Secure document intelligence platform",
+        env="APP_DESCRIPTION"
+    )
     APP_VERSION: str = Field("0.1.0", env="APP_VERSION")
     DEBUG: bool = Field(False, env="DEBUG")
     ENVIRONMENT: str = Field("development", env="ENVIRONMENT")

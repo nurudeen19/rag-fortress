@@ -43,6 +43,7 @@ class TestSettingsBasic:
             settings = Settings()
             
             assert settings.APP_NAME == "RAG Fortress"
+            assert settings.APP_DESCRIPTION == "Secure document intelligence platform"
             assert settings.APP_VERSION == "1.0.0"
             assert settings.ENVIRONMENT in ["development", "staging", "production"]
             assert settings.LLM_PROVIDER == "openai"
@@ -51,6 +52,7 @@ class TestSettingsBasic:
         """Test that ENV variables override Field defaults."""
         env = {
             "APP_NAME": "Custom RAG",
+            "APP_DESCRIPTION": "Custom branded platform",
             "LLM_PROVIDER": "google",
             "EMBEDDING_PROVIDER": "openai"
         }
@@ -60,6 +62,7 @@ class TestSettingsBasic:
             settings = Settings()
             
             assert settings.APP_NAME == "Custom RAG"
+            assert settings.APP_DESCRIPTION == "Custom branded platform"
             assert settings.LLM_PROVIDER == "google"
             assert settings.EMBEDDING_PROVIDER == "openai"
 

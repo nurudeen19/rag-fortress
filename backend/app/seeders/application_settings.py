@@ -135,6 +135,7 @@ class ApplicationSettingsSeeder(BaseSeed):
             
             # Application Settings
             ("app_name", "string", "Application display name", "application", True, False),
+            ("app_description", "string", "Application description used in branding", "application", True, False),
             ("app_environment", "string", "Environment (dev/staging/prod)", "application", False, False),
             ("cors_allow_origins", "json", "CORS allowed origins", "application", True, False),
             ("debug_mode", "boolean", "Enable debug mode", "application", True, False),

@@ -105,6 +105,7 @@ from app.config import settings
 
 # Access any setting
 print(settings.APP_NAME)
+print(settings.APP_DESCRIPTION)
 print(settings.LLM_PROVIDER)
 print(settings.EMBEDDING_PROVIDER)
 print(settings.VECTOR_DB_PROVIDER)
@@ -174,6 +175,7 @@ All settings can be configured via environment variables in the `.env` file. See
 ```bash
 # General App Settings
 APP_NAME=RAG Fortress
+APP_DESCRIPTION=Secure document intelligence platform for teams
 ENVIRONMENT=development
 DEBUG=True
 

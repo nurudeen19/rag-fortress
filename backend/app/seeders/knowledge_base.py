@@ -17,7 +17,7 @@ from app.services.file_upload import FileStorage
 logger = logging.getLogger(__name__)
 
 # Demo data path - relative to backend directory
-DEMO_DATA_PATH = Path(__file__).parent.parent.parent / "data" / "knowledge_base" / "demo_data"
+DEMO_DATA_PATH = Path(__file__).parent.parent.parent / "data" / "files" / "knowledge_base" / "demo_data"
 
 # Base files directory where all files are stored
 FILES_BASE_DIR = Path(__file__).parent.parent.parent / "data" / "files"

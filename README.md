@@ -246,6 +246,7 @@ Settings (Main)
 
 #### Application Settings
 - `APP_NAME` - Application name (default: "RAG Fortress")
+- `APP_DESCRIPTION` - Short description used in branding and emails (default: "Secure document intelligence platform")
 - `ENVIRONMENT` - Environment (development/staging/production)
 - `DEBUG` - Debug mode (auto-disabled in production)
 - `SECRET_KEY` - JWT secret key (required)

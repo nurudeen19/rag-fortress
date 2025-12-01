@@ -6,7 +6,9 @@ def get_base_template(
     title: str,
     preview_text: str,
     content_html: str,
-    footer_text: str = "RAG Fortress - Secure Document Intelligence Platform"
+    footer_text: str | None = None,
+    app_name: str | None = None,
+    app_description: str | None = None,
 ) -> str:
     """
     Get base email template with consistent styling.
@@ -15,11 +17,16 @@ def get_base_template(
         title: Email title/subject
         preview_text: Preview text shown in email clients
         content_html: Main content HTML
-        footer_text: Footer text
+        footer_text: Footer text (defaults to branded tagline)
+        app_name: Optional app name override
+        app_description: Optional description override
         
     Returns:
         Complete HTML email string
     """
+    resolved_app_name = app_name or "RAG Fortress"
+    resolved_description = app_description or "Secure document intelligence platform"
+    resolved_footer = footer_text or f"{resolved_app_name} — {resolved_description}"
     return f"""<!DOCTYPE html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -111,6 +118,13 @@ def get_base_template(
             color: #4f46e5;
             text-decoration: none;
         }}
+
+        .tagline {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-size: 14px;
+            color: #94a3b8;
+            margin: 8px 0 0 0;
+        }}
         
         /* Divider */
         .divider {{
@@ -150,8 +164,9 @@ def get_base_template(
                     <tr>
                         <td style="padding-bottom: 32px; text-align: center;">
                             <a href="#" class="logo" style="text-decoration: none;">
-                                🏰 RAG Fortress
+                                🏰 {resolved_app_name}
                             </a>
+                            <p class="tagline">{resolved_description}</p>
                         </td>
                     </tr>
                     
@@ -171,7 +186,7 @@ def get_base_template(
                     <!-- Footer -->
                     <tr>
                         <td class="footer">
-                            <p style="margin: 0 0 8px 0;">{footer_text}</p>
+                            <p style="margin: 0 0 8px 0;">{resolved_footer}</p>
                             <p style="margin: 0;">
                                 <a href="#" class="footer-link">Privacy Policy</a> •
                                 <a href="#" class="footer-link">Terms of Service</a> •
