@@ -20,7 +20,6 @@ from app.core.llm_factory import (
     get_internal_llm_provider,
     get_llm_provider,
     get_fallback_llm_provider,
-    test_llm_provider,
 )
 from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.core.database import DatabaseManager
