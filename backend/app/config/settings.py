@@ -1,6 +1,10 @@
 """
 Main settings module that composes all configuration modules.
 """
+import json
+from typing import Any, Optional
+
+from pydantic import TypeAdapter
 from pydantic_settings import SettingsConfigDict
 
 from .app_settings import AppSettings
@@ -10,6 +14,19 @@ from .vectordb_settings import VectorDBSettings
 from .database_settings import DatabaseSettings
 from .email_settings import EmailSettings
 from .cache_settings import CacheSettings
+
+
+# Database connection credentials must never be overridden by user-provided settings
+PROTECTED_DATABASE_FIELDS = frozenset(DatabaseSettings.model_fields.keys())
+PROTECTED_SETTING_CATEGORIES = frozenset({"database"})
+
+
+FIELD_ALIASES = {
+    # Application settings aliases (DB keys → env/model field names)
+    "app_environment": "ENVIRONMENT",
+    "cors_allow_origins": "CORS_ORIGINS",
+    "debug_mode": "DEBUG",
+}
 
 
 class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings, CacheSettings):
@@ -41,7 +58,7 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         4. Field defaults (lowest priority)
         
         Args:
-            cached_settings: Dict of {category: {key: {"value": str, "is_sensitive": bool}}}
+            cached_settings: Dict of {category: {key: {"value": str, "is_sensitive": bool, "is_mutable": bool}}}
             **kwargs: Explicit override values (highest priority)
         """
         # Initialize parent first so Pydantic sets up attributes
@@ -50,40 +67,10 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         # NOW store encrypted metadata for lazy decryption (after Pydantic init)
         self._encrypted_settings = {}
         self._encrypted_overrides = {}  # Track which attrs have encrypted overrides
+        self._cached_settings = cached_settings or {}
         
-        # Process cached DB values
         if cached_settings:
-            for category, settings_dict in cached_settings.items():
-                for key, metadata in settings_dict.items():
-                    if isinstance(metadata, dict):
-                        value = metadata.get("value")
-                        is_sensitive = metadata.get("is_sensitive", False)
-                    else:
-                        # Backward compatibility: plain value
-                        value = metadata
-                        is_sensitive = False
-                    
-                    if value is not None:  # Only use non-null DB values
-                        # Convert snake_case key to UPPER_CASE env var format
-                        env_var_name = key.upper()
-                        
-                        # Skip settings that don't exist as Pydantic fields
-                        # This filters out test settings while allowing all real settings
-                        try:
-                            model_fields = self.model_fields
-                            if env_var_name not in model_fields:
-                                continue  # Skip non-existent fields
-                        except AttributeError:
-                            pass  # Fallback if model_fields doesn't exist
-                        
-                        if is_sensitive:
-                            # Store encrypted value for lazy decryption
-                            self._encrypted_settings[env_var_name] = value
-                            # Mark this attribute as having encrypted override
-                            self._encrypted_overrides[env_var_name] = True
-                        else:
-                            # Non-sensitive: DB value overrides ENV/defaults unconditionally
-                            setattr(self, env_var_name, value)
+            self._apply_cached_settings(cached_settings)
     
     def __getattribute__(self, name: str):
         """
@@ -146,6 +133,112 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
             Cached value or None
         """
         return self._cached_settings.get(category, {}).get(key)
+
+    @property
+    def llm_settings(self) -> LLMSettings:
+        """Expose the LLM settings namespace for backwards compatibility."""
+        return self
+
+    @property
+    def app_settings(self) -> AppSettings:
+        """Namespace alias for AppSettings consumers."""
+        return self
+
+    @property
+    def embedding_settings(self) -> EmbeddingSettings:
+        """Namespace alias for EmbeddingSettings consumers."""
+        return self
+
+    @property
+    def vectordb_settings(self) -> VectorDBSettings:
+        """Namespace alias for VectorDBSettings consumers."""
+        return self
+
+    @property
+    def database_settings(self) -> DatabaseSettings:
+        """Namespace alias for DatabaseSettings consumers."""
+        return self
+
+    @property
+    def email_settings(self) -> EmailSettings:
+        """Namespace alias for EmailSettings consumers."""
+        return self
+
+    @property
+    def cache_settings(self) -> CacheSettings:
+        """Namespace alias for CacheSettings consumers."""
+        return self
+
+    def _apply_cached_settings(self, cached_settings: dict) -> None:
+        """Apply cached DB overrides while enforcing priority rules."""
+        model_fields = getattr(self, "model_fields", {})
+        for category, settings_dict in cached_settings.items():
+            for key, metadata in settings_dict.items():
+                value, is_sensitive, is_mutable = self._extract_metadata(metadata)
+                if value is None:
+                    continue
+                field_name = self._resolve_field_name(key)
+                if field_name not in model_fields:
+                    continue
+                if self._should_skip_override(field_name, category, is_mutable):
+                    continue
+                if is_sensitive:
+                    self._encrypted_settings[field_name] = value
+                    self._encrypted_overrides[field_name] = True
+                else:
+                    cast_value = self._cast_value(field_name, value)
+                    setattr(self, field_name, cast_value)
+
+    @staticmethod
+    def _extract_metadata(metadata: Any) -> tuple[Any, bool, bool]:
+        """Normalize metadata entry into (value, is_sensitive, is_mutable)."""
+        if isinstance(metadata, dict):
+            value = metadata.get("value")
+            is_sensitive = metadata.get("is_sensitive", False)
+            is_mutable = metadata.get("is_mutable", True)
+        else:
+            value = metadata
+            is_sensitive = False
+            is_mutable = True
+        return value, is_sensitive, is_mutable
+
+    def _resolve_field_name(self, raw_key: str) -> str:
+        """Map DB key names to model field names."""
+        key_lower = raw_key.lower()
+        if key_lower in FIELD_ALIASES:
+            return FIELD_ALIASES[key_lower]
+        normalized = raw_key.upper().replace("-", "_").replace(".", "_")
+        return normalized
+
+    def _should_skip_override(self, field_name: str, category: Optional[str], is_mutable: bool) -> bool:
+        """Determine if a cached override should be ignored."""
+        if field_name in PROTECTED_DATABASE_FIELDS:
+            return True
+        if category and category.lower() in PROTECTED_SETTING_CATEGORIES:
+            return True
+        if not is_mutable:
+            return True
+        return False
+
+    def _cast_value(self, field_name: str, raw_value: Any) -> Any:
+        """Cast string DB values into the target field type."""
+        field_info = getattr(self, "model_fields", {}).get(field_name)
+        if not field_info:
+            return raw_value
+        value = raw_value
+        if isinstance(raw_value, str):
+            stripped = raw_value.strip()
+            if stripped and stripped[0] in "[{":
+                try:
+                    value = json.loads(raw_value)
+                except json.JSONDecodeError:
+                    value = raw_value
+        annotation = getattr(field_info, "annotation", Any) or Any
+        try:
+            adapter = TypeAdapter(annotation)
+            return adapter.validate_python(value)
+        except Exception:
+            return value
 
 # Global settings instance (will be initialized with cached values at startup)
 settings = Settings()

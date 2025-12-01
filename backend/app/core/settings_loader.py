@@ -24,8 +24,8 @@ async def load_settings_by_category(session: AsyncSession) -> Dict[str, Dict[str
         session: Database session
     
     Returns:
-        Dict of {category: {key: {"value": str, "is_sensitive": bool}}}
-        Example: {"llm": {"openai_api_key": {"value": "encrypted...", "is_sensitive": True}}}
+        Dict of {category: {key: {"value": str, "is_sensitive": bool, "is_mutable": bool}}}
+        Example: {"llm": {"openai_api_key": {"value": "encrypted...", "is_sensitive": True, "is_mutable": True}}}
     """
     try:
         result = await session.execute(select(ApplicationSetting))
@@ -44,7 +44,8 @@ async def load_settings_by_category(session: AsyncSession) -> Dict[str, Dict[str
             # Decryption will happen lazily when accessed
             grouped[setting.category][setting.key] = {
                 "value": setting.value,
-                "is_sensitive": setting.is_sensitive
+                "is_sensitive": setting.is_sensitive,
+                "is_mutable": setting.is_mutable,
             }
         
         logger.info(f"Loaded {len(settings)} settings across {len(grouped)} categories")

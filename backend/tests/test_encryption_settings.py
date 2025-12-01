@@ -9,7 +9,7 @@ Tests the complete flow:
 """
 import pytest
 import pytest_asyncio
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 
 from app.core.database import DatabaseManager
 from app.config.database_settings import DatabaseSettings
@@ -318,18 +318,21 @@ class TestSettingsService:
         """Test that sensitive settings are auto-encrypted on create."""
         test_key = "test_api_key_create"
         test_value = "sk-test-value"
-        
-        setting = await settings_service.create(
-            key=test_key,
-            value=test_value,
-            data_type="string",
-            category="test",
-            description="Test"
-        )
-        
-        assert setting.is_sensitive is True  # Auto-detected
-        assert setting.value != test_value  # Encrypted
-        assert setting.value.startswith('gAAAAA')
+        await settings_service.delete(test_key)
+        try:
+            setting = await settings_service.create(
+                key=test_key,
+                value=test_value,
+                data_type="string",
+                category="test",
+                description="Test"
+            )
+            
+            assert setting.is_sensitive is True  # Auto-detected
+            assert setting.value != test_value  # Encrypted
+            assert setting.value.startswith('gAAAAA')
+        finally:
+            await settings_service.delete(test_key)
     
     @pytest.mark.asyncio
     async def test_update_sensitive_setting_encrypts(self, db_session, settings_service):
@@ -338,61 +341,207 @@ class TestSettingsService:
         test_key = "test_password_update"
         initial_value = "old-password-123"
         new_value = "new-password-456"
-        
-        await settings_service.create(
-            key=test_key,
-            value=initial_value,
-            data_type="string",
-            category="test",
-            description="Test"
-        )
-        
-        # Update it
-        updated_setting = await settings_service.update(test_key, new_value)
-        
-        # Check encryption
-        result = await db_session.execute(
-            select(ApplicationSetting).where(ApplicationSetting.key == test_key)
-        )
-        db_setting = result.scalar_one()
-        
-        assert db_setting.value != new_value  # Encrypted
-        assert db_setting.value.startswith('gAAAAA')
-        assert db_setting.value != initial_value  # Different from old encrypted value
+        await settings_service.delete(test_key)
+        try:
+            await settings_service.create(
+                key=test_key,
+                value=initial_value,
+                data_type="string",
+                category="test",
+                description="Test"
+            )
+            
+            # Update it
+            updated_setting = await settings_service.update(test_key, new_value)
+            
+            # Check encryption
+            result = await db_session.execute(
+                select(ApplicationSetting).where(ApplicationSetting.key == test_key)
+            )
+            db_setting = result.scalar_one()
+            
+            assert db_setting.value != new_value  # Encrypted
+            assert db_setting.value.startswith('gAAAAA')
+            assert db_setting.value != initial_value  # Different from old encrypted value
+        finally:
+            await settings_service.delete(test_key)
     
     @pytest.mark.asyncio
     async def test_get_value_decrypts_sensitive(self, settings_service):
         """Test that get_value() decrypts sensitive values."""
         test_key = "test_secret_get"
         test_value = "my-secret-value-789"
-        
-        # Create sensitive setting
-        await settings_service.create(
-            key=test_key,
-            value=test_value,
-            data_type="string",
-            category="test",
-            description="Test"
-        )
-        
-        # Get value - should be decrypted
-        retrieved_value = await settings_service.get_value(test_key)
-        
-        assert retrieved_value == test_value
+        await settings_service.delete(test_key)
+        try:
+            # Create sensitive setting
+            await settings_service.create(
+                key=test_key,
+                value=test_value,
+                data_type="string",
+                category="test",
+                description="Test"
+            )
+            
+            # Get value - should be decrypted
+            retrieved_value = await settings_service.get_value(test_key)
+            
+            assert retrieved_value == test_value
+        finally:
+            await settings_service.delete(test_key)
     
     @pytest.mark.asyncio
     async def test_non_sensitive_not_encrypted(self, settings_service):
         """Test that non-sensitive settings are not encrypted."""
         test_key = "test_normal_setting"
         test_value = "just-a-normal-value"
-        
-        setting = await settings_service.create(
-            key=test_key,
-            value=test_value,
-            data_type="string",
-            category="test",
-            description="Test"
+        await settings_service.delete(test_key)
+        try:
+            setting = await settings_service.create(
+                key=test_key,
+                value=test_value,
+                data_type="string",
+                category="test",
+                description="Test"
+            )
+            
+            assert setting.is_sensitive is False
+            assert setting.value == test_value  # Not encrypted
+        finally:
+            await settings_service.delete(test_key)
+
+
+class TestSettingsNamespaceCompatibility:
+    """Ensure the Settings namespace still exposes LLM sub-settings."""
+
+    def test_llm_settings_alias_works_with_cached_overrides(self):
+        """settings.llm_settings must expose subclass fields even when cached."""
+        cached_settings = {
+            "llm": {
+                "use_internal_llm": {"value": True, "is_sensitive": False},
+                "internal_llm_provider": {"value": "openai", "is_sensitive": False},
+            }
+        }
+
+        settings_obj = Settings(cached_settings=cached_settings)
+
+        assert settings_obj.llm_settings is settings_obj
+        assert settings_obj.llm_settings.USE_INTERNAL_LLM is True
+        assert settings_obj.llm_settings.INTERNAL_LLM_PROVIDER == "openai"
+
+
+class TestSettingsOverrideFlow:
+    """Validate DB → ENV → default priority and guardrails."""
+
+    @pytest.mark.asyncio
+    async def test_database_settings_never_overridden(self, db_session, settings_service):
+        """DB credentials remain sourced from env even if user settings exist."""
+        result = await db_session.execute(
+            select(ApplicationSetting).where(ApplicationSetting.key == "db_password")
         )
-        
-        assert setting.is_sensitive is False
-        assert setting.value == test_value  # Not encrypted
+        existing = result.scalar_one_or_none()
+        original_value = existing.value if existing else None
+        original_sensitive = existing.is_sensitive if existing else True
+
+        try:
+            await settings_service.create(
+                key="db_password",
+                value="db-secret-from-user",
+                data_type="string",
+                category="database",
+                description="Test DB password override",
+            )
+        except ValueError:
+            await settings_service.update("db_password", "db-secret-from-user")
+
+        cached_settings = await load_settings_by_category(db_session)
+        settings_obj = Settings(cached_settings=cached_settings, DB_PASSWORD="env-secret")
+
+        assert settings_obj.DB_PASSWORD == "env-secret"
+        assert "DB_PASSWORD" not in settings_obj._encrypted_overrides
+
+        if existing:
+            existing.value = original_value
+            existing.is_sensitive = original_sensitive
+            await db_session.commit()
+        else:
+            await db_session.execute(
+                delete(ApplicationSetting).where(ApplicationSetting.key == "db_password")
+            )
+            await db_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_non_mutable_settings_ignore_cached_value(self, db_session):
+        """Settings marked as immutable should not override ENV/defaults."""
+        result = await db_session.execute(
+            select(ApplicationSetting).where(ApplicationSetting.key == "app_environment")
+        )
+        setting = result.scalar_one_or_none()
+        existed = bool(setting)
+        original_value = setting.value if setting else None
+        original_mutable = setting.is_mutable if setting else True
+
+        if not setting:
+            setting = ApplicationSetting(
+                key="app_environment",
+                value="production",
+                data_type="string",
+                description="Environment override",
+                category="application",
+                is_mutable=False,
+                is_sensitive=False,
+            )
+            db_session.add(setting)
+        else:
+            setting.value = "production"
+            setting.is_mutable = False
+        await db_session.commit()
+
+        cached_settings = await load_settings_by_category(db_session)
+        settings_obj = Settings(cached_settings=cached_settings, ENVIRONMENT="staging")
+
+        assert settings_obj.ENVIRONMENT == "staging"
+
+        if existed:
+            setting.value = original_value
+            setting.is_mutable = original_mutable
+            await db_session.commit()
+        else:
+            await db_session.execute(
+                delete(ApplicationSetting).where(ApplicationSetting.key == "app_environment")
+            )
+            await db_session.commit()
+
+    @pytest.mark.asyncio
+    async def test_alias_keys_cast_to_target_type(self, db_session, settings_service):
+        """Aliased keys like cors_allow_origins should hydrate the proper field type."""
+        cors_payload = "[\"https://example.com\"]"
+        result = await db_session.execute(
+            select(ApplicationSetting).where(ApplicationSetting.key == "cors_allow_origins")
+        )
+        existing = result.scalar_one_or_none()
+        original_value = existing.value if existing else None
+
+        try:
+            await settings_service.create(
+                key="cors_allow_origins",
+                value=cors_payload,
+                data_type="json",
+                category="application",
+                description="Allowed origins override",
+            )
+        except ValueError:
+            await settings_service.update("cors_allow_origins", cors_payload)
+
+        cached_settings = await load_settings_by_category(db_session)
+        settings_obj = Settings(cached_settings=cached_settings)
+
+        assert settings_obj.CORS_ORIGINS == ["https://example.com"]
+
+        if existing:
+            existing.value = original_value
+            await db_session.commit()
+        else:
+            await db_session.execute(
+                delete(ApplicationSetting).where(ApplicationSetting.key == "cors_allow_origins")
+            )
+            await db_session.commit()
