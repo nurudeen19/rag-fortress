@@ -6,6 +6,7 @@ from sqlalchemy.future import select
 
 from app.models.user import User
 from app.models.auth import Role
+from app.models.user_permission import PermissionLevel, UserPermission
 from app.seeders.base import BaseSeed
 from app.config.settings import settings
 
@@ -87,6 +88,12 @@ class AdminSeeder(BaseSeed):
                 is_suspended=False
             )
             admin_user.roles.append(admin_role)
+            permission = UserPermission(
+                user=admin_user,
+                org_level_permission=PermissionLevel.HIGHLY_CONFIDENTIAL.value,
+                is_active=True
+            )
+            session.add(permission)
             
             session.add(admin_user)
             await session.commit()

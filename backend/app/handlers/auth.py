@@ -15,6 +15,8 @@ from jose import jwt
 
 from app.core.security import create_access_token, hash_password
 from app.config.settings import settings
+from app.models.user import User
+from app.models.user_permission import PermissionLevel, UserPermission
 from app.schemas.user import (
     LoginRequest,
     UserCreateRequest,
@@ -32,6 +34,16 @@ from app.services.user import (
 from app.core.startup import get_startup_controller
 from app.models.job import JobType
 from app.utils.user_clearance_cache import get_user_clearance_cache
+
+
+ROLE_CLEARANCE_LEVELS = {
+    "admin": PermissionLevel.HIGHLY_CONFIDENTIAL.value,
+    "executive": PermissionLevel.HIGHLY_CONFIDENTIAL.value,
+    "manager": PermissionLevel.CONFIDENTIAL.value,
+    "user": PermissionLevel.GENERAL.value,
+}
+
+DEFAULT_ROLE_CLEARANCE = PermissionLevel.GENERAL.value
 
 logger = logging.getLogger(__name__)
 
@@ -886,7 +898,19 @@ async def handle_signup_with_invite(
                 if department:
                     department.manager_id = new_user.id
                     logger.info(f"Set user {new_user.username} as manager of department {invitation.department_id}")
-        
+
+        # Seed user permission record based on invitation role
+        role_key = (assigned_role or "user").lower()
+        clearance_level = ROLE_CLEARANCE_LEVELS.get(role_key, DEFAULT_ROLE_CLEARANCE)
+        dept_permission_level = clearance_level if invitation.is_manager else None
+        permission_record = UserPermission(
+            user=new_user,
+            org_level_permission=clearance_level,
+            department_id=invitation.department_id,
+            department_level_permission=dept_permission_level,
+            is_active=True
+        )
+        session.add(permission_record)
         # Mark invitation as accepted and verify user (user verified through invitation)
         now = datetime.now(timezone.utc)
         invitation.status = "accepted"

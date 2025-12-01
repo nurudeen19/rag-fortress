@@ -264,12 +264,6 @@ class StartupController:
         try:
             # Get LLM provider (creates instance if needed)
             self.llm_provider = get_llm_provider()
-            
-            # Test LLM setup
-            if test_llm_provider():
-                logger.info(f"✓ LLM provider initialized successfully")
-            else:
-                raise RuntimeError("LLM provider test failed")
         
         except Exception as e:
             logger.warning(f"⚠ LLM provider initialization skipped: {e}")
