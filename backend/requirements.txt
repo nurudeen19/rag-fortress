@@ -56,7 +56,9 @@ langchain-google-genai>=3.0.1
 
 # HuggingFace
 langchain-huggingface>=1.0.1
-transformers>=4.57.1
+
+# Llama.cpp
+llama-cpp-python>=0.2.90
 
 # ============================================================================
 # LangChain - Embedding Providers

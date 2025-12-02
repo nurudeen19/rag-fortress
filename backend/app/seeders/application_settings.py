@@ -43,7 +43,7 @@ class ApplicationSettingsSeeder(BaseSeed):
             }
         settings_to_seed = [
             # LLM Settings
-            ("llm_provider", "string", "Primary LLM provider (openai, google, huggingface)", "llm", True, False),
+            ("llm_provider", "string", "Primary LLM provider (openai, google, huggingface, llamacpp)", "llm", True, False),
             ("llm_model", "string", "LLM model name for selected provider", "llm", True, False),
             ("llm_temperature", "float", "LLM temperature (0.0-2.0)", "llm", True, False),
             ("llm_max_tokens", "integer", "Maximum tokens per LLM response", "llm", True, False),
@@ -63,15 +63,27 @@ class ApplicationSettingsSeeder(BaseSeed):
             
             ("hf_api_token", "string", "HuggingFace API token (encrypted)", "llm", True, True),
             ("hf_model", "string", "HuggingFace model name", "llm", True, False),
+            ("hf_endpoint_url", "string", "Custom HuggingFace endpoint URL", "llm", True, False),
+            ("hf_task", "string", "HuggingFace task (text-generation, text2text-generation, etc.)", "llm", True, False),
             ("hf_temperature", "float", "HuggingFace temperature", "llm", True, False),
             ("hf_max_tokens", "integer", "HuggingFace max tokens", "llm", True, False),
-            ("hf_enable_quantization", "boolean", "Enable quantization for HuggingFace model", "llm", True, False),
-            ("hf_quantization_level", "string", "Quantization level for HuggingFace model (e.g., 4bit, 8bit)", "llm", True, False), 
+            ("hf_timeout", "integer", "HuggingFace endpoint timeout (seconds)", "llm", True, False),
+
+            # Llama.cpp Provider
+            ("llamacpp_model_path", "string", "Path to local llama.cpp model", "llm", True, False),
+            ("llamacpp_temperature", "float", "llama.cpp temperature", "llm", True, False),
+            ("llamacpp_max_tokens", "integer", "llama.cpp max tokens", "llm", True, False),
+            ("llamacpp_context_size", "integer", "llama.cpp context window size", "llm", True, False),
+            ("llamacpp_n_threads", "integer", "CPU threads for llama.cpp", "llm", True, False),
+            ("llamacpp_n_batch", "integer", "Batch size for llama.cpp inference", "llm", True, False),
             
             # Fallback LLM
             ("fallback_llm_provider", "string", "Fallback LLM provider", "llm", True, False),
             ("fallback_llm_api_key", "string", "Fallback LLM API key (encrypted)", "llm", True, True),
             ("fallback_llm_model", "string", "Fallback LLM model", "llm", True, False),
+            ("fallback_hf_endpoint_url", "string", "Fallback HuggingFace endpoint URL", "llm", True, False),
+            ("fallback_hf_task", "string", "Fallback HuggingFace task", "llm", True, False),
+            ("fallback_hf_timeout", "integer", "Fallback HuggingFace timeout (seconds)", "llm", True, False),
             
             # Internal LLM
             ("internal_llm_provider", "string", "Internal LLM provider for sensitive data", "llm", True, False),
@@ -79,8 +91,12 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("internal_llm_model", "string", "Internal LLM model name", "llm", True, False),
             ("internal_llm_temperature", "float", "Internal LLM temperature (0.0-2.0)", "llm", True, False),
             ("internal_llm_max_tokens", "integer", "Internal LLM max tokens", "llm", True, False),
-            ("internal_llm_enable_quantization", "boolean", "Enable quantization for internal LLM", "llm", True, False),
-            ("internal_llm_quantization_level", "string", "Quantization level for internal LLM (e.g., 4bit, 8bit)", "llm", True, False),
+            ("internal_llm_endpoint_url", "string", "Internal HuggingFace endpoint URL", "llm", True, False),
+            ("internal_llm_timeout", "integer", "Internal LLM timeout (seconds)", "llm", True, False),
+            ("internal_llamacpp_model_path", "string", "Path to llama.cpp model for internal provider", "llm", True, False),
+            ("internal_llamacpp_context_size", "integer", "Internal llama.cpp context window", "llm", True, False),
+            ("internal_llamacpp_n_threads", "integer", "Internal llama.cpp CPU threads", "llm", True, False),
+            ("internal_llamacpp_n_batch", "integer", "Internal llama.cpp batch size", "llm", True, False),
             
             # New setting for controlling internal LLM usage
             ("use_internal_llm", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),

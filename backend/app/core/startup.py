@@ -93,7 +93,7 @@ class StartupController:
             await self._initialize_vector_store()
             
             # ========== STEP 6: LLM Provider (CRITICAL) ==========
-            # await self._initialize_llm()
+            await self._initialize_llm()
             # await self._initialize_fallback_llm()
 
             # ========== STEP 7: Internal LLM Provider (optional) ==========

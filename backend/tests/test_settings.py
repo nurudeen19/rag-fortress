@@ -20,7 +20,8 @@ def clean_env():
         prefix in key for prefix in [
             'LLM_', 'OPENAI_', 'GOOGLE_', 'HF_', 'FALLBACK_',
             'EMBEDDING_', 'COHERE_',
-            'VECTOR_DB_', 'QDRANT_', 'PINECONE_', 'WEAVIATE_', 'MILVUS_'
+            'VECTOR_DB_', 'QDRANT_', 'PINECONE_', 'WEAVIATE_', 'MILVUS_',
+            'LLAMACPP_', 'INTERNAL_LLAMACPP_'
         ]
     )]
     for key in keys_to_clear:
@@ -112,6 +113,9 @@ class TestLLMConfiguration:
             "LLM_PROVIDER": "huggingface",
             "HF_API_TOKEN": "test_hf_token",
             "HF_MODEL": "meta-llama/Llama-2-7b-chat-hf",
+            "HF_ENDPOINT_URL": "https://example.endpoints.huggingface.cloud",
+            "HF_TASK": "text-generation",
+            "HF_TIMEOUT": "90",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -122,6 +126,34 @@ class TestLLMConfiguration:
             assert config["provider"] == "huggingface"
             assert config["api_key"] == "test_hf_token"
             assert config["model"] == "meta-llama/Llama-2-7b-chat-hf"
+            assert config["endpoint_url"] == "https://example.endpoints.huggingface.cloud"
+            assert config["task"] == "text-generation"
+            assert config["timeout"] == 90
+    
+    def test_llamacpp_config(self, clean_env):
+        """Test llama.cpp provider configuration from ENV."""
+        env = {
+            "LLM_PROVIDER": "llamacpp",
+            "LLAMACPP_MODEL_PATH": "/models/llama-3.1.gguf",
+            "LLAMACPP_TEMPERATURE": "0.2",
+            "LLAMACPP_MAX_TOKENS": "256",
+            "LLAMACPP_CONTEXT_SIZE": "2048",
+            "LLAMACPP_N_THREADS": "6",
+            "LLAMACPP_N_BATCH": "128",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_llm_config()
+
+            assert config["provider"] == "llamacpp"
+            assert config["model_path"] == "/models/llama-3.1.gguf"
+            assert config["temperature"] == 0.2
+            assert config["max_tokens"] == 256
+            assert config["context_size"] == 2048
+            assert config["n_threads"] == 6
+            assert config["n_batch"] == 128
     
     def test_missing_api_key_raises_error(self, clean_env):
         """Test that missing API key raises error during config access."""
@@ -165,6 +197,8 @@ class TestFallbackLLMConfiguration:
             assert fallback["provider"] == "huggingface"
             assert fallback["model"] == "google/flan-t5-small"
             assert fallback["max_tokens"] == 512
+            assert fallback["task"] == "text-generation"
+            assert "endpoint_url" in fallback
     
     def test_custom_fallback_model(self, clean_env, base_env):
         """Test custom fallback model configuration"""

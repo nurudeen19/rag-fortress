@@ -6,6 +6,7 @@ Handles retrieval and updating of user profile data.
 from typing import Optional, Tuple, Dict, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User
 from app.models.user_profile import UserProfile
@@ -35,7 +36,13 @@ class UserProfileService:
         try:
             # Get user with related data
             result = await self.session.execute(
-                select(User).where(User.id == user_id)
+                select(User)
+                .options(
+                    selectinload(User.roles),
+                    selectinload(User.department),
+                    selectinload(User.profile),
+                )
+                .where(User.id == user_id)
             )
             user = result.scalar_one_or_none()
             

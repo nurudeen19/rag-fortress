@@ -37,87 +37,9 @@ def get_llm_provider() -> BaseLanguageModel:
 
 
 def _create_llm_provider() -> BaseLanguageModel:
-    """
-    Create LangChain LLM provider based on configuration.
-    Internal function - use get_llm_provider() instead.
-    
-    Returns:
-        BaseLanguageModel: Configured LangChain LLM instance
-    """
+    """Create primary LLM provider from settings."""
     config = settings.get_llm_config()
-    provider = config["provider"].lower()
-    
-    if provider == "openai":
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-openai not installed. "
-                "Install with: pip install langchain-openai"
-            )
-        
-        return ChatOpenAI(
-            api_key=config["api_key"],
-            model=config["model"],
-            temperature=config["temperature"],
-            max_tokens=config["max_tokens"]
-        )
-    
-    elif provider == "google":
-        try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-google-genai not installed. "
-                "Install with: pip install langchain-google-genai"
-            )
-        
-        return ChatGoogleGenerativeAI(
-            google_api_key=config["api_key"],
-            model=config["model"],
-            temperature=config["temperature"],
-            max_tokens=config["max_tokens"]
-        )
-    
-    elif provider == "huggingface":
-        try:
-            from langchain_huggingface import ChatHuggingFace
-            from langchain_community.llms import HuggingFacePipeline
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-huggingface not installed. "
-                "Install with: pip install langchain-huggingface"
-            )
-        
-        try:
-            from transformers import BitsAndBytesConfig
-        except ImportError:
-            raise ConfigurationError(
-                "transformers not installed. "
-                "Install with: pip install transformers"
-            )
-        
-        # Prepare model kwargs with quantization config if enabled
-        model_kwargs = {}
-        if config.get("enable_quantization"):
-            quant_level = config.get("quantization_level", "4bit").lower()
-            model_kwargs["quantization_config"] = _get_quantization_config(quant_level)
-        
-        llm = HuggingFacePipeline.from_model_id(
-            model_id=config["model"],
-            task="text-generation",
-            pipeline_kwargs=dict(
-                max_new_tokens=config["max_tokens"],
-                do_sample=False,
-                repetition_penalty=1.03,
-                return_full_text=False,
-            ),
-            model_kwargs=model_kwargs,
-        )
-        return ChatHuggingFace(llm=llm)
-    
-    else:
-        raise ConfigurationError(f"Unsupported LLM provider: {provider}")
+    return _build_llm_from_config(config)
 
 
 def get_fallback_llm_provider() -> BaseLanguageModel:
@@ -140,107 +62,9 @@ def get_fallback_llm_provider() -> BaseLanguageModel:
 
 
 def _create_fallback_llm_provider() -> BaseLanguageModel:
-    """
-    Create fallback LangChain LLM provider based on configuration.
-    Internal function - use get_fallback_llm_provider() instead.
-    
-    Returns:
-        BaseLanguageModel: Configured fallback LangChain LLM instance
-    """
+    """Create fallback LLM provider from settings."""
     config = settings.get_fallback_llm_config()
-    provider = config["provider"].lower()
-    
-    if provider == "openai":
-        try:
-            from langchain_openai import ChatOpenAI
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-openai not installed. "
-                "Install with: pip install langchain-openai"
-            )
-        
-        return ChatOpenAI(
-            api_key=config["api_key"],
-            model=config["model"],
-            temperature=config["temperature"],
-            max_tokens=config["max_tokens"]
-        )
-    
-    elif provider == "google":
-        try:
-            from langchain_google_genai import ChatGoogleGenerativeAI
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-google-genai not installed. "
-                "Install with: pip install langchain-google-genai"
-            )
-        
-        return ChatGoogleGenerativeAI(
-            google_api_key=config["api_key"],
-            model=config["model"],
-            temperature=config["temperature"],
-            max_tokens=config["max_tokens"]
-        )
-    
-    elif provider == "huggingface":
-        try:
-            from langchain_huggingface import ChatHuggingFace
-            from langchain_community.llms import HuggingFacePipeline
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-huggingface not installed. "
-                "Install with: pip install langchain-huggingface"
-            )
-        
-        try:
-            from transformers import BitsAndBytesConfig
-        except ImportError:
-            raise ConfigurationError(
-                "transformers not installed. "
-                "Install with: pip install transformers"
-            )
-        
-        llm = HuggingFacePipeline.from_model_id(
-            model_id=config["model"],
-            task="text-generation",
-            pipeline_kwargs=dict(
-                max_new_tokens=config["max_tokens"],
-                do_sample=False,
-                repetition_penalty=1.03,
-                return_full_text=False,
-            ),
-        )
-        return ChatHuggingFace(llm=llm)
-    
-    else:
-        raise ConfigurationError(f"Unsupported fallback LLM provider: {provider}")
-
-
-def _get_quantization_config(quant_level: str):
-    """
-    Get BitsAndBytes quantization configuration based on level.
-    
-    Args:
-        quant_level: Quantization level (e.g., '4bit', '8bit')
-    
-    Returns:
-        BitsAndBytesConfig: Configured quantization settings
-    """
-    from transformers import BitsAndBytesConfig
-    
-    if quant_level == "4bit":
-        return BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype="float16",
-            bnb_4bit_use_double_quant=True,
-        )
-    elif quant_level == "8bit":
-        return BitsAndBytesConfig(
-            load_in_8bit=True,
-        )
-    else:
-        raise ConfigurationError(f"Unsupported quantization level: {quant_level}. Supported: 4bit, 8bit")
+    return _build_llm_from_config(config)
 
 
 def get_internal_llm_provider() -> Optional[BaseLanguageModel]:
@@ -267,58 +91,18 @@ def get_internal_llm_provider() -> Optional[BaseLanguageModel]:
 
 
 def _create_internal_llm_provider() -> BaseLanguageModel:
-    """
-    Create internal LangChain LLM provider based on configuration.
-    Internal function - use get_internal_llm_provider() instead.
+    """Create internal LLM provider from settings."""
+    config = settings.get_internal_llm_config()
+    if not config:
+        raise ConfigurationError("Internal LLM provider requested but no configuration found")
+    return _build_llm_from_config(config)
+
+
+def _build_llm_from_config(config: dict) -> BaseLanguageModel:
+    """Instantiate a LangChain chat model from normalized provider config."""
+    provider = config["provider"].lower()
     
-    Returns:
-        BaseLanguageModel: Configured internal LangChain LLM instance
-    """
-    settings_obj = settings.llm_settings
-    
-    if not settings_obj.INTERNAL_LLM_PROVIDER or not settings_obj.INTERNAL_LLM_MODEL:
-        raise ConfigurationError("Internal LLM provider and model are required when USE_INTERNAL_LLM is True")
-    
-    provider = settings_obj.INTERNAL_LLM_PROVIDER.lower()
-    
-    if provider == "huggingface":
-        try:
-            from langchain_huggingface import ChatHuggingFace
-            from langchain_community.llms import HuggingFacePipeline
-        except ImportError:
-            raise ConfigurationError(
-                "langchain-huggingface not installed. "
-                "Install with: pip install langchain-huggingface"
-            )
-        
-        try:
-            from transformers import BitsAndBytesConfig
-        except ImportError:
-            raise ConfigurationError(
-                "transformers not installed. "
-                "Install with: pip install transformers"
-            )
-        
-        # Prepare model kwargs with quantization config if enabled
-        model_kwargs = {}
-        if settings_obj.INTERNAL_LLM_ENABLE_QUANTIZATION:
-            quant_level = (settings_obj.INTERNAL_LLM_QUANTIZATION_LEVEL or "4bit").lower()
-            model_kwargs["quantization_config"] = _get_quantization_config(quant_level)
-        
-        llm = HuggingFacePipeline.from_model_id(
-            model_id=settings_obj.INTERNAL_LLM_MODEL,
-            task="text-generation",
-            pipeline_kwargs=dict(
-                max_new_tokens=settings_obj.INTERNAL_LLM_MAX_TOKENS,
-                do_sample=False,
-                repetition_penalty=1.03,
-                return_full_text=False,
-            ),
-            model_kwargs=model_kwargs,
-        )
-        return ChatHuggingFace(llm=llm)
-    
-    elif provider == "openai":
+    if provider == "openai":
         try:
             from langchain_openai import ChatOpenAI
         except ImportError:
@@ -327,14 +111,16 @@ def _create_internal_llm_provider() -> BaseLanguageModel:
                 "Install with: pip install langchain-openai"
             )
         
-        return ChatOpenAI(
-            api_key=settings_obj.INTERNAL_LLM_API_KEY,
-            model=settings_obj.INTERNAL_LLM_MODEL,
-            temperature=settings_obj.INTERNAL_LLM_TEMPERATURE,
-            max_tokens=settings_obj.INTERNAL_LLM_MAX_TOKENS
-        )
+        kwargs = {
+            "api_key": config["api_key"],
+            "model": config["model"],
+            "temperature": config.get("temperature", 0.7),
+        }
+        if config.get("max_tokens") is not None:
+            kwargs["max_tokens"] = config["max_tokens"]
+        return ChatOpenAI(**kwargs)
     
-    elif provider == "google":
+    if provider == "google":
         try:
             from langchain_google_genai import ChatGoogleGenerativeAI
         except ImportError:
@@ -343,15 +129,60 @@ def _create_internal_llm_provider() -> BaseLanguageModel:
                 "Install with: pip install langchain-google-genai"
             )
         
-        return ChatGoogleGenerativeAI(
-            google_api_key=settings_obj.INTERNAL_LLM_API_KEY,
-            model=settings_obj.INTERNAL_LLM_MODEL,
-            temperature=settings_obj.INTERNAL_LLM_TEMPERATURE,
-            max_tokens=settings_obj.INTERNAL_LLM_MAX_TOKENS
+        kwargs = {
+            "google_api_key": config["api_key"],
+            "model": config["model"],
+            "temperature": config.get("temperature", 0.7),
+        }
+        if config.get("max_tokens") is not None:
+            kwargs["max_tokens"] = config["max_tokens"]
+        return ChatGoogleGenerativeAI(**kwargs)
+    
+    if provider == "huggingface":
+        try:
+            from langchain_huggingface import ChatHuggingFace
+            from langchain_community.llms import HuggingFaceEndpoint
+        except ImportError:
+            raise ConfigurationError(
+                "langchain-huggingface not installed. "
+                "Install with: pip install langchain-huggingface"
+            )
+        
+        model_kwargs = {
+            "temperature": config.get("temperature", 0.7),
+        }
+        if config.get("max_tokens") is not None:
+            model_kwargs["max_new_tokens"] = config["max_tokens"]
+        
+        llm = HuggingFaceEndpoint(
+            repo_id=config.get("model"),
+            endpoint_url=config.get("endpoint_url"),
+            huggingfacehub_api_token=config.get("api_key"),
+            task=config.get("task", "text-generation"),
+            timeout=config.get("timeout"),
+            model_kwargs=model_kwargs,
+        )
+        return ChatHuggingFace(llm=llm)
+    
+    if provider == "llamacpp":
+        try:
+            from langchain_community.chat_models import ChatLlamaCpp
+        except ImportError:
+            raise ConfigurationError(
+                "llama-cpp-python not installed. "
+                "Install with: pip install llama-cpp-python"
+            )
+        
+        return ChatLlamaCpp(
+            model_path=config["model_path"],
+            temperature=config.get("temperature", 0.1),
+            max_tokens=config.get("max_tokens"),
+            n_ctx=config.get("context_size", 4096),
+            n_threads=config.get("n_threads"),
+            n_batch=config.get("n_batch"),
         )
     
-    else:
-        raise ConfigurationError(f"Unsupported internal LLM provider: {provider}")
+    raise ConfigurationError(f"Unsupported LLM provider: {provider}")
 
 
 
