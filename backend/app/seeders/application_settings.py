@@ -76,6 +76,10 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("llamacpp_context_size", "integer", "llama.cpp context window size", "llm", True, False),
             ("llamacpp_n_threads", "integer", "CPU threads for llama.cpp", "llm", True, False),
             ("llamacpp_n_batch", "integer", "Batch size for llama.cpp inference", "llm", True, False),
+            ("llamacpp_endpoint_url", "string", "OpenAI-compatible llama.cpp endpoint URL", "llm", True, False),
+            ("llamacpp_endpoint_model", "string", "Model identifier for llama.cpp endpoint", "llm", True, False),
+            ("llamacpp_endpoint_api_key", "string", "llama.cpp endpoint API key (encrypted)", "llm", True, True),
+            ("llamacpp_endpoint_timeout", "integer", "llama.cpp endpoint timeout (seconds)", "llm", True, False),
             
             # Fallback LLM
             ("fallback_llm_provider", "string", "Fallback LLM provider", "llm", True, False),

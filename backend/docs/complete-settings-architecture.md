@@ -112,10 +112,12 @@ RAG Fortress uses **TWO separate database systems**:
 │ LLMSettings (180 lines)                                    │
 ├────────────────────────────────────────────────────────────┤
 │ Language Model providers                                   │
-│ • LLM_PROVIDER (openai/google/huggingface)                 │
+│ • LLM_PROVIDER (openai/google/huggingface/llamacpp)       │
 │ • OpenAI: OPENAI_API_KEY, OPENAI_MODEL                     │
 │ • Google: GOOGLE_API_KEY, GOOGLE_MODEL                     │
 │ • HuggingFace: HF_API_TOKEN, HF_MODEL                      │
+│ • llama.cpp local: LLAMACPP_MODEL_PATH, LLAMACPP_* tuning  │
+│ • llama.cpp endpoint: LLAMACPP_ENDPOINT_URL/MODEL/API_KEY  │
 │ • Fallback: FALLBACK_LLM_PROVIDER, FALLBACK_LLM_MODEL      │
 │                                                            │
 │ Methods:                                                   │

@@ -127,12 +127,14 @@ class ConversationResponseService:
                     documents=documents,
                     history=history
                 )
+                sources = self._build_sources_payload(documents)
                 await self.conversation_service.cache_conversation_exchange(
                     conversation_id,
                     user_query,
                     response_text,
                     user_id=user_id,
-                    persist_to_db=True
+                    persist_to_db=True,
+                    assistant_meta={"sources": sources} if sources else None
                 )
                 return {
                     "success": True,
@@ -187,7 +189,7 @@ class ConversationResponseService:
         history: List[Dict[str, str]],
         conversation_id: str,
         user_id: int
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate streaming response using LangChain.
         
@@ -229,22 +231,26 @@ class ConversationResponseService:
             }):
                 content = chunk.content if hasattr(chunk, 'content') else str(chunk)
                 full_response += content
-                yield content
+                yield {"type": "token", "content": content}
             
-            # Cache the exchange after streaming completes
+            sources = self._build_sources_payload(documents)
             await self.conversation_service.cache_conversation_exchange(
                 conversation_id,
                 user_query,
                 full_response,
                 user_id=user_id,
-                persist_to_db=True
+                persist_to_db=True,
+                assistant_meta={"sources": sources} if sources else None
             )
             
+            if sources:
+                yield {"type": "metadata", "sources": sources}
+
             logger.info(f"Streaming completed for conversation {conversation_id}")
         
         except Exception as e:
             logger.error(f"Streaming failed: {e}", exc_info=True)
-            yield f"\n\n[Error: {str(e)}]"
+            yield {"type": "error", "message": str(e)}
     
     async def _generate_complete_response(
         self,
@@ -286,6 +292,33 @@ class ConversationResponseService:
         })
         
         return response.content if hasattr(response, 'content') else str(response)
+
+    def _build_sources_payload(self, documents: List[Any]) -> List[Dict[str, Any]]:
+        """Extract lightweight source metadata for the frontend."""
+        sources: List[Dict[str, Any]] = []
+        for doc in documents:
+            metadata = getattr(doc, "metadata", {}) or {}
+            source_name = (
+                metadata.get("title")
+                or metadata.get("source")
+                or metadata.get("document_id")
+                or metadata.get("path")
+                or "Document"
+            )
+            score = metadata.get("score") or metadata.get("similarity") or metadata.get("relevance", 0)
+            try:
+                score_val = float(score) if score is not None else 0.0
+            except (TypeError, ValueError):
+                score_val = 0.0
+
+            sources.append({
+                "document": source_name,
+                "score": max(0.0, min(score_val, 1.0)),
+                "chunk_index": metadata.get("chunk_index"),
+                "security_level": metadata.get("security_level"),
+            })
+
+        return sources
     
 
 def get_conversation_response_service(session) -> ConversationResponseService:

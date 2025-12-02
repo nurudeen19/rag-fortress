@@ -16,7 +16,9 @@ Endpoints:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+import json
 
 from app.core.database import get_session
 from app.core.security import get_current_user
@@ -32,6 +34,7 @@ from app.schemas.conversation import (
     MessageListResponse,
     ConversationContextResponse,
     SuccessResponse,
+    ConversationGenerateRequest,
 )
 from app.handlers.conversation import (
     handle_create_conversation,
@@ -42,6 +45,7 @@ from app.handlers.conversation import (
     handle_add_message,
     handle_get_messages,
     handle_get_conversation_context,
+    handle_stream_response,
 )
 
 
@@ -297,3 +301,36 @@ async def get_conversation_context(
         )
     
     return ConversationContextResponse(**result)
+
+
+@router.post("/{conversation_id}/respond", response_class=StreamingResponse)
+async def stream_conversation_response(
+    conversation_id: str,
+    request: ConversationGenerateRequest,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """Stream AI response tokens for a conversation using Server-Sent Events."""
+
+    async def event_generator():
+        try:
+            async for chunk in handle_stream_response(
+                conversation_id=conversation_id,
+                user_id=current_user.id,
+                user_query=request.message,
+                user=current_user,
+                session=session
+            ):
+                payload = chunk if isinstance(chunk, dict) else {"type": "token", "content": str(chunk)}
+                yield f"data: {json.dumps(payload)}\n\n"
+        except Exception as exc:
+            error_payload = {"type": "error", "message": str(exc)}
+            yield f"data: {json.dumps(error_payload)}\n\n"
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
+    }
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream", headers=headers)

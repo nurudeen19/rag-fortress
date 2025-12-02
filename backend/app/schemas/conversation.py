@@ -28,6 +28,11 @@ class MessageAddRequest(BaseModel):
     meta: Optional[dict] = Field(None, description="JSON metadata (sources, citations, etc.)")
 
 
+class ConversationGenerateRequest(BaseModel):
+    """Request body for AI response generation."""
+    message: str = Field(..., min_length=1, max_length=4000)
+
+
 # ============================================================================
 # RESPONSE SCHEMAS
 # ============================================================================

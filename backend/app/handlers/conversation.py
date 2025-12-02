@@ -288,9 +288,20 @@ async def handle_generate_response(
     """
     logger.info(f"Generating AI response for conversation {conversation_id}")
     
+    # Ensure conversation exists for the user
+    conversation_service = ConversationService(session)
+    conversation = await conversation_service.get_conversation(conversation_id, user_id)
+    if not conversation:
+        logger.warning("Conversation %s not found for user %s", conversation_id, user_id)
+        return {
+            "success": False,
+            "error": "conversation_not_found",
+            "message": "Conversation not found"
+        }
+
     # Get response service
     response_service = get_conversation_response_service(session)
-    
+
     # Generate response with security filtering
     return await response_service.generate_response(
         conversation_id=conversation_id,
@@ -306,7 +317,7 @@ async def handle_stream_response(
     user_query: str,
     user: User,
     session: AsyncSession
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[dict, None]:
     """
     Handle streaming AI response generation.
     
@@ -336,6 +347,6 @@ async def handle_stream_response(
         async for chunk in result["generator"]:
             yield chunk
     else:
-        # If generation failed, yield error message
-        error_msg = result.get("error", "Unknown error occurred")
-        yield f"Error: {error_msg}"
+        # If generation failed, yield structured error payload
+        error_msg = result.get("message") or result.get("error", "Unknown error occurred")
+        yield {"type": "error", "message": error_msg}

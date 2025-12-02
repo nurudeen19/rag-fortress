@@ -375,7 +375,8 @@ class ConversationService:
         user_msg: str,
         assistant_msg: str,
         user_id: Optional[int] = None,
-        persist_to_db: bool = False
+        persist_to_db: bool = False,
+        assistant_meta: Optional[Dict[str, Any]] = None
     ) -> None:
         """Persist the latest exchange to cache and optionally the database."""
         cache_key = f"conversation:history:{conversation_id}"
@@ -394,7 +395,13 @@ class ConversationService:
         logger.info(f"Cached exchange for {conversation_id}")
 
         if persist_to_db and user_id is not None:
-            await self._persist_messages_to_db(conversation_id, user_id, user_msg, assistant_msg)
+            await self._persist_messages_to_db(
+                conversation_id,
+                user_id,
+                user_msg,
+                assistant_msg,
+                assistant_meta=assistant_meta
+            )
 
     async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
         """Helper to persist conversation history to cache with a 24-hour TTL."""
@@ -413,7 +420,8 @@ class ConversationService:
         conversation_id: str,
         user_id: int,
         user_msg: str,
-        assistant_msg: str
+        assistant_msg: str,
+        assistant_meta: Optional[Dict[str, Any]] = None
     ) -> None:
         """Persist the user and assistant turns to the database."""
         try:
@@ -432,7 +440,8 @@ class ConversationService:
                 conversation_id=conversation_id,
                 user_id=user_id,
                 role=MessageRole.ASSISTANT,
-                content=assistant_msg
+                content=assistant_msg,
+                meta=assistant_meta
             )
             if not assistant_result.get("success"):
                 logger.warning(

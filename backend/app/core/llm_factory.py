@@ -165,6 +165,27 @@ def _build_llm_from_config(config: dict) -> BaseLanguageModel:
         return ChatHuggingFace(llm=llm)
     
     if provider == "llamacpp":
+        mode = config.get("mode", "local")
+        if mode == "endpoint":
+            try:
+                from langchain_openai import ChatOpenAI
+            except ImportError:
+                raise ConfigurationError(
+                    "langchain-openai not installed. "
+                    "Install with: pip install langchain-openai"
+                )
+            api_key = config.get("api_key") or "llamacpp-endpoint"
+            kwargs = {
+                "api_key": api_key,
+                "model": config["model"],
+                "temperature": config.get("temperature", 0.1),
+                "base_url": config["endpoint_url"],
+            }
+            if config.get("max_tokens") is not None:
+                kwargs["max_tokens"] = config["max_tokens"]
+            if config.get("timeout") is not None:
+                kwargs["timeout"] = config["timeout"]
+            return ChatOpenAI(**kwargs)
         try:
             from langchain_community.chat_models import ChatLlamaCpp
         except ImportError:

@@ -62,6 +62,10 @@ class LLMSettings(BaseSettings):
     LLAMACPP_CONTEXT_SIZE: int = Field(4096, env="LLAMACPP_CONTEXT_SIZE")
     LLAMACPP_N_THREADS: int = Field(4, env="LLAMACPP_N_THREADS")
     LLAMACPP_N_BATCH: int = Field(512, env="LLAMACPP_N_BATCH")
+    LLAMACPP_ENDPOINT_URL: Optional[str] = Field(None, env="LLAMACPP_ENDPOINT_URL")
+    LLAMACPP_ENDPOINT_MODEL: Optional[str] = Field(None, env="LLAMACPP_ENDPOINT_MODEL")
+    LLAMACPP_ENDPOINT_API_KEY: Optional[str] = Field(None, env="LLAMACPP_ENDPOINT_API_KEY")
+    LLAMACPP_ENDPOINT_TIMEOUT: int = Field(120, env="LLAMACPP_ENDPOINT_TIMEOUT")
 
     # Internal LLM Provider
     USE_INTERNAL_LLM: bool = Field(False, env="USE_INTERNAL_LLM")
@@ -121,10 +125,25 @@ class LLMSettings(BaseSettings):
                 "timeout": self.HF_TIMEOUT,
             }
         elif provider == "llamacpp":
+            endpoint_url = self.LLAMACPP_ENDPOINT_URL
+            if endpoint_url:
+                if not self.LLAMACPP_ENDPOINT_MODEL:
+                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when using llama.cpp endpoint provider")
+                return {
+                    "provider": "llamacpp",
+                    "mode": "endpoint",
+                    "endpoint_url": endpoint_url,
+                    "model": self.LLAMACPP_ENDPOINT_MODEL,
+                    "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
+                    "temperature": self.LLAMACPP_TEMPERATURE,
+                    "max_tokens": self.LLAMACPP_MAX_TOKENS,
+                    "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
+                }
             if not self.LLAMACPP_MODEL_PATH:
-                raise ValueError("LLAMACPP_MODEL_PATH is required when using llama.cpp provider")
+                raise ValueError("LLAMACPP_MODEL_PATH is required when using llama.cpp provider without an endpoint")
             return {
                 "provider": "llamacpp",
+                "mode": "local",
                 "model_path": self.LLAMACPP_MODEL_PATH,
                 "temperature": self.LLAMACPP_TEMPERATURE,
                 "max_tokens": self.LLAMACPP_MAX_TOKENS,
@@ -238,6 +257,7 @@ class LLMSettings(BaseSettings):
                 raise ValueError("LLAMACPP model path is required for fallback llama.cpp provider")
             return {
                 "provider": "llamacpp",
+                "mode": "local",
                 "model_path": self.FALLBACK_LLM_MODEL or self.LLAMACPP_MODEL_PATH,
                 "temperature": self.LLAMACPP_TEMPERATURE,
                 "max_tokens": self.LLAMACPP_MAX_TOKENS,

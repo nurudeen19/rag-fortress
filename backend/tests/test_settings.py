@@ -148,12 +148,66 @@ class TestLLMConfiguration:
             config = settings.get_llm_config()
 
             assert config["provider"] == "llamacpp"
+            assert config["mode"] == "local"
             assert config["model_path"] == "/models/llama-3.1.gguf"
             assert config["temperature"] == 0.2
             assert config["max_tokens"] == 256
             assert config["context_size"] == 2048
             assert config["n_threads"] == 6
             assert config["n_batch"] == 128
+
+    def test_llamacpp_endpoint_config(self, clean_env):
+        """Test llama.cpp endpoint configuration when URL is provided."""
+        env = {
+            "LLM_PROVIDER": "llamacpp",
+            "LLAMACPP_ENDPOINT_URL": "http://localhost:8080/v1",
+            "LLAMACPP_ENDPOINT_MODEL": "llama-3.1-8b-instruct",
+            "LLAMACPP_ENDPOINT_API_KEY": "test_key",
+            "LLAMACPP_TEMPERATURE": "0.3",
+            "LLAMACPP_MAX_TOKENS": "256",
+            "LLAMACPP_ENDPOINT_TIMEOUT": "90",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+            config = settings.get_llm_config()
+
+            assert config["provider"] == "llamacpp"
+            assert config["mode"] == "endpoint"
+            assert config["endpoint_url"] == "http://localhost:8080/v1"
+            assert config["model"] == "llama-3.1-8b-instruct"
+            assert config["api_key"] == "test_key"
+            assert config["temperature"] == 0.3
+            assert config["max_tokens"] == 256
+            assert config["timeout"] == 90
+
+    def test_llamacpp_endpoint_requires_model(self, clean_env):
+        """Ensure endpoint mode validates model name presence."""
+        env = {
+            "LLM_PROVIDER": "llamacpp",
+            "LLAMACPP_ENDPOINT_URL": "http://localhost:8080/v1",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+
+            with pytest.raises(ValueError, match="LLAMACPP_ENDPOINT_MODEL is required"):
+                settings.get_llm_config()
+
+    def test_llamacpp_missing_model_path_without_endpoint(self, clean_env):
+        """Ensure local mode requires model path when no endpoint configured."""
+        env = {
+            "LLM_PROVIDER": "llamacpp",
+        }
+
+        with patch.dict(os.environ, env, clear=True):
+            from app.config.settings import Settings
+            settings = Settings()
+
+            with pytest.raises(ValueError, match="LLAMACPP_MODEL_PATH is required"):
+                settings.get_llm_config()
     
     def test_missing_api_key_raises_error(self, clean_env):
         """Test that missing API key raises error during config access."""
