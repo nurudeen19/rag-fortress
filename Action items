@@ -1,16 +1,9 @@
 Action items TODO
 
-modularize file upload service if possible
-dispatch ingestion tasks on app startup using settings from db
-implement AUTH login/logout and the resets
-
+If the top match is above a confidence threshold (example: cosine similarity > 0.75), you’re usually safe with a small k.
+If the top match is below that threshold (example: < 0.55), then it’s a weak hit, so increase k immediately.
 
 setup quantized model for internal llm
-setup llm router to switch llm based on security level of query
-provide option to do a partial and full app setup
-store custom config in db to be used in app startup for llm overrides from .env
-setup manual history tracking per user session
-always log security incidents on when users try to access restricted info
 
 Test to see if no errors are reported
 

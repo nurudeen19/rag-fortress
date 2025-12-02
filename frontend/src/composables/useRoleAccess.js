@@ -15,15 +15,40 @@ import { useAuthStore } from '../stores/auth'
 export function useRoleAccess() {
   const authStore = useAuthStore()
 
+  const normalizeRoleName = (role) => {
+    if (!role) return null
+    if (typeof role === 'string') return role.toLowerCase()
+    if (typeof role.name === 'string' && role.name.length > 0) {
+      return role.name.toLowerCase()
+    }
+    if (typeof role.code === 'string' && role.code.length > 0) {
+      return role.code.toLowerCase()
+    }
+    return null
+  }
+
+  const normalizedRoles = computed(() => {
+    const roles = authStore.user?.roles || []
+    const normalized = new Set()
+    roles.forEach(role => {
+      const name = normalizeRoleName(role)
+      if (name) normalized.add(name)
+    })
+    if (!normalized.size && authStore.isAuthenticated) {
+      normalized.add('user')
+    }
+    return normalized
+  })
+
   /**
    * Check if user has a specific role
    * @param {string|string[]} roleName - Role name(s) to check
    * @returns {boolean} True if user has any of the specified role(s)
    */
   const hasRole = (roleName) => {
-    if (!authStore.user?.roles) return false
+    if (!normalizedRoles.value.size) return false
     const roles = Array.isArray(roleName) ? roleName : [roleName]
-    return roles.some(r => authStore.user.roles.some(userRole => userRole.name === r))
+    return roles.some(r => normalizedRoles.value.has(r.toLowerCase()))
   }
 
   /**
@@ -41,13 +66,15 @@ export function useRoleAccess() {
    * Check if user is admin
    * @returns {boolean} True if user has admin role
    */
-  const isAdmin = computed(() => hasRole('admin'))
+  const isAdmin = computed(() => normalizedRoles.value.has('admin'))
 
   /**
    * Check if user is manager or admin
    * @returns {boolean} True if user has manager or admin role
    */
-  const isManager = computed(() => hasRole(['manager', 'admin']))
+  const isManager = computed(() =>
+    normalizedRoles.value.has('manager') || normalizedRoles.value.has('admin')
+  )
 
   /**
    * Get navigation items filtered by user role
@@ -112,7 +139,7 @@ export function useRoleAccess() {
           path: '/departments',
           routeName: 'departments',
           icon: 'settings',
-          roles: ['manager', 'admin'],
+          roles: ['admin'],
           group: 'admin',
         },
         {
@@ -148,7 +175,7 @@ export function useRoleAccess() {
 
     // Filter to only items user has role for
     return nav.filter(item =>
-      item.roles.some(requiredRole => hasRole(requiredRole))
+      item.roles.some(requiredRole => normalizedRoles.value.has(requiredRole.toLowerCase()))
     )
   }
 
