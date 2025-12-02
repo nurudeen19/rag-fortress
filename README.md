@@ -257,6 +257,8 @@ Settings (Main)
 - `OPENAI_API_KEY` - OpenAI API key
 - `GOOGLE_API_KEY` - Google Gemini API key
 - `HF_API_TOKEN` - HuggingFace API token
+- `LLAMACPP_MODEL_PATH` - Local llama.cpp GGUF path (when running embedded)
+- `LLAMACPP_ENDPOINT_URL` / `LLAMACPP_ENDPOINT_MODEL` / `LLAMACPP_ENDPOINT_API_KEY` - Configure an OpenAI-compatible llama.cpp HTTP endpoint (set instead of `LLAMACPP_MODEL_PATH`)
 - `FALLBACK_LLM_PROVIDER` - Fallback LLM provider (optional)
 
 #### Embedding Configuration

@@ -397,12 +397,10 @@ const router = useRouter()
 const authStore = useAuthStore()
 const { 
   activeChat,
-  chats,
   deleteChat: deleteChatFromHistory, 
   renameChat: renameChatFromHistory,
   loadChatMessages,
-  addMessage,
-  createConversationWithMessage
+  createConversation
 } = useChatHistory()
 
 // State
@@ -417,6 +415,9 @@ const showChatOptions = ref(false)
 const showRenameModal = ref(false)
 const showDeleteModal = ref(false)
 const renameInput = ref('')
+const suppressAutoLoad = ref(false)
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
 
@@ -502,13 +503,15 @@ const loadMessagesForConversation = async (conversationId) => {
 watch(
   () => route.params.id,
   async (newId) => {
+    if (suppressAutoLoad.value && newId && newId !== 'new') {
+      return
+    }
+
     if (newId && newId !== 'new') {
       await loadMessagesForConversation(newId)
     } else {
       messages.value = []
-      if (newId !== 'new') {
-        activeChat.value = null
-      }
+      activeChat.value = null
     }
   },
   { immediate: true }
@@ -522,6 +525,100 @@ const scrollToBottom = async () => {
   }
 }
 
+const streamAssistantResponse = async (conversationId, userMessage, assistantMessage) => {
+  const token = authStore.token
+  const response = await fetch(`${API_BASE_URL}/v1/conversations/${conversationId}/respond`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ message: userMessage })
+  })
+
+  if (!response.ok) {
+    let detail = 'Failed to generate response'
+    try {
+      const errorBody = await response.json()
+      detail = errorBody?.detail || errorBody?.message || detail
+    } catch (_) {
+      const text = await response.text()
+      if (text) {
+        detail = text
+      }
+    }
+    throw new Error(detail)
+  }
+
+  if (!response.body) {
+    throw new Error('Streaming response not supported by the browser.')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  const handlePayload = async (payload) => {
+    if (!payload || typeof payload !== 'object') {
+      return
+    }
+
+    if (payload.type === 'token') {
+      assistantMessage.content += payload.content || ''
+      assistantMessage.timestamp = new Date().toISOString()
+    } else if (payload.type === 'metadata') {
+      assistantMessage.sources = payload.sources || []
+    } else if (payload.type === 'error') {
+      assistantMessage.error = payload.message || 'An error occurred while generating the response.'
+      if (!assistantMessage.content) {
+        assistantMessage.content = 'I encountered an error while generating the response.'
+      }
+      throw new Error(assistantMessage.error)
+    }
+
+    scrollToBottom()
+  }
+
+  const processBuffer = async () => {
+    let boundary = buffer.indexOf('\n\n')
+    while (boundary !== -1) {
+      const rawEvent = buffer.slice(0, boundary).trim()
+      buffer = buffer.slice(boundary + 2)
+      if (rawEvent) {
+        const dataLines = rawEvent
+          .split('\n')
+          .filter(line => line.startsWith('data:'))
+          .map(line => line.replace(/^data:\s*/, ''))
+        if (dataLines.length) {
+          const payloadStr = dataLines.join('\n')
+          try {
+            const payload = JSON.parse(payloadStr)
+            await handlePayload(payload)
+          } catch (err) {
+            console.error('Failed to parse stream payload:', err)
+          }
+        }
+      }
+      boundary = buffer.indexOf('\n\n')
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) {
+      const remaining = decoder.decode()
+      if (remaining) {
+        buffer += remaining
+        await processBuffer()
+      }
+      break
+    }
+
+    buffer += decoder.decode(value, { stream: true })
+    await processBuffer()
+  }
+}
+
 // Send message
 const sendMessage = async () => {
   if (!inputMessage.value.trim() || loading.value) return
@@ -529,119 +626,62 @@ const sendMessage = async () => {
   const userMessage = inputMessage.value.trim()
   inputMessage.value = ''
 
-  // Add user message to UI immediately
-  messages.value.push({
-    role: 'user',
-    content: userMessage,
-    timestamp: new Date().toISOString()
-  })
-
   loading.value = true
-  await scrollToBottom()
+
+  let conversationId = activeChat.value?.id
+  let createdConversation = false
 
   try {
-    let userMsg
-    
-    // Check if this is a new conversation
-    if (route.params.id === 'new' || !activeChat.value) {
-      // First message - create conversation with message
-      const result = await createConversationWithMessage(userMessage, 'USER')
-      userMsg = result.message
-      
-      // Update user message with server data
-      if (messages.value[messages.value.length - 1].role === 'user') {
-        messages.value[messages.value.length - 1].id = userMsg.id
-        messages.value[messages.value.length - 1].timestamp = userMsg.created_at
-      }
-    } else {
-      // Existing conversation - add message normally
-      userMsg = await addMessage(activeChat.value.id, userMessage, 'USER')
-      
-      // Update user message with server timestamp and id
-      if (messages.value[messages.value.length - 1].role === 'user') {
-        messages.value[messages.value.length - 1].id = userMsg.id
-        messages.value[messages.value.length - 1].timestamp = userMsg.created_at
-      }
+    if (!conversationId || route.params.id === 'new') {
+      suppressAutoLoad.value = true
+      const conversation = await createConversation(userMessage)
+      conversationId = conversation.id
+      createdConversation = true
     }
 
-    // TODO: Replace with actual API call to RAG backend
-    // const response = await api.post('/v1/chat', {
-    //   message: userMessage,
-    //   conversation_id: activeChat.value.id
-    // })
-
-    // Simulate API response for now
-    await new Promise(resolve => setTimeout(resolve, 1500))
-
-    // Mock response based on user input
-    let responseContent = ''
-    let sources = []
-
-    if (userMessage.toLowerCase().includes('sales')) {
-      responseContent = `Based on the SALES DEPARTMENT PLAYBOOK in our knowledge base, here are key insights:
-
-The Sales Department follows a structured sales cycle:
-• Initial meetings: 4-6 per week
-• Pipeline generation: $100K+ per month
-
-The discovery call typically lasts 20-30 minutes and includes:
-1. Introduction (2 min)
-2. Purpose statement (1 min)
-3. Discovery questions (15 min)
-4. Qualification assessment (5 min)
-5. Next steps discussion (2 min)`
-
-      sources = [
-        { document: 'SALES_DEPARTMENT_PLAYBOOK.md', score: 0.95 },
-        { document: 'sales_process_guide.md', score: 0.87 }
-      ]
-    } else if (userMessage.toLowerCase().includes('document')) {
-      responseContent = `I can help you find information in your documents. Our system supports:
-
-• Full-text search through all uploaded documents
-• Semantic search using AI embeddings
-• Multi-document context retrieval
-• Source attribution for all answers
-
-To get the best results, please ask specific questions about the content you're looking for.`
-
-      sources = [
-        { document: 'user_guide.md', score: 0.92 }
-      ]
-    } else {
-      responseContent = `I'm here to help you find information in your knowledge base. Feel free to ask questions about:
-
-• Specific documents or topics
-• Relationships between concepts
-• Historical information or processes
-• Guidelines and best practices
-
-I'll provide relevant sources for each answer.`
-      sources = []
+    const userEntry = {
+      role: 'user',
+      content: userMessage,
+      timestamp: new Date().toISOString()
     }
+    messages.value.push(userEntry)
+    scrollToBottom()
 
-    // Save assistant message to backend
-    const assistantMsg = await addMessage(activeChat.value.id, responseContent, 'ASSISTANT', { sources })
-
-    messages.value.push({
+    const assistantEntry = {
       role: 'assistant',
-      id: assistantMsg.id,
-      content: responseContent,
-      sources: sources,
-      timestamp: assistantMsg.created_at
-    })
+      content: '',
+      timestamp: new Date().toISOString(),
+      sources: [],
+      error: null
+    }
+    messages.value.push(assistantEntry)
+    scrollToBottom()
+
+    await streamAssistantResponse(conversationId, userMessage, assistantEntry)
+
+    await loadMessagesForConversation(conversationId)
   } catch (error) {
     console.error('Chat error:', error)
-
-    messages.value.push({
-      role: 'assistant',
-      content: 'I encountered an error processing your request.',
-      error: error.message || 'Unable to retrieve information. Please try again.',
-      timestamp: new Date().toISOString()
-    })
+    const assistantEntry = messages.value[messages.value.length - 1]
+    if (assistantEntry?.role === 'assistant') {
+      assistantEntry.error = error.message || 'Unable to retrieve information. Please try again.'
+      if (!assistantEntry.content) {
+        assistantEntry.content = 'I encountered an error while generating your response.'
+      }
+    } else {
+      messages.value.push({
+        role: 'assistant',
+        content: 'I encountered an error while generating your response.',
+        error: error.message || 'Unable to retrieve information. Please try again.',
+        timestamp: new Date().toISOString()
+      })
+    }
   } finally {
     loading.value = false
-    await scrollToBottom()
+    if (createdConversation) {
+      suppressAutoLoad.value = false
+    }
+    scrollToBottom()
   }
 }
 

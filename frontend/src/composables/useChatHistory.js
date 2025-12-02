@@ -114,9 +114,10 @@ export function useChatHistory() {
   }
 
   /**
-   * Create a new chat conversation with first message
+   * Create a new chat conversation and navigate to it.
+   * The first user message is sent via the streaming endpoint.
    */
-  const createConversationWithMessage = async (firstMessage, role = 'USER') => {
+  const createConversation = async (firstMessage) => {
     loading.value = true
     error.value = null
     
@@ -137,19 +138,10 @@ export function useChatHistory() {
       // Update cache
       setCache(chats.value)
       
-      // Add the first message
-      const messageResponse = await api.post(`/v1/conversations/${newChat.id}/messages`, {
-        role,
-        content: firstMessage
-      })
-      
       // Navigate to the new chat
       await router.push('/chat/' + newChat.id)
       
-      return {
-        conversation: newChat,
-        message: messageResponse.message
-      }
+      return newChat
     } catch (err) {
       error.value = err.message || 'Failed to create conversation'
       console.error('Error creating conversation:', err)
@@ -303,7 +295,7 @@ export function useChatHistory() {
     // Methods
     loadChats,
     openNewChat,
-    createConversationWithMessage,
+    createConversation,
     selectChat,
     deleteChat,
     renameChat,
