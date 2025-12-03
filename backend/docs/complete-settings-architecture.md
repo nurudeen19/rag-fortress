@@ -117,7 +117,7 @@ RAG Fortress uses **TWO separate database systems**:
 │ • Google: GOOGLE_API_KEY, GOOGLE_MODEL                     │
 │ • HuggingFace: HF_API_TOKEN, HF_MODEL                      │
 │ • llama.cpp local: LLAMACPP_MODEL_PATH, LLAMACPP_* tuning  │
-│ • llama.cpp endpoint: LLAMACPP_ENDPOINT_URL/MODEL/API_KEY  │
+│ • llama.cpp endpoint: LLAMACPP_ENDPOINT_URL + optional MODEL/API_KEY (preferred; leave path unset) │
 │ • Fallback: FALLBACK_LLM_PROVIDER, FALLBACK_LLM_MODEL      │
 │                                                            │
 │ Methods:                                                   │

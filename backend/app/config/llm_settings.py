@@ -45,17 +45,11 @@ class LLMSettings(BaseSettings):
     FALLBACK_LLM_MODEL: Optional[str] = Field(None, env="FALLBACK_LLM_MODEL")
     FALLBACK_LLM_TEMPERATURE: Optional[float] = Field(None, env="FALLBACK_LLM_TEMPERATURE")
     FALLBACK_LLM_MAX_TOKENS: Optional[int] = Field(None, env="FALLBACK_LLM_MAX_TOKENS")
+    FALLBACK_LLAMACPP_MODE: Optional[str] = Field(None, env="FALLBACK_LLAMACPP_MODE")
 
-    # Fallback HuggingFace Provider (small model for backup)
-    FALLBACK_HF_API_TOKEN: Optional[str] = Field(None, env="FALLBACK_HF_API_TOKEN")
-    FALLBACK_HF_MODEL: str = Field("google/flan-t5-small", env="FALLBACK_HF_MODEL")
-    FALLBACK_HF_TEMPERATURE: float = Field(0.7, env="FALLBACK_HF_TEMPERATURE")
-    FALLBACK_HF_MAX_TOKENS: int = Field(512, env="FALLBACK_HF_MAX_TOKENS")
-    FALLBACK_HF_ENDPOINT_URL: Optional[str] = Field(None, env="FALLBACK_HF_ENDPOINT_URL")
-    FALLBACK_HF_TASK: str = Field("text-generation", env="FALLBACK_HF_TASK")
-    FALLBACK_HF_TIMEOUT: int = Field(120, env="FALLBACK_HF_TIMEOUT")
 
-    # Llama.cpp Provider (local)
+    # Llama.cpp Provider (local or endpoint)
+    LLAMACPP_MODE: str = Field("api", env="LLAMACPP_MODE")
     LLAMACPP_MODEL_PATH: Optional[str] = Field(None, env="LLAMACPP_MODEL_PATH")
     LLAMACPP_TEMPERATURE: float = Field(0.1, env="LLAMACPP_TEMPERATURE")
     LLAMACPP_MAX_TOKENS: int = Field(512, env="LLAMACPP_MAX_TOKENS")
@@ -77,13 +71,8 @@ class LLMSettings(BaseSettings):
     INTERNAL_LLM_MIN_SECURITY_LEVEL: int = Field(4, env="INTERNAL_LLM_MIN_SECURITY_LEVEL")
     INTERNAL_LLM_ENDPOINT_URL: Optional[str] = Field(None, env="INTERNAL_LLM_ENDPOINT_URL")
     INTERNAL_LLM_TIMEOUT: int = Field(120, env="INTERNAL_LLM_TIMEOUT")
+    INTERNAL_LLM_MODE: Optional[str] = Field(None, env="INTERNAL_LLM_MODE")
 
-    # Internal llama.cpp overrides
-    INTERNAL_LLAMACPP_MODEL_PATH: Optional[str] = Field(None, env="INTERNAL_LLAMACPP_MODEL_PATH")
-    INTERNAL_LLAMACPP_CONTEXT_SIZE: int = Field(4096, env="INTERNAL_LLAMACPP_CONTEXT_SIZE")
-    INTERNAL_LLAMACPP_N_THREADS: int = Field(4, env="INTERNAL_LLAMACPP_N_THREADS")
-    INTERNAL_LLAMACPP_N_BATCH: int = Field(512, env="INTERNAL_LLAMACPP_N_BATCH")
-    
 
     def get_llm_config(self) -> dict:
         """Get LLM configuration for the selected provider."""
@@ -125,14 +114,16 @@ class LLMSettings(BaseSettings):
                 "timeout": self.HF_TIMEOUT,
             }
         elif provider == "llamacpp":
-            endpoint_url = self.LLAMACPP_ENDPOINT_URL
-            if endpoint_url:
+            mode = (self.LLAMACPP_MODE or "api").lower()
+            if mode == "api":
+                if not self.LLAMACPP_ENDPOINT_URL:
+                    raise ValueError("LLAMACPP_ENDPOINT_URL is required when LLAMACPP_MODE is set to api")
                 if not self.LLAMACPP_ENDPOINT_MODEL:
-                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when using llama.cpp endpoint provider")
+                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when LLAMACPP_MODE is set to api")
                 return {
                     "provider": "llamacpp",
                     "mode": "endpoint",
-                    "endpoint_url": endpoint_url,
+                    "endpoint_url": self.LLAMACPP_ENDPOINT_URL,
                     "model": self.LLAMACPP_ENDPOINT_MODEL,
                     "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
                     "temperature": self.LLAMACPP_TEMPERATURE,
@@ -140,7 +131,7 @@ class LLMSettings(BaseSettings):
                     "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
                 }
             if not self.LLAMACPP_MODEL_PATH:
-                raise ValueError("LLAMACPP_MODEL_PATH is required when using llama.cpp provider without an endpoint")
+                raise ValueError("LLAMACPP_MODEL_PATH is required when LLAMACPP_MODE is set to local")
             return {
                 "provider": "llamacpp",
                 "mode": "local",
@@ -253,18 +244,40 @@ class LLMSettings(BaseSettings):
                 "timeout": self.HF_TIMEOUT,
             }
         elif fallback_provider == "llamacpp":
-            if not self.LLAMACPP_MODEL_PATH and not self.FALLBACK_LLM_MODEL:
-                raise ValueError("LLAMACPP model path is required for fallback llama.cpp provider")
-            return {
+            mode = (self.FALLBACK_LLAMACPP_MODE or self.LLAMACPP_MODE or "api").lower()
+            config = {
                 "provider": "llamacpp",
-                "mode": "local",
-                "model_path": self.FALLBACK_LLM_MODEL or self.LLAMACPP_MODEL_PATH,
                 "temperature": self.LLAMACPP_TEMPERATURE,
                 "max_tokens": self.LLAMACPP_MAX_TOKENS,
-                "context_size": self.LLAMACPP_CONTEXT_SIZE,
-                "n_threads": self.LLAMACPP_N_THREADS,
-                "n_batch": self.LLAMACPP_N_BATCH,
             }
+            if mode == "api":
+                if not self.LLAMACPP_ENDPOINT_URL:
+                    raise ValueError("LLAMACPP_ENDPOINT_URL is required when fallback llama.cpp runs in api mode")
+                if not self.LLAMACPP_ENDPOINT_MODEL:
+                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when fallback llama.cpp runs in api mode")
+                config.update(
+                    {
+                        "mode": "endpoint",
+                        "endpoint_url": self.LLAMACPP_ENDPOINT_URL,
+                        "model": self.LLAMACPP_ENDPOINT_MODEL,
+                        "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
+                        "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
+                    }
+                )
+            else:
+                fallback_model = self.FALLBACK_LLM_MODEL or self.LLAMACPP_MODEL_PATH
+                if not fallback_model:
+                    raise ValueError("FALLBACK_LLM_MODEL or LLAMACPP_MODEL_PATH is required when fallback llama.cpp runs in local mode")
+                config.update(
+                    {
+                        "mode": "local",
+                        "model_path": fallback_model,
+                        "context_size": self.LLAMACPP_CONTEXT_SIZE,
+                        "n_threads": self.LLAMACPP_N_THREADS,
+                        "n_batch": self.LLAMACPP_N_BATCH,
+                    }
+                )
+            return config
         else:
             raise ValueError(
                 f"Unsupported fallback provider: {fallback_provider}. "
@@ -333,17 +346,34 @@ class LLMSettings(BaseSettings):
                 }
             )
         elif provider == "llamacpp":
-            model_path = self.INTERNAL_LLAMACPP_MODEL_PATH or self.INTERNAL_LLM_MODEL
-            if not model_path:
-                raise ValueError("INTERNAL_LLAMACPP_MODEL_PATH is required for llama.cpp internal provider")
-            config.update(
-                {
-                    "model_path": model_path,
-                    "context_size": self.INTERNAL_LLAMACPP_CONTEXT_SIZE,
-                    "n_threads": self.INTERNAL_LLAMACPP_N_THREADS,
-                    "n_batch": self.INTERNAL_LLAMACPP_N_BATCH,
-                }
-            )
+            mode = (self.INTERNAL_LLM_MODE or self.LLAMACPP_MODE or "api").lower()
+            if mode == "api":
+                if not self.LLAMACPP_ENDPOINT_URL:
+                    raise ValueError("LLAMACPP_ENDPOINT_URL is required when internal llama.cpp runs in api mode")
+                if not self.LLAMACPP_ENDPOINT_MODEL:
+                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when internal llama.cpp runs in api mode")
+                config.update(
+                    {
+                        "mode": "endpoint",
+                        "endpoint_url": self.LLAMACPP_ENDPOINT_URL,
+                        "model": self.LLAMACPP_ENDPOINT_MODEL,
+                        "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
+                        "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
+                    }
+                )
+            else:
+                model_path = self.LLAMACPP_MODEL_PATH or self.INTERNAL_LLM_MODEL
+                if not model_path:
+                    raise ValueError("LLAMACPP_MODEL_PATH or INTERNAL_LLM_MODEL is required when internal llama.cpp runs in local mode")
+                config.update(
+                    {
+                        "mode": "local",
+                        "model_path": model_path,
+                        "context_size": self.LLAMACPP_CONTEXT_SIZE,
+                        "n_threads": self.LLAMACPP_N_THREADS,
+                        "n_batch": self.LLAMACPP_N_BATCH,
+                    }
+                )
         else:
             raise ValueError(
                 f"Unsupported internal LLM provider: {self.INTERNAL_LLM_PROVIDER}. "

@@ -253,13 +253,15 @@ Settings (Main)
 - `DATABASE_URL` - Database connection string
 
 #### LLM Configuration
-- `LLM_PROVIDER` - Primary LLM (openai/google/huggingface)
+- `LLM_PROVIDER` - Primary LLM (openai/google/huggingface/llamacpp)
 - `OPENAI_API_KEY` - OpenAI API key
 - `GOOGLE_API_KEY` - Google Gemini API key
 - `HF_API_TOKEN` - HuggingFace API token
-- `LLAMACPP_MODEL_PATH` - Local llama.cpp GGUF path (when running embedded)
-- `LLAMACPP_ENDPOINT_URL` / `LLAMACPP_ENDPOINT_MODEL` / `LLAMACPP_ENDPOINT_API_KEY` - Configure an OpenAI-compatible llama.cpp HTTP endpoint (set instead of `LLAMACPP_MODEL_PATH`)
+- `LLAMACPP_MODEL_PATH` - Local llama.cpp GGUF path (only required if not using the endpoint)
+- `LLAMACPP_ENDPOINT_URL` / `LLAMACPP_ENDPOINT_API_KEY` / `LLAMACPP_ENDPOINT_MODEL` (optional) - Preferred OpenAI-compatible llama.cpp HTTP endpoint; leave `LLAMACPP_MODEL_PATH` unset when pointing at a remote model.
 - `FALLBACK_LLM_PROVIDER` - Fallback LLM provider (optional)
+- `INTERNAL_LLM_PROVIDER` / `INTERNAL_LLM_API_KEY` / `INTERNAL_LLM_MODEL` - Internal model overrides (used for sensitive data)
+- `INTERNAL_LLAMACPP_ENDPOINT_URL` / `INTERNAL_LLAMACPP_ENDPOINT_MODEL` / `INTERNAL_LLAMACPP_ENDPOINT_API_KEY` - Internal endpoint-style llama.cpp configuration; works without a local model path.
 
 #### Embedding Configuration
 - `EMBEDDING_PROVIDER` - Embedding provider (huggingface/openai/google/cohere/voyage)
