@@ -127,11 +127,11 @@ export function useChatHistory() {
         ? firstMessage.substring(0, 47) + '...' 
         : firstMessage
       
-      const response = await api.post('/v1/conversations', {
+      const newChat = await api.post('/v1/conversations', {
         title: title
       })
       
-      const newChat = response.conversation
+      // Response is already unwrapped by axios interceptor
       chats.value.unshift(newChat)
       activeChat.value = newChat
       
@@ -203,11 +203,11 @@ export function useChatHistory() {
    */
   const renameChat = async (chatId, newTitle) => {
     try {
-      const response = await api.patch(`/v1/conversations/${chatId}`, { 
+      const updatedChat = await api.patch(`/v1/conversations/${chatId}`, { 
         title: newTitle 
       })
       
-      const updatedChat = response.conversation
+      // Response is already unwrapped by axios interceptor
       const index = chats.value.findIndex(c => c.id === chatId)
       if (index !== -1) {
         chats.value[index] = updatedChat
@@ -247,12 +247,13 @@ export function useChatHistory() {
    */
   const addMessage = async (chatId, content, role = 'USER', meta = null) => {
     try {
-      const response = await api.post(`/v1/conversations/${chatId}/messages`, {
+      const message = await api.post(`/v1/conversations/${chatId}/messages`, {
         role,
         content,
         meta
       })
-      return response.message
+      // Response is already unwrapped by axios interceptor
+      return message
     } catch (err) {
       console.error('Error adding message:', err)
       throw err

@@ -106,7 +106,7 @@
 
         <!-- Messages -->
         <div class="max-w-6xl mx-auto space-y-6">
-        <template v-for="(message, index) in messages" :key="index">
+        <template v-for="(message, index) in [...messages].reverse()" :key="index">
           <!-- User Message -->
           <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
             <div class="w-full max-w-[90%] lg:max-w-[85%]">
@@ -140,36 +140,6 @@
                     <div class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
                   </div>
                   
-                  <!-- Sources/References -->
-                  <div v-if="message.sources && message.sources.length > 0" class="mt-3 ml-2">
-                    <div class="flex items-center gap-2 mb-2">
-                      <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <p class="text-xs font-semibold text-fortress-400 uppercase tracking-wide">Sources</p>
-                    </div>
-                    <div class="space-y-2">
-                      <div
-                        v-for="(source, idx) in message.sources"
-                        :key="idx"
-                        class="group flex items-start gap-3 p-3 bg-fortress-800/40 hover:bg-fortress-800/60 border border-fortress-700/30 hover:border-secure/30 rounded-lg transition-all duration-200 cursor-pointer"
-                      >
-                        <div class="flex-shrink-0 w-6 h-6 rounded-full bg-secure/10 flex items-center justify-center border border-secure/20">
-                          <span class="text-xs font-semibold text-secure">{{ idx + 1 }}</span>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                          <p class="text-sm text-fortress-200 group-hover:text-fortress-100 font-medium break-words transition-colors">{{ source.document }}</p>
-                          <div class="flex items-center gap-2 mt-1">
-                            <div class="flex-1 bg-fortress-700/30 rounded-full h-1.5 overflow-hidden">
-                              <div class="bg-gradient-to-r from-secure to-secure/70 h-full rounded-full transition-all duration-300" :style="{ width: `${source.score * 100}%` }"></div>
-                            </div>
-                            <span class="text-xs font-medium text-secure">{{ Math.round(source.score * 100) }}%</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
                   <!-- Error Message -->
                   <div v-if="message.error" class="mt-3 bg-alert/10 border border-alert/30 rounded-lg px-4 py-3">
                     <div class="flex items-start gap-2">
@@ -525,7 +495,7 @@ const scrollToBottom = async () => {
   }
 }
 
-const streamAssistantResponse = async (conversationId, userMessage, assistantMessage) => {
+const streamAssistantResponse = async (conversationId, userMessage) => {
   const token = authStore.token
   const response = await fetch(`${API_BASE_URL}/v1/conversations/${conversationId}/respond`, {
     method: 'POST',
@@ -557,6 +527,7 @@ const streamAssistantResponse = async (conversationId, userMessage, assistantMes
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let assistantMessage = null
 
   const handlePayload = async (payload) => {
     if (!payload || typeof payload !== 'object') {
@@ -564,14 +535,39 @@ const streamAssistantResponse = async (conversationId, userMessage, assistantMes
     }
 
     if (payload.type === 'token') {
+      // Create assistant entry on first token
+      if (!assistantMessage) {
+        assistantMessage = {
+          role: 'assistant',
+          content: '',
+          timestamp: new Date().toISOString(),
+          sources: [],
+          error: null
+        }
+        messages.value.push(assistantMessage)
+      }
       assistantMessage.content += payload.content || ''
       assistantMessage.timestamp = new Date().toISOString()
     } else if (payload.type === 'metadata') {
-      assistantMessage.sources = payload.sources || []
+      if (assistantMessage) {
+        assistantMessage.sources = payload.sources || []
+      }
     } else if (payload.type === 'error') {
-      assistantMessage.error = payload.message || 'An error occurred while generating the response.'
-      if (!assistantMessage.content) {
-        assistantMessage.content = 'I encountered an error while generating the response.'
+      // Create error message if no assistant entry exists yet
+      if (!assistantMessage) {
+        assistantMessage = {
+          role: 'assistant',
+          content: 'I encountered an error while generating your response.',
+          timestamp: new Date().toISOString(),
+          sources: [],
+          error: payload.message || 'An error occurred while generating the response.'
+        }
+        messages.value.push(assistantMessage)
+      } else {
+        assistantMessage.error = payload.message || 'An error occurred while generating the response.'
+        if (!assistantMessage.content) {
+          assistantMessage.content = 'I encountered an error while generating your response.'
+        }
       }
       throw new Error(assistantMessage.error)
     }
@@ -626,12 +622,23 @@ const sendMessage = async () => {
   const userMessage = inputMessage.value.trim()
   inputMessage.value = ''
 
+  // Add user message to UI immediately
+  const userEntry = {
+    role: 'user',
+    content: userMessage,
+    timestamp: new Date().toISOString()
+  }
+  messages.value.push(userEntry)
+  scrollToBottom()
+
+  // Show loading indicator
   loading.value = true
 
   let conversationId = activeChat.value?.id
   let createdConversation = false
 
   try {
+    // Create conversation if needed (new chat)
     if (!conversationId || route.params.id === 'new') {
       suppressAutoLoad.value = true
       const conversation = await createConversation(userMessage)
@@ -639,43 +646,14 @@ const sendMessage = async () => {
       createdConversation = true
     }
 
-    const userEntry = {
-      role: 'user',
-      content: userMessage,
-      timestamp: new Date().toISOString()
-    }
-    messages.value.push(userEntry)
-    scrollToBottom()
-
-    const assistantEntry = {
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-      sources: [],
-      error: null
-    }
-    messages.value.push(assistantEntry)
-    scrollToBottom()
-
-    await streamAssistantResponse(conversationId, userMessage, assistantEntry)
+    // Stream assistant response (entry will be created when first token arrives)
+    await streamAssistantResponse(conversationId, userMessage)
 
     await loadMessagesForConversation(conversationId)
   } catch (error) {
     console.error('Chat error:', error)
-    const assistantEntry = messages.value[messages.value.length - 1]
-    if (assistantEntry?.role === 'assistant') {
-      assistantEntry.error = error.message || 'Unable to retrieve information. Please try again.'
-      if (!assistantEntry.content) {
-        assistantEntry.content = 'I encountered an error while generating your response.'
-      }
-    } else {
-      messages.value.push({
-        role: 'assistant',
-        content: 'I encountered an error while generating your response.',
-        error: error.message || 'Unable to retrieve information. Please try again.',
-        timestamp: new Date().toISOString()
-      })
-    }
+    // Error is already handled in streamAssistantResponse
+    // Just ensure we don't have duplicate error handling
   } finally {
     loading.value = false
     if (createdConversation) {
