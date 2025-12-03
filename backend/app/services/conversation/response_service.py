@@ -19,6 +19,7 @@ from app.services.llm_router_service import get_llm_router
 from app.services.conversation.service import ConversationService
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.models.user_permission import PermissionLevel
+from app.models.message import MessageRole
 from app.core import get_logger
 
 logger = get_logger(__name__)
@@ -128,14 +129,27 @@ class ConversationResponseService:
                     history=history
                 )
                 sources = self._build_sources_payload(documents)
+                
+                # Cache the exchange (don't persist user message again)
                 await self.conversation_service.cache_conversation_exchange(
                     conversation_id,
                     user_query,
                     response_text,
                     user_id=user_id,
-                    persist_to_db=True,
+                    persist_to_db=False,
                     assistant_meta={"sources": sources} if sources else None
                 )
+                
+                # Persist only the assistant message to DB
+                await self.conversation_service.add_message(
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    role=MessageRole.ASSISTANT,
+                    content=response_text,
+                    token_count=None,
+                    meta={"sources": sources} if sources else None
+                )
+                
                 return {
                     "success": True,
                     "streaming": False,
@@ -234,13 +248,26 @@ class ConversationResponseService:
                 yield {"type": "token", "content": content}
             
             sources = self._build_sources_payload(documents)
+            
+            # Cache the exchange (updates cache with both messages)
+            # But only persist assistant message to DB since user message was saved in handler
             await self.conversation_service.cache_conversation_exchange(
                 conversation_id,
                 user_query,
                 full_response,
                 user_id=user_id,
-                persist_to_db=True,
+                persist_to_db=False,  # Don't persist user message again
                 assistant_meta={"sources": sources} if sources else None
+            )
+            
+            # Persist only the assistant message to DB
+            await self.conversation_service.add_message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.ASSISTANT,
+                content=full_response,
+                token_count=None,
+                meta={"sources": sources} if sources else None
             )
             
             if sources:

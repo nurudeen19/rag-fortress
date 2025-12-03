@@ -321,8 +321,10 @@ async def handle_stream_response(
     """
     Handle streaming AI response generation.
     
-    Convenience wrapper for handle_generate_response with streaming enabled.
-    Returns async generator that yields response chunks.
+    Complete flow for new and existing conversations:
+    1. Save user message to database first
+    2. Generate AI response with streaming
+    3. Cache and persist assistant response
     
     Args:
         conversation_id: Conversation ID
@@ -334,6 +336,32 @@ async def handle_stream_response(
     Yields:
         Response chunks as they're generated
     """
+    # Step 1: Save user message first (before generating response)
+    # This ensures the message exists in DB even if generation fails
+    conversation_service = ConversationService(session)
+    
+    try:
+        from app.models.message import MessageRole
+        user_message_result = await conversation_service.add_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=MessageRole.USER,
+            content=user_query,
+            token_count=None,
+            meta=None
+        )
+        
+        if not user_message_result.get("success"):
+            error_msg = user_message_result.get("error", "Failed to save user message")
+            yield {"type": "error", "message": error_msg}
+            return
+    
+    except Exception as exc:
+        logger.error(f"Failed to save user message: {exc}", exc_info=True)
+        yield {"type": "error", "message": f"Failed to save message: {str(exc)}"}
+        return
+    
+    # Step 2: Generate AI response with streaming
     result = await handle_generate_response(
         conversation_id=conversation_id,
         user_id=user_id,
