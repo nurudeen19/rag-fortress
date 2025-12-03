@@ -649,7 +649,11 @@ const sendMessage = async () => {
     // Stream assistant response (entry will be created when first token arrives)
     await streamAssistantResponse(conversationId, userMessage)
 
-    await loadMessagesForConversation(conversationId)
+    // Only reload from DB if it's an existing conversation (not newly created)
+    // For new conversations, messages are already in memory from streaming
+    if (!createdConversation) {
+      await loadMessagesForConversation(conversationId)
+    }
   } catch (error) {
     console.error('Chat error:', error)
     // Error is already handled in streamAssistantResponse
