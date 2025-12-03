@@ -75,214 +75,59 @@ class LLMSettings(BaseSettings):
 
 
     def get_llm_config(self) -> dict:
-        """Get LLM configuration for the selected provider."""
+        """Get primary LLM configuration."""
         provider = self.LLM_PROVIDER.lower()
         
         if provider == "openai":
-            if not self.OPENAI_API_KEY:
-                raise ValueError("OPENAI_API_KEY is required when using OpenAI provider")
-            return {
-                "provider": "openai",
-                "api_key": self.OPENAI_API_KEY,
-                "model": self.OPENAI_MODEL,
-                "temperature": self.OPENAI_TEMPERATURE,
-                "max_tokens": self.OPENAI_MAX_TOKENS,
-            }
-        elif provider == "google":
-            if not self.GOOGLE_API_KEY:
-                raise ValueError("GOOGLE_API_KEY is required when using Google provider")
-            return {
-                "provider": "google",
-                "api_key": self.GOOGLE_API_KEY,
-                "model": self.GOOGLE_MODEL,
-                "temperature": self.GOOGLE_TEMPERATURE,
-                "max_tokens": self.GOOGLE_MAX_TOKENS,
-            }
-        elif provider == "huggingface":
-            if not self.HF_API_TOKEN:
-                raise ValueError("HF_API_TOKEN is required when using HuggingFace provider")
-            if not (self.HF_MODEL or self.HF_ENDPOINT_URL):
-                raise ValueError("HF_MODEL or HF_ENDPOINT_URL is required for HuggingFace provider")
-            return {
-                "provider": "huggingface",
-                "api_key": self.HF_API_TOKEN,
-                "model": self.HF_MODEL,
-                "endpoint_url": self.HF_ENDPOINT_URL,
-                "task": self.HF_TASK,
-                "temperature": self.HF_TEMPERATURE,
-                "max_tokens": self.HF_MAX_TOKENS,
-                "timeout": self.HF_TIMEOUT,
-            }
-        elif provider == "llamacpp":
-            mode = (self.LLAMACPP_MODE or "api").lower()
-            if mode == "api":
-                if not self.LLAMACPP_ENDPOINT_URL:
-                    raise ValueError("LLAMACPP_ENDPOINT_URL is required when LLAMACPP_MODE is set to api")
-                if not self.LLAMACPP_ENDPOINT_MODEL:
-                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when LLAMACPP_MODE is set to api")
-                return {
-                    "provider": "llamacpp",
-                    "mode": "endpoint",
-                    "endpoint_url": self.LLAMACPP_ENDPOINT_URL,
-                    "model": self.LLAMACPP_ENDPOINT_MODEL,
-                    "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
-                    "temperature": self.LLAMACPP_TEMPERATURE,
-                    "max_tokens": self.LLAMACPP_MAX_TOKENS,
-                    "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
-                }
-            if not self.LLAMACPP_MODEL_PATH:
-                raise ValueError("LLAMACPP_MODEL_PATH is required when LLAMACPP_MODE is set to local")
-            return {
-                "provider": "llamacpp",
-                "mode": "local",
-                "model_path": self.LLAMACPP_MODEL_PATH,
-                "temperature": self.LLAMACPP_TEMPERATURE,
-                "max_tokens": self.LLAMACPP_MAX_TOKENS,
-                "context_size": self.LLAMACPP_CONTEXT_SIZE,
-                "n_threads": self.LLAMACPP_N_THREADS,
-                "n_batch": self.LLAMACPP_N_BATCH,
-            }
-        else:
-            raise ValueError(
-                f"Unsupported LLM provider: {self.LLM_PROVIDER}. "
-                "Supported: openai, google, huggingface, llamacpp"
-            )
+            return self._build_openai_config()
+        if provider == "google":
+            return self._build_google_config()
+        if provider == "huggingface":
+            return self._build_huggingface_config()
+        if provider == "llamacpp":
+            return self._build_llamacpp_config()
+        
+        raise ValueError(
+            f"Unsupported LLM provider: {self.LLM_PROVIDER}. "
+            "Supported: openai, google, huggingface, llamacpp"
+        )
 
     def get_fallback_llm_config(self) -> dict:
-        """
-        Get fallback LLM configuration.
+        """Get fallback LLM configuration (defaults to HuggingFace if not specified)."""
+        provider = (self.FALLBACK_LLM_PROVIDER or "huggingface").lower()
         
-        Priority:
-        1. If FALLBACK_LLM_PROVIDER and custom fields are provided, use those
-        2. If FALLBACK_LLM_PROVIDER is set but no custom fields, use that provider's config
-        3. If no fallback configured, defaults to small HuggingFace model
-        """
-        fallback_provider = self.FALLBACK_LLM_PROVIDER
+        # Build config overrides from fallback-specific env vars
+        config = {
+            "api_key": self.FALLBACK_LLM_API_KEY,
+            "model": self.FALLBACK_LLM_MODEL,
+            "temperature": self.FALLBACK_LLM_TEMPERATURE,
+            "max_tokens": self.FALLBACK_LLM_MAX_TOKENS,
+        }
         
-        # Default to HuggingFace small model if no fallback configured
-        if not fallback_provider:
-            return {
-                "provider": "huggingface",
-                "api_key": self.FALLBACK_HF_API_TOKEN or self.HF_API_TOKEN,
-                "model": self.FALLBACK_HF_MODEL,
-                "endpoint_url": self.FALLBACK_HF_ENDPOINT_URL or self.HF_ENDPOINT_URL,
-                "task": self.FALLBACK_HF_TASK,
-                "temperature": self.FALLBACK_HF_TEMPERATURE,
-                "max_tokens": self.FALLBACK_HF_MAX_TOKENS,
-                "timeout": self.FALLBACK_HF_TIMEOUT,
-            }
+        if provider == "openai":
+            return self._build_openai_config(config)
+        if provider == "google":
+            return self._build_google_config(config)
+        if provider == "huggingface":
+            # Add HuggingFace-specific fallback fields
+            config.update({
+                "endpoint_url": getattr(self, "FALLBACK_HF_ENDPOINT_URL", None),
+                "task": getattr(self, "FALLBACK_HF_TASK", None),
+                "timeout": getattr(self, "FALLBACK_HF_TIMEOUT", None),
+            })
+            return self._build_huggingface_config(config)
+        if provider == "llamacpp":
+            # Add llamacpp-specific fallback fields
+            config.update({
+                "mode": self.FALLBACK_LLAMACPP_MODE,
+                "model_path": self.FALLBACK_LLM_MODEL,
+            })
+            return self._build_llamacpp_config(config)
         
-        fallback_provider = fallback_provider.lower()
-        
-        # If custom fallback fields are provided, use them
-        if self.FALLBACK_LLM_MODEL:
-            api_key = self.FALLBACK_LLM_API_KEY
-            
-            # Try to get API key from provider-specific config if not explicitly set
-            if not api_key:
-                if fallback_provider == "openai":
-                    api_key = self.OPENAI_API_KEY
-                elif fallback_provider == "google":
-                    api_key = self.GOOGLE_API_KEY
-                elif fallback_provider == "huggingface":
-                    api_key = self.HF_API_TOKEN
-            
-            if not api_key:
-                raise ValueError(f"FALLBACK_LLM_API_KEY or {fallback_provider.upper()}_API_KEY is required")
-            
-            config = {
-                "provider": fallback_provider,
-                "api_key": api_key,
-                "model": self.FALLBACK_LLM_MODEL,
-                "temperature": self.FALLBACK_LLM_TEMPERATURE or 0.7,
-                "max_tokens": self.FALLBACK_LLM_MAX_TOKENS or 1000,
-            }
-            if fallback_provider == "huggingface":
-                config.update(
-                    {
-                        "endpoint_url": self.FALLBACK_HF_ENDPOINT_URL or self.HF_ENDPOINT_URL,
-                        "task": self.FALLBACK_HF_TASK,
-                        "timeout": self.FALLBACK_HF_TIMEOUT,
-                    }
-                )
-            return config
-        
-        # Otherwise, use provider's default config
-        if fallback_provider == "openai":
-            if not self.OPENAI_API_KEY:
-                raise ValueError("OPENAI_API_KEY is required for fallback OpenAI provider")
-            return {
-                "provider": "openai",
-                "api_key": self.OPENAI_API_KEY,
-                "model": self.OPENAI_MODEL,
-                "temperature": self.OPENAI_TEMPERATURE,
-                "max_tokens": self.OPENAI_MAX_TOKENS,
-            }
-        elif fallback_provider == "google":
-            if not self.GOOGLE_API_KEY:
-                raise ValueError("GOOGLE_API_KEY is required for fallback Google provider")
-            return {
-                "provider": "google",
-                "api_key": self.GOOGLE_API_KEY,
-                "model": self.GOOGLE_MODEL,
-                "temperature": self.GOOGLE_TEMPERATURE,
-                "max_tokens": self.GOOGLE_MAX_TOKENS,
-            }
-        elif fallback_provider == "huggingface":
-            if not self.HF_API_TOKEN:
-                raise ValueError("HF_API_TOKEN is required for fallback HuggingFace provider")
-            if not (self.HF_MODEL or self.HF_ENDPOINT_URL):
-                raise ValueError("HF_MODEL or HF_ENDPOINT_URL is required for fallback HuggingFace provider")
-            return {
-                "provider": "huggingface",
-                "api_key": self.HF_API_TOKEN,
-                "model": self.HF_MODEL,
-                "endpoint_url": self.HF_ENDPOINT_URL,
-                "task": self.HF_TASK,
-                "temperature": self.HF_TEMPERATURE,
-                "max_tokens": self.HF_MAX_TOKENS,
-                "timeout": self.HF_TIMEOUT,
-            }
-        elif fallback_provider == "llamacpp":
-            mode = (self.FALLBACK_LLAMACPP_MODE or self.LLAMACPP_MODE or "api").lower()
-            config = {
-                "provider": "llamacpp",
-                "temperature": self.LLAMACPP_TEMPERATURE,
-                "max_tokens": self.LLAMACPP_MAX_TOKENS,
-            }
-            if mode == "api":
-                if not self.LLAMACPP_ENDPOINT_URL:
-                    raise ValueError("LLAMACPP_ENDPOINT_URL is required when fallback llama.cpp runs in api mode")
-                if not self.LLAMACPP_ENDPOINT_MODEL:
-                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when fallback llama.cpp runs in api mode")
-                config.update(
-                    {
-                        "mode": "endpoint",
-                        "endpoint_url": self.LLAMACPP_ENDPOINT_URL,
-                        "model": self.LLAMACPP_ENDPOINT_MODEL,
-                        "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
-                        "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
-                    }
-                )
-            else:
-                fallback_model = self.FALLBACK_LLM_MODEL or self.LLAMACPP_MODEL_PATH
-                if not fallback_model:
-                    raise ValueError("FALLBACK_LLM_MODEL or LLAMACPP_MODEL_PATH is required when fallback llama.cpp runs in local mode")
-                config.update(
-                    {
-                        "mode": "local",
-                        "model_path": fallback_model,
-                        "context_size": self.LLAMACPP_CONTEXT_SIZE,
-                        "n_threads": self.LLAMACPP_N_THREADS,
-                        "n_batch": self.LLAMACPP_N_BATCH,
-                    }
-                )
-            return config
-        else:
-            raise ValueError(
-                f"Unsupported fallback provider: {fallback_provider}. "
-                "Supported: openai, google, huggingface, llamacpp"
-            )
+        raise ValueError(
+            f"Unsupported fallback provider: {provider}. "
+            "Supported: openai, google, huggingface, llamacpp"
+        )
 
     def validate_fallback_config(self):
         """Validate that fallback provider/model is different from primary."""
@@ -306,78 +151,179 @@ class LLMSettings(BaseSettings):
                 f"Fallback: {fallback_config['provider']}/{_model_identifier(fallback_config)}"
             )
 
-
     def get_internal_llm_config(self) -> Optional[dict]:
-        """Get internal LLM configuration if enabled."""
+        """Get internal LLM configuration (for sensitive data processing)."""
         if not self.USE_INTERNAL_LLM:
             return None
         
         if not self.INTERNAL_LLM_PROVIDER:
             raise ValueError("INTERNAL_LLM_PROVIDER is required when USE_INTERNAL_LLM is true")
         
+        provider = self.INTERNAL_LLM_PROVIDER.lower()
+        
+        # Build config overrides from internal-specific env vars
         config = {
-            "provider": self.INTERNAL_LLM_PROVIDER,
+            "api_key": self.INTERNAL_LLM_API_KEY,
+            "model": self.INTERNAL_LLM_MODEL,
             "temperature": self.INTERNAL_LLM_TEMPERATURE,
             "max_tokens": self.INTERNAL_LLM_MAX_TOKENS,
-            "min_security_level": self.INTERNAL_LLM_MIN_SECURITY_LEVEL,
         }
-
-        provider = self.INTERNAL_LLM_PROVIDER.lower()
-        if provider == "huggingface":
-            if not self.INTERNAL_LLM_API_KEY:
-                raise ValueError("INTERNAL_LLM_API_KEY is required for HuggingFace internal provider")
-            if not (self.INTERNAL_LLM_MODEL or self.INTERNAL_LLM_ENDPOINT_URL):
-                raise ValueError("INTERNAL_LLM_MODEL or INTERNAL_LLM_ENDPOINT_URL is required for HuggingFace internal provider")
-            config.update(
-                {
-                    "api_key": self.INTERNAL_LLM_API_KEY,
-                    "model": self.INTERNAL_LLM_MODEL,
-                    "endpoint_url": self.INTERNAL_LLM_ENDPOINT_URL,
-                    "timeout": self.INTERNAL_LLM_TIMEOUT,
-                }
-            )
-        elif provider in {"openai", "google"}:
-            if not self.INTERNAL_LLM_API_KEY or not self.INTERNAL_LLM_MODEL:
-                raise ValueError("INTERNAL_LLM_API_KEY and INTERNAL_LLM_MODEL are required for OpenAI/Google internal provider")
-            config.update(
-                {
-                    "api_key": self.INTERNAL_LLM_API_KEY,
-                    "model": self.INTERNAL_LLM_MODEL,
-                }
-            )
+        
+        if provider == "openai":
+            result = self._build_openai_config(config)
+        elif provider == "google":
+            result = self._build_google_config(config)
+        elif provider == "huggingface":
+            config.update({
+                "endpoint_url": self.INTERNAL_LLM_ENDPOINT_URL,
+                "task": "text-generation",
+                "timeout": self.INTERNAL_LLM_TIMEOUT,
+            })
+            result = self._build_huggingface_config(config)
         elif provider == "llamacpp":
-            mode = (self.INTERNAL_LLM_MODE or self.LLAMACPP_MODE or "api").lower()
-            if mode == "api":
-                if not self.LLAMACPP_ENDPOINT_URL:
-                    raise ValueError("LLAMACPP_ENDPOINT_URL is required when internal llama.cpp runs in api mode")
-                if not self.LLAMACPP_ENDPOINT_MODEL:
-                    raise ValueError("LLAMACPP_ENDPOINT_MODEL is required when internal llama.cpp runs in api mode")
-                config.update(
-                    {
-                        "mode": "endpoint",
-                        "endpoint_url": self.LLAMACPP_ENDPOINT_URL,
-                        "model": self.LLAMACPP_ENDPOINT_MODEL,
-                        "api_key": self.LLAMACPP_ENDPOINT_API_KEY,
-                        "timeout": self.LLAMACPP_ENDPOINT_TIMEOUT,
-                    }
-                )
-            else:
-                model_path = self.LLAMACPP_MODEL_PATH or self.INTERNAL_LLM_MODEL
-                if not model_path:
-                    raise ValueError("LLAMACPP_MODEL_PATH or INTERNAL_LLM_MODEL is required when internal llama.cpp runs in local mode")
-                config.update(
-                    {
-                        "mode": "local",
-                        "model_path": model_path,
-                        "context_size": self.LLAMACPP_CONTEXT_SIZE,
-                        "n_threads": self.LLAMACPP_N_THREADS,
-                        "n_batch": self.LLAMACPP_N_BATCH,
-                    }
-                )
+            config.update({
+                "mode": self.INTERNAL_LLM_MODE,
+                "model_path": self.INTERNAL_LLM_MODEL,
+            })
+            result = self._build_llamacpp_config(config)
         else:
             raise ValueError(
                 f"Unsupported internal LLM provider: {self.INTERNAL_LLM_PROVIDER}. "
                 "Supported: openai, google, huggingface, llamacpp"
             )
+        
+        result["min_security_level"] = self.INTERNAL_LLM_MIN_SECURITY_LEVEL
+        return result
 
-        return config
+    # Provider-specific builders - use their own env vars by default, accept optional config overrides
+    def _build_openai_config(self, config: Optional[dict] = None) -> dict:
+        """Build OpenAI configuration - uses env vars by default, accepts optional overrides."""
+        config = config or {}
+        
+        api_key = config.get("api_key") or self.OPENAI_API_KEY
+        model = config.get("model") or self.OPENAI_MODEL
+        temperature = config.get("temperature") or self.OPENAI_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.OPENAI_MAX_TOKENS
+        
+        if not api_key:
+            raise ValueError("OpenAI API key is required")
+        if not model:
+            raise ValueError("OpenAI model is required")
+        
+        return {
+            "provider": "openai",
+            "api_key": api_key,
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+
+    def _build_google_config(self, config: Optional[dict] = None) -> dict:
+        """Build Google configuration - uses env vars by default, accepts optional overrides."""
+        config = config or {}
+        
+        api_key = config.get("api_key") or self.GOOGLE_API_KEY
+        model = config.get("model") or self.GOOGLE_MODEL
+        temperature = config.get("temperature") or self.GOOGLE_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.GOOGLE_MAX_TOKENS
+        
+        if not api_key:
+            raise ValueError("Google API key is required")
+        if not model:
+            raise ValueError("Google model is required")
+        
+        return {
+            "provider": "google",
+            "api_key": api_key,
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens
+        }
+
+    def _build_huggingface_config(self, config: Optional[dict] = None) -> dict:
+        """Build HuggingFace configuration - uses env vars by default, accepts optional overrides."""
+        config = config or {}
+        
+        api_key = config.get("api_key") or self.HF_API_TOKEN
+        model = config.get("model") or self.HF_MODEL
+        endpoint_url = config.get("endpoint_url") or self.HF_ENDPOINT_URL
+        task = config.get("task") or self.HF_TASK
+        temperature = config.get("temperature") or self.HF_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.HF_MAX_TOKENS
+        timeout = config.get("timeout") or self.HF_TIMEOUT
+        
+        if not api_key:
+            raise ValueError("HuggingFace API token is required")
+        if not (model or endpoint_url):
+            raise ValueError("HuggingFace model or endpoint URL is required")
+        
+        return {
+            "provider": "huggingface",
+            "api_key": api_key,
+            "model": model,
+            "endpoint_url": endpoint_url,
+            "task": task,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "timeout": timeout
+        }
+
+    def _build_llamacpp_config(self, config: Optional[dict] = None) -> dict:
+        """
+        Build llama.cpp configuration - uses env vars by default, accepts optional overrides.
+        
+        Mode determines which fields are included:
+        - 'api' or 'endpoint': Returns endpoint-only config (no model_path)
+        - 'local': Returns local-only config (no endpoint fields)
+        """
+        config = config or {}
+        
+        mode = config.get("mode") or self.LLAMACPP_MODE
+        model_path = config.get("model_path") or self.LLAMACPP_MODEL_PATH
+        endpoint_url = self.LLAMACPP_ENDPOINT_URL
+        endpoint_model = self.LLAMACPP_ENDPOINT_MODEL
+        endpoint_api_key = self.LLAMACPP_ENDPOINT_API_KEY
+        endpoint_timeout = self.LLAMACPP_ENDPOINT_TIMEOUT
+        temperature = config.get("temperature") or self.LLAMACPP_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.LLAMACPP_MAX_TOKENS
+        context_size = self.LLAMACPP_CONTEXT_SIZE
+        n_threads = self.LLAMACPP_N_THREADS
+        n_batch = self.LLAMACPP_N_BATCH
+        
+        normalized_mode = (mode or "api").lower()
+        
+        # API/Endpoint mode: use OpenAI-compatible endpoint
+        if normalized_mode in ("api", "endpoint"):
+            if not endpoint_url:
+                raise ValueError("llama.cpp endpoint URL is required for api mode")
+            if not endpoint_model:
+                raise ValueError("llama.cpp endpoint model is required for api mode")
+            
+            return {
+                "provider": "llamacpp",
+                "mode": "endpoint",
+                "endpoint_url": endpoint_url,
+                "model": endpoint_model,
+                "api_key": endpoint_api_key,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "timeout": endpoint_timeout
+            }
+        
+        # Local mode: use local GGUF model file
+        if normalized_mode == "local":
+            if not model_path:
+                raise ValueError("llama.cpp model path is required for local mode")
+            
+            return {
+                "provider": "llamacpp",
+                "mode": "local",
+                "model_path": model_path,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "context_size": context_size,
+                "n_threads": n_threads,
+                "n_batch": n_batch
+            }
+        
+        raise ValueError(f"Invalid llama.cpp mode: {mode}. Must be 'api' or 'local'")

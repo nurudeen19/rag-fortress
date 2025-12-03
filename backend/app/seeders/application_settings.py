@@ -70,6 +70,7 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("hf_timeout", "integer", "HuggingFace endpoint timeout (seconds)", "llm", True, False),
 
             # Llama.cpp Provider
+            ("llamacpp_mode", "string", "llama.cpp mode (api or local)", "llm", True, False),
             ("llamacpp_model_path", "string", "Path to local llama.cpp model", "llm", True, False),
             ("llamacpp_temperature", "float", "llama.cpp temperature", "llm", True, False),
             ("llamacpp_max_tokens", "integer", "llama.cpp max tokens", "llm", True, False),
@@ -97,14 +98,7 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("internal_llm_max_tokens", "integer", "Internal LLM max tokens", "llm", True, False),
             ("internal_llm_endpoint_url", "string", "Internal HuggingFace endpoint URL", "llm", True, False),
             ("internal_llm_timeout", "integer", "Internal LLM timeout (seconds)", "llm", True, False),
-            ("internal_llamacpp_model_path", "string", "Path to llama.cpp model for internal provider", "llm", True, False),
-            ("internal_llamacpp_context_size", "integer", "Internal llama.cpp context window", "llm", True, False),
-            ("internal_llamacpp_n_threads", "integer", "Internal llama.cpp CPU threads", "llm", True, False),
-            ("internal_llamacpp_n_batch", "integer", "Internal llama.cpp batch size", "llm", True, False),
-            ("internal_llamacpp_endpoint_url", "string", "Internal llama.cpp HTTP endpoint URL", "llm", True, False),
-            ("internal_llamacpp_endpoint_model", "string", "Internal llama.cpp endpoint model", "llm", True, False),
-            ("internal_llamacpp_endpoint_api_key", "string", "API key for internal llama.cpp endpoint (encrypted)", "llm", True, True),
-            ("internal_llamacpp_endpoint_timeout", "integer", "Internal llama.cpp endpoint timeout (seconds)", "llm", True, False),
+            ("internal_llm_mode", "string", "Internal llama.cpp mode (api or local)", "llm", True, False),
             
             # New setting for controlling internal LLM usage
             ("use_internal_llm", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),

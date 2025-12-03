@@ -166,7 +166,8 @@ def _build_llm_from_config(config: dict) -> BaseLanguageModel:
     
     if provider == "llamacpp":
         mode = config.get("mode", "local")
-        if mode == "endpoint":
+        # Support explicit modes: "api" (endpoint) or "local"
+        if mode in {"endpoint", "api"}:
             try:
                 from langchain_openai import ChatOpenAI
             except ImportError:
