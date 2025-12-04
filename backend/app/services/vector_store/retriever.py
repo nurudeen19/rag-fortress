@@ -1,6 +1,6 @@
 """
 Retriever service for querying the vector store.
-Handles document retrieval with optional filtering, re-ranking, and processing.
+Handles adaptive document retrieval with quality-based top-k adjustment.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
@@ -105,150 +105,67 @@ class RetrieverService:
         self,
         query_text: str,
         top_k: Optional[int] = None,
-        filters: Optional[Dict[str, Any]] = None,
         user_security_level: Optional[int] = None,
         user_department_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
-        Query the vector store and retrieve relevant documents with security filtering.
+        Adaptive document retrieval with quality-based top-k adjustment.
         
-        Uses POST-FILTERING: Retrieves documents first, then filters by user access.
-        Returns clear error messages when user lacks access to retrieved documents.
+        Process:
+        1. Start with min_top_k documents
+        2. Check retrieval quality (scores above threshold)
+        3. If quality is low, increase top_k (up to max_top_k) and retry
+        4. If quality remains low, return empty context with explanation
+        5. If only one high-scoring doc exists, return just that one
         
         Args:
             query_text: The search query
-            top_k: Number of results to return (overrides settings default)
-            filters: Optional metadata filters (future feature)
-            user_security_level: User's clearance level (PermissionLevel enum value)
-            user_department_id: User's department ID for department-only filtering
+            top_k: Optional override (uses min_top_k by default)
+            user_security_level: User's clearance level
+            user_department_id: User's department ID
             
         Returns:
-            Dict with:
-                - success (bool): Whether retrieval succeeded
-                - context (List[Document]): Retrieved documents if successful
-                - count (int): Number of documents returned
-                - error (str): Error type if failed (e.g., 'insufficient_clearance', 'no_access')
-                - message (str): Human-readable error message if failed
+            Dict with success, context (documents), count, error, message
         """
         try:
-            k = top_k or self.retriever.search_kwargs.get("k", 5)
+            # Get configuration
+            min_k = top_k or self.settings.app_settings.MIN_TOP_K
+            max_k = self.settings.app_settings.MAX_TOP_K
+            score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
             
-            # Query vector store (no pre-filtering)
-            self.retriever.search_kwargs = {"k": k}
-            if filters:
-                # Apply any custom metadata filters if provided
-                self.retriever.search_kwargs["filter"] = filters
+            vector_store = self.retriever.vectorstore
+            current_k = min_k
             
-            docs = self.retriever.invoke(query_text)
+            logger.info(f"Starting adaptive retrieval: min_k={min_k}, max_k={max_k}, threshold={score_threshold}")
             
-            logger.info(f"Retrieved {len(docs)} documents for query: '{query_text[:50]}...'")
-            
-            # Apply security filtering if user credentials provided
-            max_security_level = None
-            if user_security_level is not None:
-                logger.debug(
-                    f"Filtering documents for user_level={PermissionLevel(user_security_level).name}, "
-                    f"dept={user_department_id}"
-                )
+            while current_k <= max_k:
+                # Retrieve documents with scores
+                try:
+                    results = vector_store.similarity_search_with_score(query_text, k=current_k)
+                except (AttributeError, NotImplementedError):
+                    logger.warning("Vector store doesn't support scores, falling back to basic retrieval")
+                    return self._fallback_query(query_text, current_k, user_security_level, user_department_id)
                 
-                filtered_docs, max_security_level = self._filter_by_security(
-                    docs,
-                    user_security_level,
-                    user_department_id
-                )
-                
-                # Check if user has access to any documents
-                if len(docs) > 0 and len(filtered_docs) == 0:
-                    # Documents were found but user can't access any
-                    logger.warning(
-                        f"User with level={user_security_level}, dept={user_department_id} "
-                        f"has no access to {len(docs)} retrieved documents"
-                    )
+                if not results:
+                    logger.warning(f"No documents retrieved with k={current_k}")
                     return {
                         "success": False,
-                        "error": "insufficient_clearance",
-                        "message": "You do not have sufficient clearance to access the retrieved documents.",
-                        "count": 0,
-                        "max_security_level": max_security_level,
+                        "error": "no_documents",
+                        "message": "No relevant documents found for your query.",
+                        "count": 0
                     }
-
-                docs = filtered_docs
-                logger.info(f"After security filtering: {len(docs)} accessible documents")
-            
-            return {
-                "success": True,
-                "context": docs,
-                "count": len(docs),
-                "max_security_level": max_security_level,
-            }
-        
-        except Exception as e:
-            logger.error(f"Error querying vector store: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": "retrieval_error",
-                "message": f"Failed to retrieve documents: {str(e)}",
-                "count": 0
-            }
-
-    def query_with_scores(
-        self,
-        query_text: str,
-        top_k: Optional[int] = None,
-        user_security_level: Optional[int] = None,
-        user_department_id: Optional[int] = None
-    ) -> Dict[str, Any]:
-        """
-        Query with similarity scores and security POST-filtering.
-        
-        Retrieves documents with scores, then filters by user access.
-        
-        Args:
-            query_text: The search query
-            top_k: Number of results to return
-            user_security_level: User's clearance level (PermissionLevel enum value)
-            user_department_id: User's department ID for department-only filtering
-            
-        Returns:
-            Dict with:
-                - success (bool): Whether retrieval succeeded
-                - context (List[tuple[Document, float]]): Retrieved (document, score) tuples
-                - count (int): Number of documents returned
-                - error (str): Error type if failed
-                - message (str): Human-readable error message if failed
-            
-        Note:
-            Not all vector stores support score retrieval.
-            Falls back to regular query if unavailable.
-        """
-        try:
-            # Get vector store from retriever
-            vector_store = self.retriever.vectorstore
-            k = top_k or self.retriever.search_kwargs.get("k", 5)
-            
-            # Try to get documents with scores
-            try:
-                results = vector_store.similarity_search_with_score(query_text, k=k)
                 
-                logger.info(f"Retrieved {len(results)} documents with scores")
-                
-                # Apply security filtering if user credentials provided
+                # Apply security filtering
+                filtered_results = results
                 max_security_level = None
+                
                 if user_security_level is not None:
-                    # Extract documents for filtering
                     docs = [doc for doc, _ in results]
                     filtered_docs, max_security_level = self._filter_by_security(
-                        docs,
-                        user_security_level,
-                        user_department_id
+                        docs, user_security_level, user_department_id
                     )
                     
-                    # Check if user has access
                     if len(docs) > 0 and len(filtered_docs) == 0:
-                        logger.warning(
-                            f"User with level={user_security_level}, dept={user_department_id} "
-                            f"has no access to {len(docs)} retrieved documents"
-                        )
                         return {
                             "success": False,
                             "error": "insufficient_clearance",
@@ -257,52 +174,104 @@ class RetrieverService:
                             "max_security_level": max_security_level,
                         }
                     
-                    # Rebuild results with only accessible documents
                     filtered_ids = {id(doc) for doc in filtered_docs}
-                    results = [(doc, score) for doc, score in results if id(doc) in filtered_ids]
-                    logger.info(f"After security filtering: {len(results)} accessible documents")
+                    filtered_results = [(doc, score) for doc, score in results if id(doc) in filtered_ids]
                 
-                return {
-                    "success": True,
-                    "context": results,
-                    "count": len(results),
-                    "max_security_level": max_security_level,
-                }
+                # Analyze scores
+                scores = [score for _, score in filtered_results]
+                high_quality_results = [(doc, score) for doc, score in filtered_results if score >= score_threshold]
+                
+                logger.info(f"k={current_k}: {len(filtered_results)} docs, {len(high_quality_results)} above threshold")
+                
+                # Check if we have quality results
+                if high_quality_results:
+                    # Check for single high-quality document
+                    if len(high_quality_results) == 1 and len(filtered_results) > 1:
+                        # Only one good result, rest are poor - return just the good one
+                        logger.info(f"Single high-quality document found (score={high_quality_results[0][1]:.3f}), returning it")
+                        return {
+                            "success": True,
+                            "context": [high_quality_results[0][0]],
+                            "count": 1,
+                            "max_security_level": max_security_level,
+                        }
+                    
+                    # Multiple quality results - return them
+                    logger.info(f"Found {len(high_quality_results)} quality documents")
+                    return {
+                        "success": True,
+                        "context": [doc for doc, _ in high_quality_results],
+                        "count": len(high_quality_results),
+                        "max_security_level": max_security_level,
+                    }
+                
+                # No quality results - try increasing k
+                if current_k < max_k:
+                    current_k = min(current_k + 2, max_k)
+                    logger.info(f"Quality below threshold, increasing k to {current_k}")
+                    continue
+                else:
+                    # Reached max_k with no quality results
+                    logger.warning(f"Reached max_k={max_k} with no documents above threshold")
+                    return {
+                        "success": False,
+                        "error": "low_quality_results",
+                        "message": "No relevant documents found for your query. The available documents do not match your request well enough.",
+                        "count": 0
+                    }
             
-            except (AttributeError, NotImplementedError):
-                # Fallback to regular query if scores not supported
-                logger.warning(
-                    "Vector store does not support similarity scores, "
-                    "falling back to regular query"
-                )
-                query_result = self.query(
-                    query_text,
-                    top_k=top_k,
-                    user_security_level=user_security_level,
-                    user_department_id=user_department_id
-                )
-                
-                if not query_result["success"]:
-                    return query_result
-                
-                # Add None scores to documents
-                docs_with_scores = [(doc, None) for doc in query_result["context"]]
-                return {
-                    "success": True,
-                    "context": docs_with_scores,
-                    "count": len(docs_with_scores),
-                    "max_security_level": query_result.get("max_security_level"),
-                }
-        
-        except Exception as e:
-            logger.error(f"Error in query_with_scores: {e}", exc_info=True)
+            # Should not reach here
             return {
                 "success": False,
                 "error": "retrieval_error",
-                "message": f"Failed to retrieve documents with scores: {str(e)}",
+                "message": "Unexpected error during retrieval",
+                "count": 0
+            }
+        
+        except Exception as e:
+            logger.error(f"Error in adaptive query: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": "retrieval_error",
+                "message": f"Failed to retrieve documents: {str(e)}",
                 "count": 0
             }
     
+    def _fallback_query(
+        self,
+        query_text: str,
+        k: int,
+        user_security_level: Optional[int],
+        user_department_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """Fallback when vector store doesn't support scores."""
+        self.retriever.search_kwargs = {"k": k}
+        docs = self.retriever.invoke(query_text)
+        
+        max_security_level = None
+        if user_security_level is not None:
+            filtered_docs, max_security_level = self._filter_by_security(
+                docs, user_security_level, user_department_id
+            )
+            
+            if len(docs) > 0 and len(filtered_docs) == 0:
+                return {
+                    "success": False,
+                    "error": "insufficient_clearance",
+                    "message": "You do not have sufficient clearance to access the retrieved documents.",
+                    "count": 0,
+                    "max_security_level": max_security_level,
+                }
+            docs = filtered_docs
+        
+        return {
+            "success": True,
+            "context": docs,
+            "count": len(docs),
+            "max_security_level": max_security_level,
+        }
+
+
     def format_results(
         self,
         documents: List[Document],

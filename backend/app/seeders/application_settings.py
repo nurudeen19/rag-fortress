@@ -120,8 +120,11 @@ class ApplicationSettingsSeeder(BaseSeed):
             # Vector Database Settings
             ("vector_db_provider", "string", "Vector DB provider (chroma, qdrant, pinecone, weaviate, milvus)", "vector_db", True, False),
             ("vector_store_collection_name", "string", "Vector store collection/index name", "vector_db", True, False),
-            ("retriever_top_k", "integer", "Number of documents to retrieve", "vector_db", True, False),
-            ("retriever_similarity_threshold", "float", "Minimum similarity threshold (0.0-1.0)", "vector_db", True, False),
+            
+            # Adaptive Retrieval Settings
+            ("min_top_k", "integer", "Minimum number of documents to retrieve initially", "retrieval", True, False),
+            ("max_top_k", "integer", "Maximum number of documents to retrieve when increasing top-k", "retrieval", True, False),
+            ("retrieval_score_threshold", "float", "Minimum quality score for retrieved documents (0.0-1.0)", "retrieval", True, False),
             
             # Qdrant-specific
             ("qdrant_host", "string", "Qdrant server host", "vector_db", True, False),

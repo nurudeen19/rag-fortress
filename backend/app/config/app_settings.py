@@ -42,7 +42,9 @@ class AppSettings(BaseSettings):
     # RAG Configuration
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
     CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")
-    TOP_K_RESULTS: int = Field(5, env="TOP_K_RESULTS")
+    MIN_TOP_K: int = Field(3, env="MIN_TOP_K")
+    MAX_TOP_K: int = Field(10, env="MAX_TOP_K")
+    RETRIEVAL_SCORE_THRESHOLD: float = Field(0.5, env="RETRIEVAL_SCORE_THRESHOLD")
     SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
     
     # Security
@@ -155,5 +157,9 @@ class AppSettings(BaseSettings):
                 f"CHUNK_SIZE ({self.CHUNK_SIZE})"
             )
         
-        if self.TOP_K_RESULTS < 1:
-            raise ValueError("TOP_K_RESULTS must be at least 1")
+        if self.MIN_TOP_K < 1:
+            raise ValueError("MIN_TOP_K must be at least 1")
+        if self.MAX_TOP_K < self.MIN_TOP_K:
+            raise ValueError("MAX_TOP_K must be greater than or equal to MIN_TOP_K")
+        if not (0.0 <= self.RETRIEVAL_SCORE_THRESHOLD <= 1.0):
+            raise ValueError("RETRIEVAL_SCORE_THRESHOLD must be between 0.0 and 1.0")
