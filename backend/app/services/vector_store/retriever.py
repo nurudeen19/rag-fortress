@@ -1,6 +1,6 @@
 """
 Retriever service for querying the vector store.
-Handles adaptive document retrieval with quality-based top-k adjustment.
+Handles adaptive document retrieval with quality-based top-k adjustment and reranking.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
@@ -10,6 +10,7 @@ from app.core.vector_store_factory import get_retriever
 from app.core import get_logger
 from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
+from app.services.vector_store.reranker import get_reranker_service
 
 
 logger = get_logger(__name__)
@@ -27,6 +28,9 @@ class RetrieverService:
         """Initialize retriever service."""
         self.retriever = get_retriever()
         self.settings = settings
+        self.reranker = None
+        if self.settings.app_settings.ENABLE_RERANKER:
+            self.reranker = get_reranker_service()
     
     def _filter_by_security(
         self,
@@ -205,6 +209,17 @@ class RetrieverService:
                         "max_security_level": max_security_level,
                     }
                 
+                # No quality results - try reranking if enabled and on first iteration
+                if current_k == min_k and self.reranker and self.settings.app_settings.ENABLE_RERANKER:
+                    logger.info("Initial results have poor quality, attempting reranking with max_k documents")
+                    return self._rerank_retrieval(
+                        query_text,
+                        max_k,
+                        user_security_level,
+                        user_department_id,
+                        score_threshold
+                    )
+                
                 # No quality results - try increasing k
                 if current_k < max_k:
                     current_k = min(current_k + 2, max_k)
@@ -230,6 +245,116 @@ class RetrieverService:
         
         except Exception as e:
             logger.error(f"Error in adaptive query: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": "retrieval_error",
+                "message": f"Failed to retrieve documents: {str(e)}",
+                "count": 0
+            }
+    
+    def _rerank_retrieval(
+        self,
+        query_text: str,
+        k: int,
+        user_security_level: Optional[int],
+        user_department_id: Optional[int],
+        score_threshold: float
+    ) -> Dict[str, Any]:
+        """
+        Retrieve more documents and use reranker to find quality results.
+        
+        Args:
+            query_text: The search query
+            k: Number of documents to retrieve (typically max_k)
+            user_security_level: User's clearance level
+            user_department_id: User's department ID
+            score_threshold: Quality threshold for reranker scores
+            
+        Returns:
+            Dict with success, context, count, error, message
+        """
+        try:
+            vector_store = self.retriever.vectorstore
+            
+            # Retrieve max_k documents
+            try:
+                results = vector_store.similarity_search_with_score(query_text, k=k)
+            except (AttributeError, NotImplementedError):
+                logger.warning("Vector store doesn't support scores during reranking")
+                return {
+                    "success": False,
+                    "error": "low_quality_results",
+                    "message": "No relevant documents found for your query.",
+                    "count": 0
+                }
+            
+            if not results:
+                return {
+                    "success": False,
+                    "error": "no_documents",
+                    "message": "No relevant documents found for your query.",
+                    "count": 0
+                }
+            
+            # Apply security filtering
+            filtered_results = results
+            max_security_level = None
+            
+            if user_security_level is not None:
+                docs = [doc for doc, _ in results]
+                filtered_docs, max_security_level = self._filter_by_security(
+                    docs, user_security_level, user_department_id
+                )
+                
+                if len(docs) > 0 and len(filtered_docs) == 0:
+                    return {
+                        "success": False,
+                        "error": "insufficient_clearance",
+                        "message": "You do not have sufficient clearance to access the retrieved documents.",
+                        "count": 0,
+                        "max_security_level": max_security_level,
+                    }
+                
+                filtered_ids = {id(doc) for doc in filtered_docs}
+                filtered_results = [(doc, score) for doc, score in results if id(doc) in filtered_ids]
+            
+            # Use reranker to improve ranking
+            docs_to_rerank = [doc for doc, _ in filtered_results]
+            reranker_top_k = self.settings.app_settings.RERANKER_TOP_K
+            reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
+            
+            logger.info(f"Reranking {len(docs_to_rerank)} documents (target: top {reranker_top_k})")
+            reranked_docs, reranked_scores = self.reranker.rerank(
+                query_text,
+                docs_to_rerank,
+                top_k=reranker_top_k
+            )
+            
+            # Filter reranked results by score threshold
+            quality_results = [
+                (doc, score) for doc, score in zip(reranked_docs, reranked_scores)
+                if score >= reranker_threshold
+            ]
+            
+            if quality_results:
+                logger.info(f"Reranker found {len(quality_results)} quality documents")
+                return {
+                    "success": True,
+                    "context": [doc for doc, _ in quality_results],
+                    "count": len(quality_results),
+                    "max_security_level": max_security_level,
+                }
+            else:
+                logger.warning("Reranker could not find quality documents above threshold")
+                return {
+                    "success": False,
+                    "error": "low_quality_results",
+                    "message": "No relevant documents found for your query. The available documents do not match your request well enough.",
+                    "count": 0
+                }
+        
+        except Exception as e:
+            logger.error(f"Error during reranking retrieval: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": "retrieval_error",

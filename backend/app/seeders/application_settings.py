@@ -126,6 +126,12 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("max_top_k", "integer", "Maximum number of documents to retrieve when increasing top-k", "retrieval", True, False),
             ("retrieval_score_threshold", "float", "Minimum quality score for retrieved documents (0.0-1.0)", "retrieval", True, False),
             
+            # Reranker Settings
+            ("enable_reranker", "boolean", "Enable reranking when initial results are poor quality", "retrieval", True, False),
+            ("reranker_model", "string", "Cross-encoder model for reranking", "retrieval", True, False),
+            ("reranker_top_k", "integer", "Number of documents to return after reranking", "retrieval", True, False),
+            ("reranker_score_threshold", "float", "Minimum reranker quality score (0.0-1.0)", "retrieval", True, False),
+            
             # Qdrant-specific
             ("qdrant_host", "string", "Qdrant server host", "vector_db", True, False),
             ("qdrant_port", "integer", "Qdrant HTTP port", "vector_db", True, False),

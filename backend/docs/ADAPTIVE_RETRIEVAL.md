@@ -6,19 +6,41 @@ The retrieval system uses adaptive top-k adjustment with quality-based scoring t
 
 ## How It Works
 
-### 1. Quality-Based Retrieval
+### 1. Quality-Based Retrieval with Reranking
 
-Instead of retrieving a fixed number of documents, the system:
+Instead of retrieving a fixed number of documents, the system uses a multi-stage approach:
 
 1. **Starts small**: Begins with `MIN_TOP_K` documents (default: 3)
 2. **Checks quality**: Evaluates if retrieved documents meet the `RETRIEVAL_SCORE_THRESHOLD` (default: 0.5)
-3. **Adapts dynamically**: If quality is low, increases top-k incrementally (by 2) up to `MAX_TOP_K` (default: 10)
-4. **Returns intelligently**: 
+3. **Reranking fallback**: If initial results are poor quality AND reranker is enabled:
+   - Retrieves `MAX_TOP_K` documents (default: 10)
+   - Uses cross-encoder model to rerank based on semantic relevance
+   - Returns top `RERANKER_TOP_K` documents (default: 3) that meet `RERANKER_SCORE_THRESHOLD` (default: 0.3)
+4. **Adaptive scaling**: If reranker disabled or unavailable, increases top-k incrementally (by 2)
+5. **Returns intelligently**: 
    - If high-quality results found: returns them
    - If only one good result among many poor ones: returns just that one
-   - If no quality results after reaching MAX_TOP_K: returns empty context with clear error message
+   - If no quality results after all attempts: returns empty context with clear error message
 
-### 2. Edge Cases
+### 2. Reranker Integration
+
+**When Reranking Activates**
+- Initial `MIN_TOP_K` retrieval yields poor quality scores
+- Reranker is enabled (`ENABLE_RERANKER=True`)
+- System immediately retrieves `MAX_TOP_K` documents and applies reranking
+
+**Reranking Process**
+- Uses cross-encoder model (default: `cross-encoder/ms-marco-MiniLM-L-6-v2`)
+- Evaluates semantic relevance between query and each document
+- Returns top `RERANKER_TOP_K` documents with scores above `RERANKER_SCORE_THRESHOLD`
+- More accurate than vector similarity alone for relevance ranking
+
+**Why Cross-Encoder?**
+- Bi-encoders (embeddings): Fast but less accurate, good for initial retrieval
+- Cross-encoders: Slower but more accurate, perfect for reranking small sets
+- Cross-encoders see query + document together, better understanding of relevance
+
+### 3. Edge Cases
 
 **Single High-Quality Document**
 - If retrieval finds only ONE document above threshold with multiple low-scoring documents
@@ -27,15 +49,20 @@ Instead of retrieving a fixed number of documents, the system:
 
 **No Quality Results**
 - If system reaches MAX_TOP_K without finding quality documents
+- If reranker also fails to find quality results
 - Returns empty context with error: "No relevant documents found for your query"
 - Rationale: Better to return nothing than false positives that waste tokens and confuse the LLM
 
-### 3. Security Filtering
+**Reranker Disabled**
+- Falls back to incremental top-k scaling (3 → 5 → 7 → 9 → 10)
+- Uses only vector similarity scores for quality checks
 
-Security filtering is applied AFTER quality checks:
+### 4. Security Filtering
+
+Security filtering is applied AFTER quality checks but BEFORE reranking:
 1. Retrieve documents with scores
-2. Filter by quality (score threshold)
-3. Apply user security clearance filtering
+2. Apply user security clearance filtering (remove inaccessible documents)
+3. Check quality or apply reranking on accessible documents only
 4. Return accessible, high-quality documents
 
 ## Configuration
@@ -47,14 +74,28 @@ Security filtering is applied AFTER quality checks:
 MIN_TOP_K=3                     # Initial number of documents to retrieve
 MAX_TOP_K=10                    # Maximum documents when increasing
 RETRIEVAL_SCORE_THRESHOLD=0.5   # Minimum quality score (0.0-1.0)
+
+# Reranker Settings
+ENABLE_RERANKER=True            # Enable reranking for poor quality results
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2  # Cross-encoder model
+RERANKER_TOP_K=3                # Documents to return after reranking
+RERANKER_SCORE_THRESHOLD=0.3    # Minimum reranker score (0.0-1.0)
 ```
 
 ### Database Settings
 
 Add these to application_settings via seeder or admin UI:
+
+**Adaptive Retrieval:**
 - `min_top_k` (integer): Minimum initial retrieval size
 - `max_top_k` (integer): Maximum retrieval size
 - `retrieval_score_threshold` (float): Quality threshold
+
+**Reranker:**
+- `enable_reranker` (boolean): Enable/disable reranking
+- `reranker_model` (string): Cross-encoder model name
+- `reranker_top_k` (integer): Documents to return after reranking
+- `reranker_score_threshold` (float): Minimum reranker quality score
 
 ### Validation
 
@@ -87,9 +128,15 @@ def query(
 5. If yes:
    - Check for single high-quality doc edge case
    - Return quality results
-6. If no:
-   - If current_k < MAX_TOP_K: increase and retry
-   - If current_k == MAX_TOP_K: return empty with error
+6. If no quality results:
+   - If reranker enabled and first iteration:
+     a. Retrieve MAX_TOP_K documents
+     b. Apply security filtering
+     c. Rerank documents using cross-encoder
+     d. Return top RERANKER_TOP_K if above threshold
+     e. If no quality results: return empty with error
+   - Else if current_k < MAX_TOP_K: increase by 2 and retry
+   - Else: return empty with error
 ```
 
 ### Return Format
@@ -128,10 +175,12 @@ Security failure case:
 ## Benefits
 
 1. **Resource Efficiency**: Start small, only retrieve more if needed
-2. **Quality Assurance**: Only return documents that meet quality threshold
+2. **Quality Assurance**: Two-stage filtering (vector similarity + cross-encoder reranking)
 3. **False Positive Prevention**: Better to return nothing than irrelevant context
 4. **Token Optimization**: Don't waste LLM tokens on low-quality context
-5. **Response Quality**: LLM gets better results with quality-filtered context
+5. **Response Quality**: LLM gets better results with quality-filtered, reranked context
+6. **Semantic Accuracy**: Cross-encoder reranking provides more accurate relevance scoring than embeddings alone
+7. **Adaptive Strategy**: Combines fast vector search with accurate cross-encoder reranking
 
 ## Removed Features
 
@@ -192,3 +241,8 @@ If vector store doesn't support similarity scores:
 - Uses `MIN_TOP_K` as static retrieval size
 - Still applies security filtering
 - Logs warning about missing score support
+
+If reranker model fails to load or errors occur:
+- Falls back to incremental top-k scaling
+- Uses only vector similarity scores
+- Logs error and continues without reranking
