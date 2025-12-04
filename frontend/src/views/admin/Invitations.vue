@@ -342,7 +342,9 @@ const handleInviteUser = async (inviteData) => {
     inviteData.invitationLinkTemplate,
     inviteData.invitationMessage,
     inviteData.departmentId,
-    inviteData.isManager
+    inviteData.isManager,
+    inviteData.orgLevelPermission,
+    inviteData.departmentLevelPermission
   )
   
   if (result.success) {

@@ -112,7 +112,26 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
-  async function inviteUser(email, roleId, invitationLinkTemplate, invitationMessage = null, departmentId = null, isManager = false) {
+  async function getInvitationLimits() {
+    try {
+      const response = await api.get('/v1/admin/users/me/invitation-limits')
+      return { success: true, data: response }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to get invitation limits'
+      return { success: false, error: error.value }
+    }
+  }
+
+  async function inviteUser(
+    email, 
+    roleId, 
+    invitationLinkTemplate, 
+    invitationMessage = null, 
+    departmentId = null, 
+    isManager = false,
+    orgLevelPermission = 1,
+    departmentLevelPermission = null
+  ) {
     loading.value = true
     error.value = null
 
@@ -120,7 +139,9 @@ export const useAdminStore = defineStore('admin', () => {
       const payload = {
         email,
         role_id: roleId,
-        is_manager: isManager
+        is_manager: isManager,
+        org_level_permission: orgLevelPermission,
+        department_level_permission: departmentLevelPermission
       }
       
       // Include optional fields if provided
@@ -241,6 +262,8 @@ export const useAdminStore = defineStore('admin', () => {
     loading,
     error,
     totalUsers,
+    // Actions
+    getInvitationLimits,
     currentPage,
     pageSize,
     // Getters
