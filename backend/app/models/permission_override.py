@@ -52,11 +52,29 @@ class OverrideType(str, Enum):
     DEPARTMENT = "department"
 
 
-class PermissionOverride(Base):
-    """Temporary elevated permission override with expiry date.
+class OverrideStatus(str, Enum):
+    """Status of permission override request/approval.
+    
+    Attributes:
+        PENDING: Awaiting approval decision
+        APPROVED: Approved and active (or will be active during valid window)
+        DENIED: Request denied by approver
+        EXPIRED: Override has expired
+        REVOKED: Manually revoked before expiry
+    """
+    
+    PENDING = "pending"
+    APPROVED = "approved"
+    DENIED = "denied"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
 
-    Allows granting users temporary elevated permissions for special assignments
-    or projects, with automatic expiration after the valid_until date.
+
+class PermissionOverride(Base):
+    """Temporary elevated permission override with request/approval workflow.
+
+    Supports both direct grants (by admins) and user-requested overrides that
+    require approval. Includes automatic expiration after the valid_until date.
 
     Attributes:
         id: Unique override ID
@@ -67,8 +85,16 @@ class PermissionOverride(Base):
         reason: Business justification for the override
         valid_from: Start datetime of the override
         valid_until: End datetime of the override (auto-expires after this)
-        created_by_id: User who created this override (audit trail)
+        created_by_id: User who created/requested this override
         is_active: Whether override is currently active (can be manually revoked)
+        status: Current status (pending/approved/denied/expired/revoked)
+        approver_id: User who approved/denied (nullable until decision)
+        approval_notes: Approver's comments on decision
+        decided_at: When approval/denial decision was made
+        trigger_query: Query that triggered this request (optional)
+        trigger_file_id: File that couldn't be accessed (optional)
+        auto_escalated: Whether request was auto-escalated to admin
+        escalated_at: When auto-escalation occurred
         created_at: Creation timestamp
         updated_at: Last update timestamp
     """
@@ -126,6 +152,49 @@ class PermissionOverride(Base):
         nullable=False,
         index=True,
     )
+    
+    # Approval workflow fields
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default=OverrideStatus.APPROVED.value,  # Direct grants are auto-approved
+        index=True,
+    )
+    
+    approver_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    
+    approval_notes: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    
+    decided_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True,
+    )
+    
+    # Context fields (what triggered this request)
+    trigger_query: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+    )
+    
+    trigger_file_id: Mapped[Optional[int]] = mapped_column(
+        Integer,  # Store file ID without FK constraint (file may be deleted)
+        nullable=True,
+    )
+    
+    # Auto-escalation tracking
+    auto_escalated: Mapped[bool] = mapped_column(
+        default=False,
+        nullable=False,
+    )
+    
+    escalated_at: Mapped[Optional[datetime]] = mapped_column(
+        nullable=True,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         default=lambda: datetime.now(timezone.utc),
@@ -148,6 +217,12 @@ class PermissionOverride(Base):
     created_by: Mapped[Optional["User"]] = relationship(
         "User",
         foreign_keys=[created_by_id],
+        uselist=False,
+    )
+    
+    approver: Mapped[Optional["User"]] = relationship(
+        "User",
+        foreign_keys=[approver_id],
         uselist=False,
     )
 
@@ -173,23 +248,34 @@ class PermissionOverride(Base):
             "department_id",
             "override_type",
         ),
+        Index(
+            "ix_permission_overrides_status_created",
+            "status",
+            "created_at",
+        ),
+        Index(
+            "ix_permission_overrides_user_status",
+            "user_id",
+            "status",
+        ),
     )
 
     def is_valid(self) -> bool:
         """Check if override is currently valid.
 
         Returns:
-            True if override is active and within valid time window, False otherwise
+            True if override is approved, active and within valid time window
 
         Example:
             if override.is_valid():
                 # Use override permission
             else:
-                # Override has expired or been revoked
+                # Override has expired, been revoked, or not approved
         """
         now = datetime.now(timezone.utc)
         return (
-            self.is_active
+            self.status == OverrideStatus.APPROVED.value
+            and self.is_active
             and self.valid_from <= now <= self.valid_until
         )
 
@@ -218,13 +304,52 @@ class PermissionOverride(Base):
     def revoke(self) -> None:
         """Manually revoke this override.
 
-        Sets is_active to False, immediately deactivating the override.
+        Sets is_active to False and status to REVOKED.
 
         Example:
             override.revoke()
             await db.commit()
         """
         self.is_active = False
+        self.status = OverrideStatus.REVOKED.value
+        self.updated_at = datetime.now(timezone.utc)
+    
+    def is_pending(self) -> bool:
+        """Check if override request is pending approval."""
+        return self.status == OverrideStatus.PENDING.value
+    
+    def is_approved(self) -> bool:
+        """Check if override has been approved."""
+        return self.status == OverrideStatus.APPROVED.value
+    
+    def is_denied(self) -> bool:
+        """Check if override request was denied."""
+        return self.status == OverrideStatus.DENIED.value
+    
+    def can_be_cancelled(self) -> bool:
+        """Check if request can be cancelled by requester."""
+        return self.status == OverrideStatus.PENDING.value
+    
+    def hours_since_created(self) -> float:
+        """Calculate hours since override was created/requested."""
+        delta = datetime.now(timezone.utc) - self.created_at
+        return delta.total_seconds() / 3600
+    
+    def should_auto_escalate(self, escalation_threshold_hours: int = 24) -> bool:
+        """Check if pending request should be auto-escalated to admin.
+        
+        Args:
+            escalation_threshold_hours: Hours before escalation (default 24)
+            
+        Returns:
+            True if pending and past escalation threshold
+        """
+        return (
+            self.is_pending()
+            and not self.auto_escalated
+            and self.override_type == OverrideType.DEPARTMENT.value
+            and self.hours_since_created() >= escalation_threshold_hours
+        )
 
     def __repr__(self) -> str:
         """String representation of the override."""

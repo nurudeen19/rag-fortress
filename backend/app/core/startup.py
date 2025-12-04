@@ -189,6 +189,10 @@ class StartupController:
             self.job_integration = JobQueueIntegration(self.async_session_factory)
             logger.info("✓ Job queue initialized")
             
+            # Schedule recurring job for auto-escalation of override requests
+            await self._schedule_override_escalation_job()
+            logger.info("✓ Override request escalation job scheduled")
+            
         except Exception as e:
             logger.warning(f"⚠ Job queue initialization skipped: {e}")
     
@@ -359,6 +363,39 @@ class StartupController:
         except Exception as e:
             logger.warning(f"⚠ Cache initialization failed (continuing without cache): {e}")
             # Don't block startup - cache is optional
+    
+    async def _schedule_override_escalation_job(self):
+        """Schedule hourly job to auto-escalate stale override requests."""
+        try:
+            async def escalate_overrides():
+                """Background task to process auto-escalations."""
+                try:
+                    from app.core.database import get_session
+                    from app.services.override_request_service import OverrideRequestService
+                    
+                    async with get_session() as session:
+                        service = OverrideRequestService(session)
+                        count = await service.process_auto_escalations(
+                            escalation_threshold_hours=24
+                        )
+                        await session.commit()
+                        
+                        if count > 0:
+                            logger.info(f"Auto-escalated {count} override request(s)")
+                
+                except Exception as e:
+                    logger.error(f"Error in override escalation job: {e}", exc_info=True)
+            
+            # Schedule to run every hour (3600 seconds)
+            self.job_manager.add_recurring_job(
+                escalate_overrides,
+                interval_seconds=3600,
+                job_id='override_request_escalation',
+                max_instances=1
+            )
+            
+        except Exception as e:
+            logger.warning(f"⚠ Failed to schedule override escalation job: {e}")
     
     async def shutdown(self):
         """
