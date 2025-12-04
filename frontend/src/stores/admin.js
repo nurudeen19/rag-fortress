@@ -244,6 +244,106 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  // Actions - Override Requests
+  async function createOverrideRequest(requestData) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.post('/v1/override-requests', requestData)
+      return { success: true, request: response }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to create override request'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchPendingOverrideRequests(limit = 50, offset = 0) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.get('/v1/override-requests/pending', {
+        params: { limit, offset }
+      })
+      return { success: true, requests: response.requests || [], total: response.total || 0 }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to fetch pending requests'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function fetchMyOverrideRequests(statusFilter = null, limit = 50, offset = 0) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const params = { limit, offset }
+      if (statusFilter) params.status_filter = statusFilter
+
+      const response = await api.get('/v1/override-requests/my-requests', { params })
+      return { success: true, requests: response.requests || [], total: response.total || 0 }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to fetch requests'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function approveOverrideRequest(requestId, approvalNotes = null) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.post(`/v1/override-requests/${requestId}/approve`, {
+        approval_notes: approvalNotes
+      })
+      return { success: true, request: response }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to approve request'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function denyOverrideRequest(requestId, denialReason) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.post(`/v1/override-requests/${requestId}/deny`, {
+        denial_reason: denialReason
+      })
+      return { success: true, message: response.message }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to deny request'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function cancelOverrideRequest(requestId) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.delete(`/v1/override-requests/${requestId}`)
+      return { success: true, message: response.message }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to cancel request'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
   // Utility
   function clearError() {
     error.value = null
@@ -262,24 +362,33 @@ export const useAdminStore = defineStore('admin', () => {
     loading,
     error,
     totalUsers,
-    // Actions
-    getInvitationLimits,
     currentPage,
     pageSize,
     // Getters
     isLoading,
     hasError,
-    // Actions
+    // Actions - Users
     fetchUsers,
     fetchUserDetails,
     suspendUser,
     unsuspendUser,
+    getInvitationLimits,
     inviteUser,
+    // Actions - Roles
     fetchRoles,
     assignRoleToUser,
     revokeRoleFromUser,
     fetchUserRoles,
+    // Actions - Permissions
     fetchPermissions,
+    // Actions - Override Requests
+    createOverrideRequest,
+    fetchPendingOverrideRequests,
+    fetchMyOverrideRequests,
+    approveOverrideRequest,
+    denyOverrideRequest,
+    cancelOverrideRequest,
+    // Utility
     clearError,
     clearSelection,
   }
