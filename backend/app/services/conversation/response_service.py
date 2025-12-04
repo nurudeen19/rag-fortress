@@ -17,6 +17,7 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm_router_service import get_llm_router
 from app.services.conversation.service import ConversationService
+from app.services import activity_logger_service
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
@@ -76,15 +77,33 @@ class ConversationResponseService:
                 query_text=user_query,
                 top_k=5,
                 user_security_level=user_clearance.value,
-                user_department_id=user_department_id
+                user_department_id=user_department_id,
+                user_id=user_id
             )
             
             # Handle retrieval errors (access denied, etc.)
             if not retrieval_result["success"]:
-                logger.warning(f"Retrieval failed: {retrieval_result.get('error')}")
+                error_type = retrieval_result.get("error", "retrieval_error")
+                logger.warning(f"Retrieval failed: {error_type}")
+                
+                # Log no-retrieval events to activity logs for analysis
+                if error_type in ["no_documents", "low_quality_results", "reranker_no_quality"]:
+                    try:
+                        await activity_logger_service.log_activity(
+                            db=self.db,
+                            user_id=user_id,
+                            incident_type="retrieval_no_context",
+                            severity="info",
+                            description=f"No context retrieved: {error_type}",
+                            user_query=user_query[:500],  # Truncate long queries
+                            details=retrieval_result.get("details")
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to log no-retrieval event: {e}")
+                
                 return {
                     "success": False,
-                    "error": retrieval_result.get("error", "retrieval_error"),
+                    "error": error_type,
                     "message": retrieval_result.get("message", "Failed to retrieve context")
                 }
             

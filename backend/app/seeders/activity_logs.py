@@ -29,6 +29,7 @@ class ActivityLogsSeeder(BaseSeed):
             "access_pattern_anomaly",
             "query_validation_failed",
             "sensitive_data_access",
+            "retrieval_no_context",
         ]
 
         severities = ["info", "warning", "critical"]

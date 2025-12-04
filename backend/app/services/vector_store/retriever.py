@@ -110,7 +110,8 @@ class RetrieverService:
         query_text: str,
         top_k: Optional[int] = None,
         user_security_level: Optional[int] = None,
-        user_department_id: Optional[int] = None
+        user_department_id: Optional[int] = None,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Adaptive document retrieval with quality-based top-k adjustment.
@@ -127,6 +128,7 @@ class RetrieverService:
             top_k: Optional override (uses min_top_k by default)
             user_security_level: User's clearance level
             user_department_id: User's department ID
+            user_id: User ID for activity logging (optional)
             
         Returns:
             Dict with success, context (documents), count, error, message
@@ -152,12 +154,12 @@ class RetrieverService:
                 
                 if not results:
                     logger.warning(f"No documents retrieved with k={current_k}")
-                    return {
-                        "success": False,
-                        "error": "no_documents",
-                        "message": "No relevant documents found for your query.",
-                        "count": 0
-                    }
+                    return self._log_no_retrieval(
+                        query_text=query_text,
+                        user_id=user_id,
+                        reason="no_documents",
+                        details={"k": current_k}
+                    )
                 
                 # Apply security filtering
                 filtered_results = results
@@ -217,7 +219,8 @@ class RetrieverService:
                         max_k,
                         user_security_level,
                         user_department_id,
-                        score_threshold
+                        score_threshold,
+                        user_id
                     )
                 
                 # No quality results - try increasing k
@@ -228,12 +231,17 @@ class RetrieverService:
                 else:
                     # Reached max_k with no quality results
                     logger.warning(f"Reached max_k={max_k} with no documents above threshold")
-                    return {
-                        "success": False,
-                        "error": "low_quality_results",
-                        "message": "No relevant documents found for your query. The available documents do not match your request well enough.",
-                        "count": 0
-                    }
+                    return self._log_no_retrieval(
+                        query_text=query_text,
+                        user_id=user_id,
+                        reason="low_quality_results",
+                        details={
+                            "max_k": max_k,
+                            "threshold": score_threshold,
+                            "documents_retrieved": len(filtered_results),
+                            "above_threshold": 0
+                        }
+                    )
             
             # Should not reach here
             return {
@@ -258,7 +266,8 @@ class RetrieverService:
         k: int,
         user_security_level: Optional[int],
         user_department_id: Optional[int],
-        score_threshold: float
+        score_threshold: float,
+        user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Retrieve more documents and use reranker to find quality results.
@@ -346,12 +355,17 @@ class RetrieverService:
                 }
             else:
                 logger.warning("Reranker could not find quality documents above threshold")
-                return {
-                    "success": False,
-                    "error": "low_quality_results",
-                    "message": "No relevant documents found for your query. The available documents do not match your request well enough.",
-                    "count": 0
-                }
+                return self._log_no_retrieval(
+                    query_text=query_text,
+                    user_id=user_id,
+                    reason="reranker_no_quality",
+                    details={
+                        "documents_retrieved": len(docs_to_rerank),
+                        "reranker_top_k": reranker_top_k,
+                        "reranker_threshold": reranker_threshold,
+                        "above_threshold": 0
+                    }
+                )
         
         except Exception as e:
             logger.error(f"Error during reranking retrieval: {e}", exc_info=True)
@@ -397,6 +411,47 @@ class RetrieverService:
         }
 
 
+    def _log_no_retrieval(
+        self,
+        query_text: str,
+        user_id: Optional[int],
+        reason: str,
+        details: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Log no-context retrieval events for analysis.
+        
+        Args:
+            query_text: The query that produced no results
+            user_id: User ID if available
+            reason: Reason code (no_documents, low_quality_results, reranker_no_quality)
+            details: Additional context about the failure
+            
+        Returns:
+            Standard error response dict
+        """
+        # Log with structured data for analysis
+        logger.warning(
+            f"No context retrieved - reason={reason}, query='{query_text[:100]}...', "
+            f"user_id={user_id}, details={details}"
+        )
+        
+        # Map reasons to user-friendly messages
+        messages = {
+            "no_documents": "No relevant documents found for your query.",
+            "low_quality_results": "No relevant documents found for your query. The available documents do not match your request well enough.",
+            "reranker_no_quality": "No relevant documents found for your query. The available documents do not match your request well enough."
+        }
+        
+        return {
+            "success": False,
+            "error": reason,
+            "message": messages.get(reason, "No relevant documents found."),
+            "count": 0,
+            "query": query_text,
+            "details": details
+        }
+    
     def format_results(
         self,
         documents: List[Document],

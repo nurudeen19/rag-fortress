@@ -107,6 +107,11 @@ async def get_incident_types(
             description="Query failed validation checks"
         ),
         IncidentTypeInfo(
+            value="retrieval_no_context",
+            name="No Context Retrieved",
+            description="Query did not find relevant documents above quality threshold"
+        ),
+        IncidentTypeInfo(
             value="insufficient_clearance",
             name="Insufficient Clearance",
             description="User attempted to access above their clearance level"
