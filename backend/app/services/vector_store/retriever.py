@@ -36,23 +36,25 @@ class RetrieverService:
         self,
         documents: List[Document],
         user_security_level: int,
-        user_department_id: Optional[int] = None
+        user_department_id: Optional[int] = None,
+        user_department_security_level: Optional[int] = None
     ) -> Tuple[List[Document], Optional[int]]:
         """
         Filter documents based on user's security clearance and department access.
         
         Access rules:
-        1. User can access documents at their clearance level or below
-        2. If document is department-only, user must be in that department
+        1. For org-wide documents: User can access at their org clearance level or below
+        2. For department-only documents: User must be in that department AND meet department security level
         3. If user has no department, they can only access non-department documents
         
         Args:
             documents: Retrieved documents from vector store
-            user_security_level: User's clearance level (PermissionLevel enum value)
+            user_security_level: User's org-wide clearance level (PermissionLevel enum value)
             user_department_id: User's department ID (None if not assigned)
+            user_department_security_level: User's department-specific clearance level (None if not assigned)
             
         Returns:
-            Filtered list of documents the user can access
+            Tuple of (filtered documents, max security level accessed)
         """
         filtered_docs: List[Document] = []
         max_security_level: Optional[int] = None
@@ -74,14 +76,7 @@ class RetrieverService:
                 logger.warning(f"Invalid security level '{doc_security_level}' in document metadata")
                 continue
             
-            # User must have sufficient clearance
-            if user_security_level < doc_level_value:
-                logger.debug(
-                    f"Document blocked: user_level={user_security_level} < doc_level={doc_level_value}"
-                )
-                continue
-            
-            # Check department access
+            # Check department access first
             is_department_only = metadata.get("is_department_only", False)
             doc_department_id = metadata.get("department_id")
             
@@ -93,6 +88,23 @@ class RetrieverService:
                 if doc_department_id != user_department_id:
                     logger.debug(
                         f"Document blocked: dept mismatch (user={user_department_id}, doc={doc_department_id})"
+                    )
+                    continue
+                
+                # For department-only docs, use department security level
+                if user_department_security_level is None:
+                    logger.debug(f"Document blocked: department-only but user has no department security level")
+                    continue
+                if user_department_security_level < doc_level_value:
+                    logger.debug(
+                        f"Document blocked: user_dept_level={user_department_security_level} < doc_level={doc_level_value}"
+                    )
+                    continue
+            else:
+                # For org-wide documents, use org security level
+                if user_security_level < doc_level_value:
+                    logger.debug(
+                        f"Document blocked: user_org_level={user_security_level} < doc_level={doc_level_value}"
                     )
                     continue
             
@@ -111,6 +123,7 @@ class RetrieverService:
         top_k: Optional[int] = None,
         user_security_level: Optional[int] = None,
         user_department_id: Optional[int] = None,
+        user_department_security_level: Optional[int] = None,
         user_id: Optional[int] = None
     ) -> Dict[str, Any]:
         """
@@ -126,8 +139,9 @@ class RetrieverService:
         Args:
             query_text: The search query
             top_k: Optional override (uses min_top_k by default)
-            user_security_level: User's clearance level
+            user_security_level: User's org-wide clearance level
             user_department_id: User's department ID
+            user_department_security_level: User's department-specific clearance level
             user_id: User ID for activity logging (optional)
             
         Returns:
@@ -150,7 +164,7 @@ class RetrieverService:
                     results = vector_store.similarity_search_with_score(query_text, k=current_k)
                 except (AttributeError, NotImplementedError):
                     logger.warning("Vector store doesn't support scores, falling back to basic retrieval")
-                    return self._fallback_query(query_text, current_k, user_security_level, user_department_id)
+                    return self._fallback_query(query_text, current_k, user_security_level, user_department_id, user_department_security_level)
                 
                 if not results:
                     logger.warning(f"No documents retrieved with k={current_k}")
@@ -168,7 +182,7 @@ class RetrieverService:
                 if user_security_level is not None:
                     docs = [doc for doc, _ in results]
                     filtered_docs, max_security_level = self._filter_by_security(
-                        docs, user_security_level, user_department_id
+                        docs, user_security_level, user_department_id, user_department_security_level
                     )
                     
                     if len(docs) > 0 and len(filtered_docs) == 0:
@@ -219,6 +233,7 @@ class RetrieverService:
                         max_k,
                         user_security_level,
                         user_department_id,
+                        user_department_security_level,
                         score_threshold,
                         user_id
                     )
@@ -266,6 +281,7 @@ class RetrieverService:
         k: int,
         user_security_level: Optional[int],
         user_department_id: Optional[int],
+        user_department_security_level: Optional[int],
         score_threshold: float,
         user_id: Optional[int] = None
     ) -> Dict[str, Any]:
@@ -312,7 +328,7 @@ class RetrieverService:
             if user_security_level is not None:
                 docs = [doc for doc, _ in results]
                 filtered_docs, max_security_level = self._filter_by_security(
-                    docs, user_security_level, user_department_id
+                    docs, user_security_level, user_department_id, user_department_security_level
                 )
                 
                 if len(docs) > 0 and len(filtered_docs) == 0:
@@ -381,7 +397,8 @@ class RetrieverService:
         query_text: str,
         k: int,
         user_security_level: Optional[int],
-        user_department_id: Optional[int]
+        user_department_id: Optional[int],
+        user_department_security_level: Optional[int] = None
     ) -> Dict[str, Any]:
         """Fallback when vector store doesn't support scores."""
         self.retriever.search_kwargs = {"k": k}
@@ -390,7 +407,7 @@ class RetrieverService:
         max_security_level = None
         if user_security_level is not None:
             filtered_docs, max_security_level = self._filter_by_security(
-                docs, user_security_level, user_department_id
+                docs, user_security_level, user_department_id, user_department_security_level
             )
             
             if len(docs) > 0 and len(filtered_docs) == 0:

@@ -70,14 +70,17 @@ class ConversationResponseService:
             
             user_clearance = user_info["clearance"]
             user_department_id = user_info.get("department_id")
+            user_dept_clearance = user_info.get("department_security_level")
             
             # Step 2: Retrieve context with user credentials
-            logger.info(f"Retrieving context for user_id={user_id}, clearance={user_clearance.name}")
+            dept_level_str = f", dept_level={user_dept_clearance.name}" if user_dept_clearance else ""
+            logger.info(f"Retrieving context for user_id={user_id}, org_level={user_clearance.name}{dept_level_str}")
             retrieval_result = self.retriever.query(
                 query_text=user_query,
                 top_k=5,
                 user_security_level=user_clearance.value,
                 user_department_id=user_department_id,
+                user_department_security_level=user_dept_clearance.value if user_dept_clearance else None,
                 user_id=user_id
             )
             
@@ -202,9 +205,14 @@ class ConversationResponseService:
                 logger.warning(f"User clearance not found for user_id={user_id}")
                 return None
             
-            # Convert security level string to PermissionLevel enum
+            # Convert security level strings to PermissionLevel enums
+            dept_security_level = None
+            if clearance.get("department_security_level"):
+                dept_security_level = PermissionLevel[clearance["department_security_level"]]
+            
             return {
                 "clearance": PermissionLevel[clearance["security_level"]],
+                "department_security_level": dept_security_level,
                 "department_id": clearance["department_id"]
             }
         

@@ -40,7 +40,8 @@ class UserClearanceCache:
         # Returns:
         {
             "user_id": 42,
-            "security_level": "CONFIDENTIAL",
+            "security_level": "CONFIDENTIAL",  # Org-wide level (with overrides)
+            "department_security_level": "HIGHLY_CONFIDENTIAL",  # Department-specific level
             "department_id": 5,
             "department_name": "Engineering"
         }
@@ -82,7 +83,8 @@ class UserClearanceCache:
                 user_id=clearance["user_id"],
                 security_level=clearance["security_level"],
                 department_id=clearance["department_id"],
-                department_name=clearance["department_name"]
+                department_name=clearance["department_name"],
+                department_security_level=clearance.get("department_security_level")
             )
         
         return clearance
@@ -92,7 +94,8 @@ class UserClearanceCache:
         user_id: int,
         security_level: str,
         department_id: Optional[int],
-        department_name: Optional[str]
+        department_name: Optional[str],
+        department_security_level: Optional[str] = None
     ) -> None:
         """
         Manually set user clearance in cache.
@@ -102,9 +105,10 @@ class UserClearanceCache:
         
         Args:
             user_id: User ID
-            security_level: Security level name (e.g., "CONFIDENTIAL")
+            security_level: Org-wide security level name (e.g., "CONFIDENTIAL")
             department_id: Department ID or None
             department_name: Department name or None
+            department_security_level: Department-specific security level or None
         """
         import json
         
@@ -112,6 +116,7 @@ class UserClearanceCache:
         data = {
             "user_id": user_id,
             "security_level": security_level,
+            "department_security_level": department_security_level,
             "department_id": department_id,
             "department_name": department_name
         }
@@ -174,6 +179,15 @@ class UserClearanceCache:
         # Get effective security level (includes overrides)
         security_level = self._get_effective_security_level(user)
         
+        # Get department-specific security level
+        department_security_level = None
+        if user.permission and user.permission.department_level_permission:
+            dept_level = user.permission.department_level_permission
+            if isinstance(dept_level, PermissionLevel):
+                department_security_level = dept_level.name
+            else:
+                department_security_level = PermissionLevel(dept_level).name
+        
         # Get department info
         department_id = user.department_id
         department_name = user.department.name if user.department else None
@@ -181,6 +195,7 @@ class UserClearanceCache:
         return {
             "user_id": user_id,
             "security_level": security_level.name,
+            "department_security_level": department_security_level,
             "department_id": department_id,
             "department_name": department_name
         }
