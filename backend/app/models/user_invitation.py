@@ -36,6 +36,17 @@ class UserInvitation(Base):
     )
     is_manager: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
+    # Clearance levels to be assigned during onboarding
+    org_level_permission: Mapped[int] = mapped_column(
+        nullable=False,
+        default=1,  # GENERAL level by default
+        comment="Organization-wide clearance level (1-4)"
+    )
+    department_level_permission: Mapped[Optional[int]] = mapped_column(
+        nullable=True,
+        comment="Department-specific clearance level (1-4)"
+    )
+    
     invited_by: Mapped[Optional["User"]] = relationship(
         "User",
         back_populates="invitations_sent",

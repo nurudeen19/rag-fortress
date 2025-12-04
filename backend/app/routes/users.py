@@ -23,7 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.core.security import get_current_user, require_role
+from app.core.security import get_current_user, require_role, require_admin_or_department_manager
 from app.schemas.user import (
     UserResponse,
     UserDetailResponse,
@@ -42,6 +42,8 @@ from app.schemas.user import (
     RevokePermissionFromRoleRequest,
     SuccessResponse,
     InvitationsListResponse,
+    InvitationLimitsResponse,
+    ClearanceLevelOption,
 )
 from app.models.user import User
 from app.core import get_logger
@@ -173,20 +175,96 @@ async def unsuspend_user(
     return SuccessResponse(message=result.get("message", "User unsuspended"))
 
 
+@router.get("/users/me/invitation-limits", response_model=InvitationLimitsResponse)
+async def get_invitation_limits(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Get invitation limits and permissions for current user.
+    
+    Returns information about:
+    - Whether user can send invitations
+    - Whether user is admin or department manager
+    - Which departments user can invite to
+    - Maximum clearance levels user can assign
+    - Available clearance level options
+    """
+    from app.utils.user_clearance_cache import get_user_clearance_cache
+    from sqlalchemy import select
+    from app.models.department import Department
+    
+    # Get user clearance from cache
+    clearance = await get_user_clearance_cache(current_user.id, session)
+    
+    if not clearance:
+        # User cannot invite if clearance not found
+        return InvitationLimitsResponse(
+            can_invite=False,
+            is_admin=False,
+            is_department_manager=False,
+            allowed_departments=None,
+            max_org_clearance=1,
+            max_dept_clearance=None,
+            clearance_levels=[]
+        )
+    
+    is_admin = clearance.get("is_admin", False)
+    is_dept_manager = clearance.get("is_department_manager", False)
+    can_invite = is_admin or is_dept_manager
+    
+    # Determine allowed departments
+    allowed_departments = None  # None means all for admins
+    if is_dept_manager and not is_admin:
+        # Department managers can only invite to their own department
+        dept_id = clearance.get("department_id")
+        allowed_departments = [dept_id] if dept_id else []
+    
+    # Get clearance values
+    max_org_clearance = clearance.get("org_clearance_value", 1)
+    max_dept_clearance = clearance.get("dept_clearance_value")
+    
+    # Build clearance level options
+    clearance_levels = [
+        ClearanceLevelOption(value=1, label="GENERAL"),
+        ClearanceLevelOption(value=2, label="RESTRICTED"),
+        ClearanceLevelOption(value=3, label="CONFIDENTIAL"),
+        ClearanceLevelOption(value=4, label="HIGHLY_CONFIDENTIAL"),
+    ]
+    
+    return InvitationLimitsResponse(
+        can_invite=can_invite,
+        is_admin=is_admin,
+        is_department_manager=is_dept_manager,
+        allowed_departments=allowed_departments,
+        max_org_clearance=max_org_clearance,
+        max_dept_clearance=max_dept_clearance,
+        clearance_levels=clearance_levels
+    )
+
+
 @router.post("/users/invite", response_model=SuccessResponse)
 async def invite_user(
     request: UserInviteRequest,
-    admin: User = Depends(require_role("admin")),
+    inviter: User = Depends(require_admin_or_department_manager),
     session: AsyncSession = Depends(get_session)
 ):
-    """Send invitation to new user with optional department assignment. Requires admin role."""
+    """
+    Send invitation to new user with optional department assignment.
+    
+    Requires admin role or department manager status.
+    - Admins can invite to any department with any clearance level
+    - Department managers can only invite to their own department with clearance <= their own
+    """
     result = await handle_invite_user(
         email=request.email,
         role_id=request.role_id,
-        admin_user=admin,
+        admin_user=inviter,
         invitation_message=request.invitation_message,
         department_id=request.department_id,
         is_manager=request.is_manager,
+        org_level_permission=request.org_level_permission,
+        department_level_permission=request.department_level_permission,
         invitation_link_template=request.invitation_link_template,
         session=session
     )

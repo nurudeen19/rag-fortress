@@ -43,7 +43,11 @@ class UserClearanceCache:
             "security_level": "CONFIDENTIAL",  # Org-wide level (with overrides)
             "department_security_level": "HIGHLY_CONFIDENTIAL",  # Department-specific level
             "department_id": 5,
-            "department_name": "Engineering"
+            "department_name": "Engineering",
+            "is_admin": False,
+            "is_department_manager": True,
+            "org_clearance_value": 3,  # Numeric value for limits
+            "dept_clearance_value": 4
         }
     """
     
@@ -84,7 +88,11 @@ class UserClearanceCache:
                 security_level=clearance["security_level"],
                 department_id=clearance["department_id"],
                 department_name=clearance["department_name"],
-                department_security_level=clearance.get("department_security_level")
+                department_security_level=clearance.get("department_security_level"),
+                is_admin=clearance.get("is_admin", False),
+                is_department_manager=clearance.get("is_department_manager", False),
+                org_clearance_value=clearance.get("org_clearance_value", 1),
+                dept_clearance_value=clearance.get("dept_clearance_value")
             )
         
         return clearance
@@ -95,7 +103,11 @@ class UserClearanceCache:
         security_level: str,
         department_id: Optional[int],
         department_name: Optional[str],
-        department_security_level: Optional[str] = None
+        department_security_level: Optional[str] = None,
+        is_admin: bool = False,
+        is_department_manager: bool = False,
+        org_clearance_value: int = 1,
+        dept_clearance_value: Optional[int] = None
     ) -> None:
         """
         Manually set user clearance in cache.
@@ -109,6 +121,10 @@ class UserClearanceCache:
             department_id: Department ID or None
             department_name: Department name or None
             department_security_level: Department-specific security level or None
+            is_admin: Whether user has admin role
+            is_department_manager: Whether user is a department manager
+            org_clearance_value: Numeric value of org clearance
+            dept_clearance_value: Numeric value of dept clearance
         """
         import json
         
@@ -118,7 +134,11 @@ class UserClearanceCache:
             "security_level": security_level,
             "department_security_level": department_security_level,
             "department_id": department_id,
-            "department_name": department_name
+            "department_name": department_name,
+            "is_admin": is_admin,
+            "is_department_manager": is_department_manager,
+            "org_clearance_value": org_clearance_value,
+            "dept_clearance_value": dept_clearance_value
         }
         
         await self.cache.set(
@@ -181,12 +201,22 @@ class UserClearanceCache:
         
         # Get department-specific security level
         department_security_level = None
+        dept_clearance_value = None
         if user.permission and user.permission.department_level_permission:
             dept_level = user.permission.department_level_permission
             if isinstance(dept_level, PermissionLevel):
                 department_security_level = dept_level.name
+                dept_clearance_value = dept_level.value
             else:
-                department_security_level = PermissionLevel(dept_level).name
+                dept_level_enum = PermissionLevel(dept_level)
+                department_security_level = dept_level_enum.name
+                dept_clearance_value = dept_level_enum.value
+        
+        # Check if user is admin or department manager
+        is_admin = user.has_role("admin")
+        is_department_manager = False
+        if user.department_id and user.department:
+            is_department_manager = user.department.manager_id == user.id
         
         # Get department info
         department_id = user.department_id
@@ -197,7 +227,11 @@ class UserClearanceCache:
             "security_level": security_level.name,
             "department_security_level": department_security_level,
             "department_id": department_id,
-            "department_name": department_name
+            "department_name": department_name,
+            "is_admin": is_admin,
+            "is_department_manager": is_department_manager,
+            "org_clearance_value": security_level.value,
+            "dept_clearance_value": dept_clearance_value
         }
     
     def _get_effective_security_level(self, user: User) -> PermissionLevel:

@@ -303,6 +303,53 @@ def require_admin():
     return require_role("admin")
 
 
+async def require_admin_or_department_manager(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+) -> User:
+    """
+    Dependency that checks if user is an admin or a department manager.
+    
+    Usage:
+        @router.post("/invitations")
+        async def send_invitation(
+            user: User = Depends(require_admin_or_department_manager)
+        ):
+            # Admins or department managers can access
+            pass
+    
+    Returns:
+        User if authorized
+        
+    Raises:
+        HTTPException: If user is neither admin nor department manager
+    """
+    # Check if admin
+    if current_user.has_role("admin"):
+        return current_user
+    
+    # Check if department manager
+    from sqlalchemy import select
+    from app.models.department import Department
+    
+    result = await session.execute(
+        select(Department).where(Department.manager_id == current_user.id)
+    )
+    dept = result.scalar_one_or_none()
+    
+    if dept:
+        return current_user
+    
+    logger.warning(
+        f"User {current_user.id} denied access: not admin or department manager"
+    )
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="This action requires admin role or department manager status"
+    )
+
+
+
 def require_user():
     """
     Create a dependency that requires user role.

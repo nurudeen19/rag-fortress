@@ -205,6 +205,18 @@ class UserInviteRequest(BaseModel):
         False,
         description="Whether to make user a manager of the assigned department"
     )
+    org_level_permission: int = Field(
+        1,
+        ge=1,
+        le=4,
+        description="Organization-wide clearance level (1=GENERAL, 2=RESTRICTED, 3=CONFIDENTIAL, 4=HIGHLY_CONFIDENTIAL)"
+    )
+    department_level_permission: Optional[int] = Field(
+        None,
+        ge=1,
+        le=4,
+        description="Department-specific clearance level (optional, for department members)"
+    )
     invitation_link_template: Optional[str] = Field(
         None,
         description="Frontend invitation link template with {token} placeholder. "
@@ -336,6 +348,30 @@ class InvitationsListResponse(BaseModel):
     limit: int
     offset: int
     invitations: List[InvitationResponse] = Field(default_factory=list)
+
+
+class ClearanceLevelOption(BaseModel):
+    """Clearance level option for dropdowns."""
+    
+    value: int
+    label: str
+
+
+class InvitationLimitsResponse(BaseModel):
+    """
+    Response schema for invitation limits and permissions.
+    
+    Provides frontend with information about what the current user
+    can do regarding invitations (departments, clearance levels).
+    """
+    
+    can_invite: bool
+    is_admin: bool
+    is_department_manager: bool
+    allowed_departments: Optional[List[int]] = None  # None = all departments for admins
+    max_org_clearance: int
+    max_dept_clearance: Optional[int] = None
+    clearance_levels: List[ClearanceLevelOption]
 
 
 # Update forward references for nested models

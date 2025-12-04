@@ -26,6 +26,7 @@ from app.services.user import (
     InvitationService,
 )
 from app.services.email.builders.specialized import InvitationEmailBuilder
+from app.utils.user_clearance_cache import get_user_clearance_cache
 
 logger = logging.getLogger(__name__)
 
@@ -763,6 +764,63 @@ async def handle_revoke_permission_from_role(
         }
 
 
+def can_invite_user(inviter_clearance: dict, target_dept_id: Optional[int]) -> tuple[bool, Optional[str]]:
+    """
+    Check if inviter has permission to invite a user to the target department.
+    
+    Args:
+        inviter_clearance: Cached clearance data from get_user_clearance_cache
+        target_dept_id: Department ID the user is being invited to
+        
+    Returns:
+        Tuple of (authorized: bool, error_message: Optional[str])
+    """
+    if inviter_clearance.get("is_admin"):
+        return True, None
+    
+    if inviter_clearance.get("is_department_manager"):
+        if target_dept_id == inviter_clearance.get("department_id"):
+            return True, None
+        return False, "Department managers can only invite users to their own department"
+    
+    return False, "Insufficient permissions to send invitations"
+
+
+def validate_clearance_limits(
+    requested_org: int,
+    requested_dept: Optional[int],
+    inviter_org_max: int,
+    inviter_dept_max: Optional[int],
+    is_admin: bool
+) -> tuple[bool, Optional[str]]:
+    """
+    Validate that requested clearance levels don't exceed inviter's own limits.
+    
+    Args:
+        requested_org: Requested org-wide clearance level (1-4)
+        requested_dept: Requested department clearance level (1-4 or None)
+        inviter_org_max: Inviter's max org clearance value
+        inviter_dept_max: Inviter's max dept clearance value
+        is_admin: Whether inviter is admin (no limits)
+        
+    Returns:
+        Tuple of (valid: bool, error_message: Optional[str])
+    """
+    if is_admin:
+        return True, None  # Admins have no clearance limits
+    
+    if requested_org > inviter_org_max:
+        return False, f"Cannot assign organization clearance higher than your own level ({inviter_org_max})"
+    
+    if requested_dept is not None:
+        if inviter_dept_max is None:
+            return False, "You do not have department clearance to assign"
+        if requested_dept > inviter_dept_max:
+            return False, f"Cannot assign department clearance higher than your own level ({inviter_dept_max})"
+    
+    return True, None
+
+
 async def handle_invite_user(
     email: str,
     role_id: int,
@@ -771,12 +829,16 @@ async def handle_invite_user(
     invitation_message: Optional[str] = None,
     department_id: Optional[int] = None,
     is_manager: bool = False,
+    org_level_permission: int = 1,
+    department_level_permission: Optional[int] = None,
     session: AsyncSession = None
 ) -> dict:
     """
     Send invitation to new user with optional department assignment.
     
-    Delegates to InvitationService for all business logic.
+    Enforces role-based authorization:
+    - Admins can invite to any department with any clearance
+    - Department managers can only invite to their own department with clearance <= their own
     
     Args:
         email: Email address to invite
@@ -786,12 +848,42 @@ async def handle_invite_user(
         invitation_message: Optional custom message for invitation
         department_id: Optional department to assign user to
         is_manager: Whether to make user a manager of the department
+        org_level_permission: Organization-wide clearance level (1-4)
+        department_level_permission: Department-specific clearance level (1-4)
         session: Database session
     
     Returns:
         Dict with success status and message
     """
     try:
+        # Get inviter's clearance from cache
+        inviter_clearance = await get_user_clearance_cache(admin_user.id, session)
+        if not inviter_clearance:
+            logger.warning(f"Failed to get clearance cache for user {admin_user.id}")
+            return {"success": False, "error": "Could not verify your permissions. Please try again."}
+        
+        # Check if inviter can invite to target department
+        can_invite, invite_error = can_invite_user(inviter_clearance, department_id)
+        if not can_invite:
+            logger.warning(f"User {admin_user.id} unauthorized to invite to dept {department_id}: {invite_error}")
+            return {"success": False, "error": invite_error}
+        
+        # Validate clearance limits
+        is_admin = inviter_clearance.get("is_admin", False)
+        inviter_org_max = inviter_clearance.get("org_clearance_value", 1)
+        inviter_dept_max = inviter_clearance.get("dept_clearance_value")
+        
+        clearance_valid, clearance_error = validate_clearance_limits(
+            org_level_permission,
+            department_level_permission,
+            inviter_org_max,
+            inviter_dept_max,
+            is_admin
+        )
+        if not clearance_valid:
+            logger.warning(f"User {admin_user.id} clearance validation failed: {clearance_error}")
+            return {"success": False, "error": clearance_error}
+        
         # Get role name
         result = await session.execute(select(Role).where(Role.id == role_id))
         role = result.scalar_one_or_none()
@@ -799,7 +891,7 @@ async def handle_invite_user(
             logger.warning(f"Role {role_id} not found for invitation by admin {admin_user.id}")
             return {"success": False, "error": "The specified role does not exist"}
         
-        # Create invitation via service with new fields
+        # Create invitation via service with clearance fields
         service = InvitationService(session)
         invitation, error = await service.create_invitation(
             email=email,
@@ -808,6 +900,8 @@ async def handle_invite_user(
             custom_message=invitation_message,
             department_id=department_id,
             is_manager=is_manager,
+            org_level_permission=org_level_permission,
+            department_level_permission=department_level_permission,
             invitation_link_template=invitation_link_template,
         )
         

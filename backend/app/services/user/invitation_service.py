@@ -36,18 +36,22 @@ class InvitationService:
         custom_message: Optional[str] = None,
         department_id: Optional[int] = None,
         is_manager: bool = False,
+        org_level_permission: int = 1,
+        department_level_permission: Optional[int] = None,
         invitation_link_template: Optional[str] = None,
-    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """
         Create a new invitation and send email.
         
         Args:
             email: Email address to invite
-            inviter_id: User ID of the inviter (admin)
+            inviter_id: User ID of the inviter (admin or manager)
             role_name: Optional role to assign
             custom_message: Optional custom message for invitation
             department_id: Optional department to assign user to during onboarding
             is_manager: Whether to make user a manager of the assigned department
+            org_level_permission: Organization-wide clearance level (1-4)
+            department_level_permission: Department-specific clearance level (1-4, optional)
             invitation_link_template: Optional frontend signup link template with {token} placeholder
         
         Returns:
@@ -109,6 +113,8 @@ class InvitationService:
                 invitation_message=custom_message,
                 department_id=department_id,
                 is_manager=is_manager,
+                org_level_permission=org_level_permission,
+                department_level_permission=department_level_permission,
                 expires_at=expiry,
                 status="pending",
             )
