@@ -43,7 +43,7 @@ def upgrade() -> None:
         sa.Column('department_level_permission', sa.Integer(), nullable=True),
         
         # Status
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()),
         
         # Foreign keys
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),

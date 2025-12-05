@@ -61,13 +61,13 @@ def upgrade() -> None:
             'retry_count',
             sa.Integer(),
             nullable=False,
-            server_default='0',
+            server_default=sa.text('0'),
         ),
         sa.Column(
             'max_retries',
             sa.Integer(),
             nullable=False,
-            server_default='3',
+            server_default=sa.text('3'),
         ),
         sa.Column(
             'created_at',

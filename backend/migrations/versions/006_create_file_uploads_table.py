@@ -49,7 +49,7 @@ def upgrade() -> None:
         
         # Department association and access control
         sa.Column('department_id', sa.Integer(), nullable=True),
-        sa.Column('is_department_only', sa.Boolean(), nullable=False, server_default='0'),
+        sa.Column('is_department_only', sa.Boolean(), nullable=False, server_default=sa.false()),
         
         # Processing metadata
         sa.Column('file_purpose', sa.Text(), nullable=True),
@@ -61,15 +61,15 @@ def upgrade() -> None:
         
         # Processing tracking
         sa.Column('status', sa.String(length=50), nullable=False, server_default='pending'),
-        sa.Column('is_processed', sa.Boolean(), nullable=False, server_default='0'),
+        sa.Column('is_processed', sa.Boolean(), nullable=False, server_default=sa.false()),
         
         # Processing results
-        sa.Column('chunks_created', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('chunks_created', sa.Integer(), nullable=False, server_default=sa.text('0')),
         sa.Column('processing_error', sa.Text(), nullable=True),
         
         # Performance & monitoring
         sa.Column('processing_time_ms', sa.Integer(), nullable=True),
-        sa.Column('retry_count', sa.Integer(), nullable=False, server_default='0'),
+        sa.Column('retry_count', sa.Integer(), nullable=False, server_default=sa.text('0')),
         sa.Column('max_retries', sa.Integer(), nullable=False, server_default='3'),
         
         # Timestamps
@@ -79,7 +79,7 @@ def upgrade() -> None:
         
         # Data retention
         sa.Column('retention_until', sa.DateTime(), nullable=True),
-        sa.Column('is_archived', sa.Boolean(), nullable=False, server_default='0'),
+        sa.Column('is_archived', sa.Boolean(), nullable=False, server_default=sa.false()),
         
         # Foreign keys
         sa.ForeignKeyConstraint(['uploaded_by_id'], ['users.id'], ondelete='SET NULL'),

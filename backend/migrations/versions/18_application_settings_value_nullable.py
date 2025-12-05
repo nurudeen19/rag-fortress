@@ -20,14 +20,19 @@ depends_on: Sequence[str] | None = None
 
 def upgrade() -> None:
     # Make value column nullable - users will provide values via UI
-    op.alter_column('application_settings', 'value',
-                    existing_type=sa.Text(),
-                    nullable=True)
+    # Use batch mode for SQLite compatibility
+    with op.batch_alter_table('application_settings', schema=None) as batch_op:
+        batch_op.alter_column('value',
+                              existing_type=sa.Text(),
+                              nullable=True)
 
 
 def downgrade() -> None:
     # Revert to non-nullable (fill nulls with empty string first)
     op.execute("UPDATE application_settings SET value = '' WHERE value IS NULL")
-    op.alter_column('application_settings', 'value',
-                    existing_type=sa.Text(),
-                    nullable=False)
+    
+    # Use batch mode for SQLite compatibility
+    with op.batch_alter_table('application_settings', schema=None) as batch_op:
+        batch_op.alter_column('value',
+                              existing_type=sa.Text(),
+                              nullable=False)

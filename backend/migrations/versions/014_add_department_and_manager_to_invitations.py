@@ -17,61 +17,52 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add department_id column with foreign key
-    op.add_column(
-        'user_invitations',
-        sa.Column(
-            'department_id',
-            sa.Integer(),
-            nullable=True,
-            comment='Department to assign user to during onboarding'
+    # Use batch mode for SQLite compatibility
+    with op.batch_alter_table('user_invitations', schema=None) as batch_op:
+        # Add department_id column with foreign key
+        batch_op.add_column(
+            sa.Column(
+                'department_id',
+                sa.Integer(),
+                nullable=True
+            )
         )
-    )
-    
-    # Add is_manager flag
-    op.add_column(
-        'user_invitations',
-        sa.Column(
-            'is_manager',
-            sa.Boolean(),
-            nullable=False,
-            server_default=sa.false(),
-            comment='Whether to make user a manager of assigned department'
+        
+        # Add is_manager flag
+        batch_op.add_column(
+            sa.Column(
+                'is_manager',
+                sa.Boolean(),
+                nullable=False,
+                server_default=sa.false()
+            )
         )
-    )
-    
-    # Create foreign key constraint
-    op.create_foreign_key(
-        'fk_user_invitations_department_id',
-        'user_invitations',
-        'departments',
-        ['department_id'],
-        ['id'],
-        ondelete='SET NULL'
-    )
-    
-    # Create index for department_id
-    op.create_index(
-        'idx_user_invitations_department_id',
-        'user_invitations',
-        ['department_id']
-    )
+        
+        # Create foreign key constraint
+        batch_op.create_foreign_key(
+            'fk_user_invitations_department_id',
+            'departments',
+            ['department_id'],
+            ['id'],
+            ondelete='SET NULL'
+        )
+        
+        # Create index for department_id
+        batch_op.create_index(
+            'idx_user_invitations_department_id',
+            ['department_id']
+        )
 
 
 def downgrade() -> None:
-    # Drop index
-    op.drop_index(
-        'idx_user_invitations_department_id',
-        table_name='user_invitations'
-    )
-    
-    # Drop foreign key constraint
-    op.drop_constraint(
-        'fk_user_invitations_department_id',
-        'user_invitations',
-        type_='foreignkey'
-    )
-    
-    # Drop columns
-    op.drop_column('user_invitations', 'is_manager')
-    op.drop_column('user_invitations', 'department_id')
+    # Use batch mode for SQLite compatibility
+    with op.batch_alter_table('user_invitations', schema=None) as batch_op:
+        # Drop index
+        batch_op.drop_index('idx_user_invitations_department_id')
+        
+        # Drop foreign key constraint
+        batch_op.drop_constraint('fk_user_invitations_department_id', type_='foreignkey')
+        
+        # Drop columns
+        batch_op.drop_column('is_manager')
+        batch_op.drop_column('department_id')

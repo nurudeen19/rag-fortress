@@ -27,7 +27,7 @@ click>=8.1.0
 
 # Database Drivers
 # PostgreSQL (recommended for production)
-# psycopg2-binary>=2.9.11
+psycopg2-binary>=2.9.11
 asyncpg>=0.29.0
 
 # MySQL

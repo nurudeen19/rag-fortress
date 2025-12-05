@@ -24,7 +24,7 @@ def upgrade() -> None:
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('email', sa.String(length=255), nullable=False),
         sa.Column('token', sa.String(length=255), nullable=False),
-        sa.Column('is_used', sa.Boolean(), nullable=False, server_default=sa.text('0')),
+        sa.Column('is_used', sa.Boolean(), nullable=False, server_default=sa.false()),
         sa.Column('used_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),

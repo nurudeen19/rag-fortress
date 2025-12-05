@@ -37,7 +37,7 @@ def upgrade() -> None:
                 
         # Department metadata
         sa.Column('code', sa.String(length=50), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('is_active', sa.Boolean(), nullable=False, server_default=sa.true()),
         
         # Department head (manager)
         sa.Column('manager_id', sa.Integer(), nullable=True),
@@ -78,41 +78,34 @@ def upgrade() -> None:
     )
     
     # Add department_id to users table
-    op.add_column('users', sa.Column('department_id', sa.Integer(), nullable=True))
-    
-    op.create_index(
-        op.f('ix_users_department_id'),
-        'users',
-        ['department_id'],
-        unique=False
-    )
-    
-    op.create_foreign_key(
-        op.f('fk_users_department_id'),
-        'users',
-        'departments',
-        ['department_id'],
-        ['id'],
-        ondelete='SET NULL'
-    )
+    # Use batch mode for SQLite compatibility
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('department_id', sa.Integer(), nullable=True))
+        batch_op.create_index(
+            op.f('ix_users_department_id'),
+            ['department_id'],
+            unique=False
+        )
+        batch_op.create_foreign_key(
+            op.f('fk_users_department_id'),
+            'departments',
+            ['department_id'],
+            ['id'],
+            ondelete='SET NULL'
+        )
 
 
 def downgrade() -> None:
-    """Drop departments table and remove department_id from users."""
+    """Remove departments table and department_id from users."""
     
-    # Remove foreign key and column from users
-    op.drop_constraint(
-        op.f('fk_users_department_id'),
-        'users',
-        type_='foreignkey'
-    )
-    
-    op.drop_index(
-        op.f('ix_users_department_id'),
-        table_name='users'
-    )
-    
-    op.drop_column('users', 'department_id')
+    # Remove foreign key and column from users using batch mode
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.drop_constraint(
+            op.f('fk_users_department_id'),
+            type_='foreignkey'
+        )
+        batch_op.drop_index(op.f('ix_users_department_id'))
+        batch_op.drop_column('department_id')
     
     # Drop departments table indexes
     op.drop_index(op.f('idx_department_parent_active'), table_name='departments')

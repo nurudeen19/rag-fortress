@@ -21,7 +21,7 @@ depends_on: Sequence[str] | None = None
 def upgrade() -> None:
     # Add is_sensitive column for tracking encrypted values
     op.add_column('application_settings',
-                  sa.Column('is_sensitive', sa.Boolean(), nullable=False, server_default='0'))
+                  sa.Column('is_sensitive', sa.Boolean(), nullable=False, server_default=sa.false()))
 
 
 def downgrade() -> None:

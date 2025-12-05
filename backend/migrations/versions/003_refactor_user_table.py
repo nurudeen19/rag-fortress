@@ -29,7 +29,7 @@ def upgrade() -> None:
     # For MySQL/PostgreSQL: add with NOT NULL directly
     op.add_column('users', sa.Column('first_name', sa.String(length=100), nullable=False, server_default='Unknown'))
     op.add_column('users', sa.Column('last_name', sa.String(length=100), nullable=False, server_default='Unknown'))
-    op.add_column('users', sa.Column('is_suspended', sa.Boolean(), nullable=False, server_default='0'))
+    op.add_column('users', sa.Column('is_suspended', sa.Boolean(), nullable=False, server_default=sa.false()))
     op.add_column('users', sa.Column('suspension_reason', sa.Text(), nullable=True))
     op.add_column('users', sa.Column('suspended_at', sa.DateTime(), nullable=True))
     

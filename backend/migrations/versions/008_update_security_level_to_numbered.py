@@ -32,32 +32,50 @@ def upgrade() -> None:
     op.execute("""
         UPDATE file_uploads
         SET security_level = CASE
-            WHEN security_level = 'public' THEN 1
-            WHEN security_level = 'internal' THEN 2
-            WHEN security_level = 'confidential' THEN 3
-            WHEN security_level = 'restricted' THEN 4
-            ELSE 2
+            WHEN security_level = 'public' THEN '1'
+            WHEN security_level = 'internal' THEN '2'
+            WHEN security_level = 'confidential' THEN '3'
+            WHEN security_level = 'restricted' THEN '4'
+            ELSE '2'
         END
     """)
     
-    # Step 2: Drop the old string-based enum constraint
-    op.drop_index(
-        op.f('ix_file_upload_security_level'),
-        table_name='file_uploads'
-    )
+    # Step 2: Drop the old index
+    op.drop_index(op.f('ix_file_upload_security_level'), table_name='file_uploads')
     
-    # Step 3: Alter the column to INTEGER type with new numeric default
-    op.alter_column(
-        'file_uploads',
-        'security_level',
-        existing_type=sa.String(length=50),
-        type_=sa.Integer(),
-        existing_nullable=False,
-        existing_server_default='internal',
-        server_default=sa.text('2')
-    )
+    # Step 3: Alter the column to INTEGER type - handle differently per database
+    # PostgreSQL requires explicit USING clause and default must be dropped first
+    conn = op.get_bind()
+    if conn.dialect.name == 'postgresql':
+        # Drop old default first
+        op.execute("""
+            ALTER TABLE file_uploads 
+            ALTER COLUMN security_level DROP DEFAULT
+        """)
+        # Change type with USING clause
+        op.execute("""
+            ALTER TABLE file_uploads 
+            ALTER COLUMN security_level TYPE INTEGER 
+            USING security_level::integer
+        """)
+        # Set new default
+        op.execute("""
+            ALTER TABLE file_uploads 
+            ALTER COLUMN security_level SET DEFAULT 2
+        """)
+    else:
+        # MySQL and SQLite can use batch mode
+        with op.batch_alter_table('file_uploads', schema=None) as batch_op:
+            batch_op.alter_column(
+                'security_level',
+                existing_type=sa.String(length=50),
+                type_=sa.Integer(),
+                existing_nullable=False,
+                existing_server_default='internal',
+                server_default=sa.text("'2'")
+            )
     
-    # Step 5: Recreate the index
+    # Step 4: Recreate the index
     op.create_index(
         op.f('ix_file_upload_security_level'),
         'file_uploads',
@@ -70,10 +88,7 @@ def downgrade() -> None:
     """Revert security_level from numbered tier back to string enum."""
     
     # Step 1: Drop the numeric index
-    op.drop_index(
-        op.f('ix_file_upload_security_level'),
-        table_name='file_uploads'
-    )
+    op.drop_index(op.f('ix_file_upload_security_level'), table_name='file_uploads')
     
     # Step 2: Migrate data back from integer to string
     op.execute("""
@@ -87,16 +102,36 @@ def downgrade() -> None:
         END
     """)
     
-    # Step 3: Alter the column back to STRING type with original default
-    op.alter_column(
-        'file_uploads',
-        'security_level',
-        existing_type=sa.Integer(),
-        type_=sa.String(length=50),
-        existing_nullable=False,
-        existing_server_default='2',
-        server_default=sa.text("'internal'")
-    )
+    # Step 3: Alter the column back to STRING type - handle differently per database
+    conn = op.get_bind()
+    if conn.dialect.name == 'postgresql':
+        # Drop numeric default first
+        op.execute("""
+            ALTER TABLE file_uploads 
+            ALTER COLUMN security_level DROP DEFAULT
+        """)
+        # Change type with USING clause
+        op.execute("""
+            ALTER TABLE file_uploads 
+            ALTER COLUMN security_level TYPE VARCHAR(50) 
+            USING security_level::varchar
+        """)
+        # Set string default
+        op.execute("""
+            ALTER TABLE file_uploads 
+            ALTER COLUMN security_level SET DEFAULT 'internal'
+        """)
+    else:
+        # MySQL and SQLite can use batch mode
+        with op.batch_alter_table('file_uploads', schema=None) as batch_op:
+            batch_op.alter_column(
+                'security_level',
+                existing_type=sa.Integer(),
+                type_=sa.String(length=50),
+                existing_nullable=False,
+                existing_server_default='2',
+                server_default=sa.text("'internal'")
+            )
     
     # Step 4: Recreate the index
     op.create_index(

@@ -21,12 +21,12 @@ def upgrade() -> None:
         sa.Column('id', sa.String(length=36), primary_key=True),
         sa.Column('user_id', sa.Integer(), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True),
         sa.Column('title', sa.String(length=255), nullable=False),
-        sa.Column('message_count', sa.Integer(), nullable=False, server_default=sa.text('0')),
-        sa.Column('last_message_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP'), index=True),
-        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default=sa.text('0'), index=True),
+        sa.Column('message_count', sa.Integer(), nullable=False, server_default=sa.text("'0'")),
+        sa.Column('last_message_at', sa.DateTime(), nullable=False),
+        sa.Column('is_deleted', sa.Boolean(), nullable=False, server_default=sa.text("'0'"), index=True),
         sa.Column('deleted_at', sa.DateTime(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
     )
     op.create_index('idx_conv_user_deleted', 'conversations', ['user_id', 'is_deleted'])
     op.create_index('idx_conv_user_updated', 'conversations', ['user_id', 'last_message_at'])
@@ -36,12 +36,12 @@ def upgrade() -> None:
         'messages',
         sa.Column('id', sa.String(length=36), primary_key=True),
         sa.Column('conversation_id', sa.String(length=36), sa.ForeignKey('conversations.id', ondelete='CASCADE'), nullable=False, index=True),
-        sa.Column('role', sa.Enum('USER', 'ASSISTANT', 'SYSTEM', name='messagerole'), nullable=False),
+        sa.Column('role', sa.Enum('USER', 'ASSISTANT', 'SYSTEM', name='messagerole', native_enum=False), nullable=False),
         sa.Column('content', sa.Text(), nullable=False),
         sa.Column('token_count', sa.Integer(), nullable=True),
         sa.Column('meta', sa.JSON(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')),
+        sa.Column('created_at', sa.DateTime(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(), nullable=False),
     )
     op.create_index('idx_msg_conv_created', 'messages', ['conversation_id', 'created_at'])
     op.create_index('idx_msg_role', 'messages', ['role'])
