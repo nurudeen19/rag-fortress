@@ -3,7 +3,7 @@ Department model for organizational units.
 
 Stores basic department information for organizational tracking and access control.
 """
-from sqlalchemy import String, Text, ForeignKey, Boolean
+from sqlalchemy import String, Text, ForeignKey, Boolean, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -42,11 +42,13 @@ class Department(Base):
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
         index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False

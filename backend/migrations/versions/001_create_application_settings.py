@@ -23,8 +23,8 @@ def upgrade() -> None:
     op.create_table(
         'application_settings',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('key', sa.String(length=255), nullable=False),
         sa.Column('value', sa.Text(), nullable=False),
         sa.Column('data_type', sa.String(length=50), nullable=False),

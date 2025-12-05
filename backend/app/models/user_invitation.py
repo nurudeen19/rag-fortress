@@ -23,8 +23,8 @@ class UserInvitation(Base):
     invited_by_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False, index=True)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
-    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     invitation_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     assigned_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)

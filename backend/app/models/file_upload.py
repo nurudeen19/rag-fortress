@@ -145,12 +145,12 @@ class FileUpload(Base):
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
-    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    processing_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    processing_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     # Data retention
-    retention_until: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)  # Auto-delete date
+    retention_until: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True, index=True)  # Auto-delete date
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     
     # Relationships

@@ -29,8 +29,8 @@ def upgrade() -> None:
     op.create_table(
         'file_uploads',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         
         # Core identifiers
         sa.Column('upload_token', sa.String(length=255), nullable=False, unique=True),
@@ -73,12 +73,12 @@ def upgrade() -> None:
         sa.Column('max_retries', sa.Integer(), nullable=False, server_default='3'),
         
         # Timestamps
-        sa.Column('approved_at', sa.DateTime(), nullable=True),
-        sa.Column('processing_started_at', sa.DateTime(), nullable=True),
-        sa.Column('processing_completed_at', sa.DateTime(), nullable=True),
+        sa.Column('approved_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('processing_started_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('processing_completed_at', sa.DateTime(timezone=True), nullable=True),
         
         # Data retention
-        sa.Column('retention_until', sa.DateTime(), nullable=True),
+        sa.Column('retention_until', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_archived', sa.Boolean(), nullable=False, server_default=sa.false()),
         
         # Foreign keys

@@ -4,7 +4,7 @@ UserPermission model for managing access control.
 Defines user security levels at organization-wide and department-specific levels.
 Enables granular access control for files and resources.
 """
-from sqlalchemy import String, Integer, ForeignKey, Boolean, Index
+from sqlalchemy import String, Integer, ForeignKey, Boolean, Index, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -78,11 +78,13 @@ class UserPermission(Base):
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
         index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False

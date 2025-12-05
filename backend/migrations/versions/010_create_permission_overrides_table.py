@@ -48,12 +48,12 @@ def upgrade() -> None:
         ),
         sa.Column(
             'valid_from',
-            sa.DateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
         ),
         sa.Column(
             'valid_until',
-            sa.DateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
         ),
         sa.Column(

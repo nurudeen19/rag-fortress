@@ -31,7 +31,7 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('last_name', sa.String(length=100), nullable=False, server_default='Unknown'))
     op.add_column('users', sa.Column('is_suspended', sa.Boolean(), nullable=False, server_default=sa.false()))
     op.add_column('users', sa.Column('suspension_reason', sa.Text(), nullable=True))
-    op.add_column('users', sa.Column('suspended_at', sa.DateTime(), nullable=True))
+    op.add_column('users', sa.Column('suspended_at', sa.DateTime(timezone=True), nullable=True))
     
     # Drop old columns
     op.drop_column('users', 'full_name')

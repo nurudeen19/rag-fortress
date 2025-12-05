@@ -41,7 +41,7 @@ class User(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_suspended: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     suspension_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    suspended_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
     profile: Mapped[Optional["UserProfile"]] = relationship(
         "UserProfile",

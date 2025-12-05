@@ -28,8 +28,8 @@ def upgrade() -> None:
     op.create_table(
         'departments',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         
         # Department information
         sa.Column('name', sa.String(length=255), nullable=False),

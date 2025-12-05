@@ -28,8 +28,8 @@ def upgrade() -> None:
     op.create_table(
         'user_permissions',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         
         # User reference (unique one-to-one)
         sa.Column('user_id', sa.Integer(), nullable=False, unique=True),

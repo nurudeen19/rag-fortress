@@ -24,11 +24,11 @@ def upgrade() -> None:
     op.add_column('permission_overrides', sa.Column('status', sa.String(length=20), nullable=False, server_default=sa.text("'approved'")))
     op.add_column('permission_overrides', sa.Column('approver_id', sa.Integer(), nullable=True))
     op.add_column('permission_overrides', sa.Column('approval_notes', sa.Text(), nullable=True))
-    op.add_column('permission_overrides', sa.Column('decided_at', sa.DateTime(), nullable=True))
+    op.add_column('permission_overrides', sa.Column('decided_at', sa.DateTime(timezone=True), nullable=True))
     op.add_column('permission_overrides', sa.Column('trigger_query', sa.Text(), nullable=True))
     op.add_column('permission_overrides', sa.Column('trigger_file_id', sa.Integer(), nullable=True))
     op.add_column('permission_overrides', sa.Column('auto_escalated', sa.Boolean(), nullable=False, server_default=sa.text("'0'")))
-    op.add_column('permission_overrides', sa.Column('escalated_at', sa.DateTime(), nullable=True))
+    op.add_column('permission_overrides', sa.Column('escalated_at', sa.DateTime(timezone=True), nullable=True))
     
     # Create indexes for efficient queries
     op.create_index(op.f('ix_permission_overrides_status'), 'permission_overrides', ['status'], unique=False)
