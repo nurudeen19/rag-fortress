@@ -1,16 +1,21 @@
 """
 Retriever service for querying the vector store.
 Handles adaptive document retrieval with quality-based top-k adjustment and reranking.
+Includes caching and query preprocessing.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
 from langchain_core.documents import Document
+import hashlib
+import json
 
 from app.core.vector_store_factory import get_retriever
 from app.core import get_logger
+from app.core.cache import get_cache
 from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.services.vector_store.reranker import get_reranker_service
+from app.utils.text_processing import preprocess_query
 
 
 logger = get_logger(__name__)
@@ -31,6 +36,36 @@ class RetrieverService:
         self.reranker = None
         if self.settings.app_settings.ENABLE_RERANKER:
             self.reranker = get_reranker_service()
+        self.cache = get_cache()
+    
+    def _generate_cache_key(
+        self,
+        query_text: str,
+        user_security_level: Optional[int],
+        user_department_id: Optional[int],
+        user_department_security_level: Optional[int]
+    ) -> str:
+        """
+        Generate cache key for a query based on:
+        - The cleaned query
+        - User security level (org-wide)
+        - Department context (whether query is dept-scoped or org-wide)
+        
+        This ensures different users with different clearances don't share cached results.
+        """
+        # Determine scope: if user has department restrictions, include dept_id; otherwise org-wide
+        scope = "dept" if (user_department_id and user_department_security_level) else "org"
+        
+        key_data = {
+            "query": query_text,  # Already preprocessed by caller
+            "scope": scope,
+            "org_level": user_security_level,
+            "dept_id": user_department_id if scope == "dept" else None,
+            "dept_level": user_department_security_level if scope == "dept" else None,
+        }
+        
+        serialized = json.dumps(key_data, sort_keys=True, default=str)
+        return f"retrieval:{hashlib.md5(serialized.encode()).hexdigest()}"
     
     def _filter_by_security(
         self,
@@ -117,7 +152,7 @@ class RetrieverService:
         
         return filtered_docs, max_security_level
     
-    def query(
+    async def query(
         self,
         query_text: str,
         top_k: Optional[int] = None,
@@ -130,14 +165,16 @@ class RetrieverService:
         Adaptive document retrieval with quality-based top-k adjustment.
         
         Process:
-        1. Start with min_top_k documents
-        2. Check retrieval quality (scores above threshold)
-        3. If quality is low, increase top_k (up to max_top_k) and retry
-        4. If quality remains low, return empty context with explanation
-        5. If only one high-scoring doc exists, return just that one
+        1. Preprocess query (remove stop words, normalize)
+        2. Check cache for existing results
+        3. If cache miss: Start with min_top_k documents
+        4. Check retrieval quality (scores above threshold)
+        5. If quality is low, increase top_k (up to max_top_k) and retry
+        6. If quality remains low, return empty context with explanation
+        7. If only one high-scoring doc exists, return just that one
         
         Args:
-            query_text: The search query
+            query_text: The search query (will be preprocessed internally)
             top_k: Optional override (uses min_top_k by default)
             user_security_level: User's org-wide clearance level
             user_department_id: User's department ID
@@ -147,7 +184,37 @@ class RetrieverService:
         Returns:
             Dict with success, context (documents), count, error, message
         """
-        try:
+        # Step 1: Preprocess query
+        cleaned_query = preprocess_query(query_text)
+        
+        # Step 2: Check cache
+        cache_key = self._generate_cache_key(
+            cleaned_query,
+            user_security_level,
+            user_department_id,
+            user_department_security_level
+        )
+        
+        cached_result = await self.cache.get(cache_key)
+        if cached_result:
+            logger.info(f"Cache hit for query (key={cache_key[:8]}...)")
+            return cached_result
+        
+        # Step 3-7: Perform actual retrieval
+        retrieval_result = await self._perform_retrieval(
+            cleaned_query,
+            top_k,
+            user_security_level,
+            user_department_id,
+            user_department_security_level,
+            user_id
+        )
+        
+        # Cache successful results (TTL 5 minutes)
+        if retrieval_result["success"]:
+            await self.cache.set(cache_key, retrieval_result, ttl=300)
+        
+        return retrieval_result
             # Get configuration
             min_k = top_k or self.settings.app_settings.MIN_TOP_K
             max_k = self.settings.app_settings.MAX_TOP_K

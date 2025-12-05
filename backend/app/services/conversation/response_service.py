@@ -19,9 +19,13 @@ from app.services.llm_router_service import get_llm_router
 from app.services.conversation.service import ConversationService
 from app.services import activity_logger_service
 from app.utils.user_clearance_cache import get_user_clearance_cache
+from app.utils.text_processing import preprocess_query
+from app.core.cache import get_cache
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.core import get_logger
+import hashlib
+import json
 
 logger = get_logger(__name__)
 
@@ -72,17 +76,41 @@ class ConversationResponseService:
             user_department_id = user_info.get("department_id")
             user_dept_clearance = user_info.get("department_security_level")
             
+            # Preprocess query to remove stop words and noise
+            cleaned_query = preprocess_query(user_query)
+            
             # Step 2: Retrieve context with user credentials
-            dept_level_str = f", dept_level={user_dept_clearance.name}" if user_dept_clearance else ""
-            logger.info(f"Retrieving context for user_id={user_id}, org_level={user_clearance.name}{dept_level_str}")
-            retrieval_result = self.retriever.query(
-                query_text=user_query,
-                top_k=5,
-                user_security_level=user_clearance.value,
-                user_department_id=user_department_id,
-                user_department_security_level=user_dept_clearance.value if user_dept_clearance else None,
-                user_id=user_id
-            )
+            # Check cache first
+            cache_key_data = {
+                "query": cleaned_query,
+                "user_clearance": user_clearance.value,
+                "user_department_id": user_department_id,
+                "user_dept_clearance": user_dept_clearance.value if user_dept_clearance else None
+            }
+            cache_key = f"retrieval:{hashlib.md5(json.dumps(cache_key_data, sort_keys=True).encode()).hexdigest()}"
+            
+            cache = get_cache()
+            retrieval_result = await cache.get(cache_key)
+            
+            if not retrieval_result:
+                dept_level_str = f", dept_level={user_dept_clearance.name}" if user_dept_clearance else ""
+                logger.info(f"Retrieving context for user_id={user_id}, org_level={user_clearance.name}{dept_level_str}")
+                
+                # Use cleaned query for better retrieval
+                retrieval_result = self.retriever.query(
+                    query_text=cleaned_query,
+                    top_k=5,
+                    user_security_level=user_clearance.value,
+                    user_department_id=user_department_id,
+                    user_department_security_level=user_dept_clearance.value if user_dept_clearance else None,
+                    user_id=user_id
+                )
+                
+                # Cache successful results (TTL 5 minutes)
+                if retrieval_result["success"]:
+                    await cache.set(cache_key, retrieval_result, ttl=300)
+            else:
+                logger.info(f"Using cached context for user_id={user_id}")
             
             # Handle retrieval errors (access denied, etc.)
             if not retrieval_result["success"]:
