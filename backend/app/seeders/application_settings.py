@@ -199,6 +199,10 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("session_timeout_minutes", "integer", "Session timeout (minutes)", "security", True, False),
             ("max_login_attempts", "integer", "Max login attempts", "security", True, False),
             ("password_min_length", "integer", "Minimum password length", "security", True, False),
+            
+            # RAG System Prompts
+            ("rag_system_prompt", "string", "System prompt for RAG responses - instructs the LLM on how to answer questions from the knowledge base", "prompts", True, False),
+            ("no_context_response", "string", "Response when no relevant documents found in knowledge base", "prompts", True, False),
         ]
     
         count = 0

@@ -14,6 +14,7 @@ from .vectordb_settings import VectorDBSettings
 from .database_settings import DatabaseSettings
 from .email_settings import EmailSettings
 from .cache_settings import CacheSettings
+from .prompt_settings import PromptSettings
 
 
 # Database connection credentials must never be overridden by user-provided settings
@@ -29,7 +30,7 @@ FIELD_ALIASES = {
 }
 
 
-class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings, CacheSettings):
+class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings, CacheSettings, PromptSettings):
     """
     Main settings class that inherits from all specialized settings modules.
     

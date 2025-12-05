@@ -20,6 +20,7 @@ from app.services.conversation.service import ConversationService
 from app.services import activity_logger_service
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.utils.text_processing import preprocess_query
+from app.config.prompt_settings import get_prompt_settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.core import get_logger
@@ -39,6 +40,7 @@ class ConversationResponseService:
         self.retriever = get_retriever_service()
         self.llm_router = get_llm_router()
         self.conversation_service = ConversationService(session)
+        self.prompt_settings = get_prompt_settings()
     
     async def generate_response(
         self,
@@ -106,11 +108,25 @@ class ConversationResponseService:
                     except Exception as e:
                         logger.error(f"Failed to log no-retrieval event: {e}")
                 
-                return {
-                    "success": False,
-                    "error": error_type,
-                    "message": retrieval_result.get("message", "Failed to retrieve context")
-                }
+                # Generate appropriate response based on error type
+                if stream:
+                    return {
+                        "success": True,  # Consider this successful - we're returning a valid response
+                        "streaming": True,
+                        "generator": self._stream_no_context_response(
+                            error_type=error_type,
+                            user_query=user_query,
+                            conversation_id=conversation_id,
+                            user_id=user_id
+                        )
+                    }
+                else:
+                    response_text = self._get_no_context_response_text(error_type)
+                    return {
+                        "success": True,
+                        "streaming": False,
+                        "response": response_text
+                    }
             
             # Extract documents and their max security level
             documents = retrieval_result["context"]
@@ -188,6 +204,38 @@ class ConversationResponseService:
                 "message": str(e)
             }
     
+    def _get_no_context_response_text(self, error_type: str) -> str:
+        """Get response when no context is available."""
+        return self.prompt_settings.NO_CONTEXT_RESPONSE
+    
+    async def _stream_no_context_response(
+        self,
+        error_type: str,
+        user_query: str,
+        conversation_id: str,
+        user_id: int
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Stream a response when no relevant context is found."""
+        # Get appropriate message based on error type
+        response_text = self._get_no_context_response_text(error_type)
+        
+        # Stream the message word by word for consistency
+        words = response_text.split()
+        for word in words:
+            yield {"type": "token", "content": word + " "}
+        
+        # Persist the response
+        await self.conversation_service.add_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=MessageRole.ASSISTANT,
+            content=response_text,
+            token_count=None,
+            meta={"source": "no_context", "error_type": error_type}
+        )
+        
+        logger.info(f"Completed no-context response for conversation {conversation_id}")
+    
     async def _get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
         Get user info from cache (clearance, department).
@@ -235,19 +283,20 @@ class ConversationResponseService:
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate streaming response using LangChain.
-        
-        Uses native LangChain modules: prompt template, message history, streaming.
+        Uses configurable system prompt from prompt_settings.
         """
         try:
             # Build context from documents
             context_text = "\n\n".join([
-                f"[Source: {doc.metadata.get('source', 'Unknown')}]\n{doc.page_content}"
+                f"{doc.page_content}"
                 for doc in documents
             ])
             
-            # Build prompt template with history placeholder
+            # Use configurable system prompt
+            system_prompt = self.prompt_settings.RAG_SYSTEM_PROMPT
+            
             prompt = ChatPromptTemplate.from_messages([
-                SystemMessage(content="You are a helpful AI assistant. Use the provided context to answer questions accurately."),
+                SystemMessage(content=system_prompt),
                 MessagesPlaceholder(variable_name="history"),
                 ("human", "Context:\n{context}\n\nQuestion: {question}")
             ])
@@ -315,16 +364,18 @@ class ConversationResponseService:
         documents: List[Any],
         history: List[Dict[str, str]]
     ) -> str:
-        """Generate complete non-streaming response (if needed)."""
+        """Generate complete non-streaming response using configurable system prompt."""
         # Build context
         context_text = "\n\n".join([
-            f"[Source: {doc.metadata.get('source', 'Unknown')}]\n{doc.page_content}"
+            f"{doc.page_content}"
             for doc in documents
         ])
         
-        # Build prompt
+        # Use configurable system prompt
+        system_prompt = self.prompt_settings.RAG_SYSTEM_PROMPT
+        
         prompt = ChatPromptTemplate.from_messages([
-            SystemMessage(content="You are a helpful AI assistant."),
+            SystemMessage(content=system_prompt),
             MessagesPlaceholder(variable_name="history"),
             ("human", "Context:\n{context}\n\nQuestion: {question}")
         ])
