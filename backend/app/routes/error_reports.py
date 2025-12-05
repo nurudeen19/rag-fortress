@@ -1,23 +1,27 @@
 """
-Error Report Routes - User and admin endpoints for error reporting.
+Error Reporting API routes.
 
-Endpoints:
-- POST   /api/error-reports              - User submits error report
-- GET    /api/error-reports              - User views their reports
-- GET    /api/admin/error-reports        - Admin views all reports
-- PATCH  /api/admin/error-reports/{id}   - Admin updates report status/notes
-- POST   /api/error-reports/{id}/image   - Upload image for report
+Routes delegate request handling to handlers for business logic separation.
+Requires authentication for all endpoints.
+
+User Endpoints:
+- POST /api/error-reports - Create new error report
+- GET  /api/error-reports - List user's error reports
+- POST /api/error-reports/{report_id}/image - Upload image for error report
+
+Admin Endpoints:
+- GET  /api/admin/error-reports - List all error reports (with filters)
+- PATCH /api/admin/error-reports/{report_id} - Update error report status/notes
 """
 
-import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
-from app.core.dependencies import get_db, get_current_user
-from app.core.security import RoleRequired
+from app.core.database import get_session
+from app.core.security import get_current_user
 from app.models.user import User
+from app.core import get_logger
 from app.schemas.error_report import (
     ErrorReportCreateRequest,
     ErrorReportResponse,
@@ -26,235 +30,178 @@ from app.schemas.error_report import (
     ErrorReportAdminUpdateRequest,
     ErrorReportListAdminResponse,
 )
-from app.models.error_report import ErrorReportStatus, ErrorReportCategory
-from app.services.error_report_service import get_error_report_service
-from app.core import get_logger
+from app.handlers.error_report import (
+    handle_create_error_report,
+    handle_get_user_error_reports,
+    handle_upload_error_report_image,
+    handle_get_all_error_reports_admin,
+    handle_update_error_report_admin,
+)
 
 logger = get_logger(__name__)
+router = APIRouter(prefix="/api/error-reports", tags=["error-reports"])
+admin_router = APIRouter(prefix="/api/admin/error-reports", tags=["error-reports-admin"])
 
-router = APIRouter(prefix="/api/error-reports", tags=["Error Reports"])
 
+# ============================================================================
+# USER ENDPOINTS
+# ============================================================================
 
-@router.post("", response_model=ErrorReportResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=ErrorReportResponse, status_code=201)
 async def create_error_report(
     request: ErrorReportCreateRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
+    request_obj: Request = None,
 ) -> ErrorReportResponse:
-    """
-    Create a new error report.
-    
-    Any authenticated user can report errors they encounter.
-    
-    Request body:
-    - title: Brief description of the error
-    - description: Detailed description of what happened
-    - category: Category of error (llm_error, retrieval_error, etc.)
-    - conversation_id: (Optional) ID of conversation where error occurred
-    """
+    """Create a new error report."""
     try:
-        service = get_error_report_service(db)
+        # Get request context
+        user_agent = request_obj.headers.get("user-agent", "") if request_obj else ""
+        request_context = {
+            "route": "/api/error-reports",
+            "method": "POST",
+            "conversation_id": request.conversation_id,
+        }
         
-        # Create report
-        success, response = await service.create_report(
+        success, response = await handle_create_error_report(
             user_id=current_user.id,
             request=request,
-            user_agent=request.headers.get("user-agent") if hasattr(request, "headers") else None,
+            user_agent=user_agent,
+            request_context=request_context,
+            session=session,
         )
         
         if not success:
-            logger.error(f"Failed to create error report: {response}")
-            raise HTTPException(status_code=400, detail="Failed to create error report")
+            raise HTTPException(status_code=400, detail=response.get("message", "Failed to create report"))
         
-        await db.commit()
-        
-        logger.info(f"Error report created: {response.id}")
         return response
-    
-    except HTTPException:
-        raise
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Error creating report: {e}", exc_info=True)
+        logger.error(f"Error creating error report: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @router.get("", response_model=ErrorReportListResponse)
 async def get_user_error_reports(
-    status: Optional[ErrorReportStatus] = Query(None, description="Filter by status"),
-    limit: int = Query(50, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> ErrorReportListResponse:
-    """
-    Get error reports submitted by current user.
-    
-    Query parameters:
-    - status: (Optional) Filter by status (open, investigating, resolved, etc.)
-    - limit: Number of reports (default 50, max 100)
-    - offset: Pagination offset
-    """
+    """Get user's error reports with optional status filter."""
     try:
-        service = get_error_report_service(db)
-        
-        reports = await service.get_user_reports(
+        return await handle_get_user_error_reports(
             user_id=current_user.id,
             status=status,
             limit=limit,
             offset=offset,
+            session=session,
         )
-        
-        total = await service.get_user_reports_count(current_user.id, status)
-        
-        return ErrorReportListResponse(reports=reports, total=total)
-    
     except Exception as e:
-        logger.error(f"Error getting user reports: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve reports")
+        logger.error(f"Error fetching user error reports: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-@router.post("/{report_id}/image", status_code=status.HTTP_200_OK)
+@router.post("/{report_id}/image", status_code=200)
 async def upload_error_report_image(
     report_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ):
-    """
-    Upload image attachment for error report.
-    
-    - Maximum file size: 5MB
-    - Supported formats: PNG, JPG, JPEG, GIF, WebP
-    - Only user who submitted report can upload image
-    """
+    """Upload image for error report (max 5MB, image types only)."""
     try:
-        service = get_error_report_service(db)
-        
-        # Verify file size
-        file_size = len(await file.read())
-        await file.seek(0)
-        
+        # Validate file size (5MB)
         max_size = 5 * 1024 * 1024  # 5MB
-        if file_size > max_size:
+        file_content = await file.read()
+        if len(file_content) > max_size:
             raise HTTPException(status_code=400, detail="File size exceeds 5MB limit")
         
-        # Verify file type
+        # Validate file type
         allowed_types = {"image/png", "image/jpeg", "image/gif", "image/webp"}
         if file.content_type not in allowed_types:
-            raise HTTPException(status_code=400, detail="File type not supported")
+            raise HTTPException(status_code=400, detail="Only image files are allowed")
         
-        # TODO: Save file to disk and get filename
-        # For now, just store the filename
-        filename = f"error_report_{report_id}_{file.filename}"
+        # Reset file pointer
+        await file.seek(0)
         
-        success = await service.attach_image(
+        success, response = await handle_upload_error_report_image(
             report_id=report_id,
-            filename=filename,
+            file=file,
+            user_id=current_user.id,
+            session=session,
         )
         
         if not success:
-            raise HTTPException(status_code=404, detail="Error report not found")
+            raise HTTPException(status_code=400, detail=response.get("message", "Failed to upload image"))
         
-        await db.commit()
-        
-        return {"message": "Image uploaded successfully", "filename": filename}
-    
+        return response
     except HTTPException:
-        await db.rollback()
         raise
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Error uploading image: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to upload image")
+        logger.error(f"Error uploading error report image: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
-# Admin routes
-
-admin_router = APIRouter(prefix="/api/admin/error-reports", tags=["Admin - Error Reports"])
-
+# ============================================================================
+# ADMIN ENDPOINTS
+# ============================================================================
 
 @admin_router.get("", response_model=ErrorReportListAdminResponse)
 async def get_all_error_reports_admin(
-    status: Optional[ErrorReportStatus] = Query(None, description="Filter by status"),
-    category: Optional[ErrorReportCategory] = Query(None, description="Filter by category"),
-    limit: int = Query(50, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    category: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> ErrorReportListAdminResponse:
-    """
-    Get all error reports (admin only).
-    
-    Query parameters:
-    - status: (Optional) Filter by status
-    - category: (Optional) Filter by category
-    - limit: Number of reports (default 50, max 100)
-    - offset: Pagination offset
-    """
-    # Check admin role
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+    """Get all error reports (admin only)."""
     try:
-        service = get_error_report_service(db)
+        # Check admin status
+        if not getattr(current_user, "is_admin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
         
-        reports, total, status_counts = await service.get_all_reports_admin(
+        return await handle_get_all_error_reports_admin(
             status=status,
             category=category,
             limit=limit,
             offset=offset,
+            session=session,
         )
-        
-        return ErrorReportListAdminResponse(
-            reports=reports,
-            total=total,
-            open_count=status_counts.get("open", 0),
-            investigating_count=status_counts.get("investigating", 0),
-            resolved_count=status_counts.get("resolved", 0),
-        )
-    
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Error getting admin reports: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to retrieve reports")
+        logger.error(f"Error fetching admin error reports: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @admin_router.patch("/{report_id}", response_model=ErrorReportDetailResponse)
 async def update_error_report_admin(
     report_id: int,
-    update: ErrorReportAdminUpdateRequest,
+    update_request: ErrorReportAdminUpdateRequest,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_session),
 ) -> ErrorReportDetailResponse:
-    """
-    Update error report status and notes (admin only).
-    
-    Request body:
-    - status: New status (open, investigating, acknowledged, resolved, etc.)
-    - admin_notes: Investigation notes or resolution details
-    - assigned_to: (Optional) User ID to assign the report to
-    """
-    # Check admin role
-    if not current_user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
+    """Update error report status and notes (admin only)."""
     try:
-        service = get_error_report_service(db)
+        # Check admin status
+        if not getattr(current_user, "is_admin", False):
+            raise HTTPException(status_code=403, detail="Admin access required")
         
-        success, updated_report = await service.update_report_admin(report_id, update)
+        success, response = await handle_update_error_report_admin(
+            report_id=report_id,
+            update_request=update_request,
+            session=session,
+        )
         
         if not success:
-            raise HTTPException(status_code=404, detail="Error report not found")
+            raise HTTPException(status_code=400, detail=response.get("message", "Failed to update report"))
         
-        await db.commit()
-        
-        logger.info(f"Error report {report_id} updated by admin {current_user.id}")
-        return updated_report
-    
+        return response
     except HTTPException:
-        await db.rollback()
         raise
     except Exception as e:
-        await db.rollback()
-        logger.error(f"Error updating report: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Failed to update report")
+        logger.error(f"Error updating error report: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
