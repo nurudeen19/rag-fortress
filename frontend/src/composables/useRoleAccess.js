@@ -164,6 +164,14 @@ export function useRoleAccess() {
         group: 'admin',
       })
       nav.push({
+        name: 'Error Reports',
+        path: '/error-reports',
+        routeName: 'admin-error-reports',
+        icon: 'alerts',
+        roles: ['admin'],
+        group: 'admin',
+      })
+      nav.push({
         name: 'System Settings',
         path: '/system-settings',
         routeName: 'system-settings',

@@ -120,6 +120,12 @@ const router = createRouter({
           meta: { requiresRoles: ['admin'] }
         },
         {
+          path: 'error-reports',
+          name: 'admin-error-reports',
+          component: () => import('../views/admin/ErrorReports.vue'),
+          meta: { requiresRoles: ['admin'] }
+        },
+        {
           path: 'system-settings',
           name: 'system-settings',
           component: () => import('../views/admin/Configuration.vue'),
@@ -135,6 +141,12 @@ const router = createRouter({
           path: 'settings',
           name: 'settings',
           component: () => import('../views/users/Settings.vue'),
+          meta: { requiresRoles: ['user', 'manager', 'admin'] }
+        },
+        {
+          path: 'error-reports',
+          name: 'error-reports',
+          component: () => import('../views/system/ErrorReporting.vue'),
           meta: { requiresRoles: ['user', 'manager', 'admin'] }
         },
         {
