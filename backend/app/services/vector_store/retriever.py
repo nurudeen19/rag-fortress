@@ -215,7 +215,22 @@ class RetrieverService:
             await self.cache.set(cache_key, retrieval_result, ttl=300)
         
         return retrieval_result
-            # Get configuration
+    
+    async def _perform_retrieval(
+        self,
+        query_text: str,
+        top_k: Optional[int],
+        user_security_level: Optional[int],
+        user_department_id: Optional[int],
+        user_department_security_level: Optional[int],
+        user_id: Optional[int]
+    ) -> Dict[str, Any]:
+        """
+        Perform the actual adaptive retrieval logic.
+        Called by query() after cache check.
+        """
+        try:
+            # Get configuration - uses MIN_TOP_K from app settings by default
             min_k = top_k or self.settings.app_settings.MIN_TOP_K
             max_k = self.settings.app_settings.MAX_TOP_K
             score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
@@ -231,7 +246,7 @@ class RetrieverService:
                     results = vector_store.similarity_search_with_score(query_text, k=current_k)
                 except (AttributeError, NotImplementedError):
                     logger.warning("Vector store doesn't support scores, falling back to basic retrieval")
-                    return self._fallback_query(query_text, current_k, user_security_level, user_department_id, user_department_security_level)
+                    return await self._fallback_query(query_text, current_k, user_security_level, user_department_id, user_department_security_level)
                 
                 if not results:
                     logger.warning(f"No documents retrieved with k={current_k}")
@@ -295,7 +310,7 @@ class RetrieverService:
                 # No quality results - try reranking if enabled and on first iteration
                 if current_k == min_k and self.reranker and self.settings.app_settings.ENABLE_RERANKER:
                     logger.info("Initial results have poor quality, attempting reranking with max_k documents")
-                    return self._rerank_retrieval(
+                    return await self._rerank_retrieval(
                         query_text,
                         max_k,
                         user_security_level,
@@ -342,7 +357,7 @@ class RetrieverService:
                 "count": 0
             }
     
-    def _rerank_retrieval(
+    async def _rerank_retrieval(
         self,
         query_text: str,
         k: int,
@@ -459,7 +474,7 @@ class RetrieverService:
                 "count": 0
             }
     
-    def _fallback_query(
+    async def _fallback_query(
         self,
         query_text: str,
         k: int,
