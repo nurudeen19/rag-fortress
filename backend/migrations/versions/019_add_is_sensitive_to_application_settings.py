@@ -26,4 +26,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Remove is_sensitive column
-    op.drop_column('application_settings', 'is_sensitive')
+    with op.batch_alter_table('application_settings') as batch_op:
+        batch_op.drop_column('is_sensitive')

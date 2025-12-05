@@ -34,8 +34,9 @@ def upgrade() -> None:
     op.add_column('users', sa.Column('suspended_at', sa.DateTime(timezone=True), nullable=True))
     
     # Drop old columns
-    op.drop_column('users', 'full_name')
-    op.drop_column('users', 'bio')
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.drop_column('full_name')
+        batch_op.drop_column('bio')
     
     # Create is_suspended index
     op.create_index(
@@ -57,14 +58,24 @@ def downgrade() -> None:
     op.add_column('users', sa.Column('full_name', sa.String(length=255), nullable=True))
     
     # Migrate first_name and last_name back to full_name
-    op.execute("""
-        UPDATE users
-        SET full_name = TRIM(first_name || ' ' || last_name)
-    """)
+    # Handle string concatenation based on dialect
+    conn = op.get_bind()
+    if conn.dialect.name == 'mysql':
+        op.execute("""
+            UPDATE users
+            SET full_name = TRIM(CONCAT(first_name, ' ', last_name))
+        """)
+    else:
+        # PostgreSQL and SQLite support ||
+        op.execute("""
+            UPDATE users
+            SET full_name = TRIM(first_name || ' ' || last_name)
+        """)
     
     # Drop new columns
-    op.drop_column('users', 'suspended_at')
-    op.drop_column('users', 'suspension_reason')
-    op.drop_column('users', 'is_suspended')
-    op.drop_column('users', 'last_name')
-    op.drop_column('users', 'first_name')
+    with op.batch_alter_table('users') as batch_op:
+        batch_op.drop_column('suspended_at')
+        batch_op.drop_column('suspension_reason')
+        batch_op.drop_column('is_suspended')
+        batch_op.drop_column('last_name')
+        batch_op.drop_column('first_name')

@@ -32,8 +32,8 @@ class Job(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     
     # Job identification
-    job_type: Mapped[str] = mapped_column(SQLEnum(JobType), nullable=False, index=True)
-    status: Mapped[str] = mapped_column(SQLEnum(JobStatus), nullable=False, index=True, default=JobStatus.PENDING)
+    job_type: Mapped[str] = mapped_column(SQLEnum(JobType, native_enum=False), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(SQLEnum(JobStatus, native_enum=False), nullable=False, index=True, default=JobStatus.PENDING)
     
     # Tracking
     reference_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)

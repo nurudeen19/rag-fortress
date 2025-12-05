@@ -29,7 +29,12 @@ with engine.connect() as conn:
     # Drop all tables
     for table in tables:
         print(f"Dropping table: {table}")
-        conn.execute(text(f'DROP TABLE IF EXISTS `{table}`'))
+        if 'postgresql' in db._get_sync_database_url().lower():
+            conn.execute(text(f'DROP TABLE IF EXISTS "{table}" CASCADE'))
+        elif 'mysql' in db._get_sync_database_url().lower():
+            conn.execute(text(f'DROP TABLE IF EXISTS `{table}`'))
+        else:
+            conn.execute(text(f'DROP TABLE IF EXISTS "{table}"'))
     
     # Re-enable foreign key checks for MySQL
     if 'mysql' in db._get_sync_database_url().lower():

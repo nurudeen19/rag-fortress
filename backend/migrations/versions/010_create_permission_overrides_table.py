@@ -69,13 +69,13 @@ def upgrade() -> None:
         ),
         sa.Column(
             'created_at',
-            sa.DateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.current_timestamp(),
         ),
         sa.Column(
             'updated_at',
-            sa.DateTime(),
+            sa.DateTime(timezone=True),
             nullable=False,
             server_default=sa.func.current_timestamp(),
         ),

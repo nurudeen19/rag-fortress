@@ -31,8 +31,8 @@ def upgrade() -> None:
         sa.Column('threat_type', sa.String(length=100), nullable=True),
         sa.Column('ip_address', sa.String(length=45), nullable=True),
         sa.Column('user_agent', sa.String(length=500), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
     )
     
     # Create composite indexes for performance

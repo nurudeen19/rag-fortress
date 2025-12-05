@@ -31,6 +31,7 @@ from sqlalchemy import (
     Text,
     and_,
     select,
+    DateTime,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -133,11 +134,13 @@ class PermissionOverride(Base):
     )
 
     valid_from: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         nullable=False,
         index=True,
     )
 
     valid_until: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         nullable=False,
         index=True,
     )
@@ -172,6 +175,7 @@ class PermissionOverride(Base):
     )
     
     decided_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
     
@@ -193,15 +197,18 @@ class PermissionOverride(Base):
     )
     
     escalated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
     updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
         nullable=False,

@@ -50,7 +50,7 @@ class Message(Base):
     
     # Message content
     role: Mapped[str] = mapped_column(
-        SQLEnum(MessageRole),
+        SQLEnum(MessageRole, native_enum=False),
         nullable=False
     )
     content: Mapped[str] = mapped_column(Text, nullable=False)

@@ -29,5 +29,6 @@ def downgrade() -> None:
     op.drop_index('idx_password_reset_tokens_updated_at', table_name='password_reset_tokens')
     
     # Drop column
-    op.drop_column('password_reset_tokens', 'updated_at')
+    with op.batch_alter_table('password_reset_tokens') as batch_op:
+        batch_op.drop_column('updated_at')
 
