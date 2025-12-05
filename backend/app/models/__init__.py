@@ -16,6 +16,7 @@ from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.models.activity_log import ActivityLog
+from app.models.error_report import ErrorReport, ErrorReportStatus, ErrorReportCategory
 
 __all__ = [
     "Base",
@@ -39,4 +40,7 @@ __all__ = [
     "Message",
     "MessageRole",
     "ActivityLog",
+    "ErrorReport",
+    "ErrorReportStatus",
+    "ErrorReportCategory",
 ]

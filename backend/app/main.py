@@ -88,6 +88,7 @@ def create_app() -> FastAPI:
     from app.routes.admin import router as admin_router
     from app.routes.settings import router as settings_router
     from app.routes.override_requests import router as override_requests_router
+    from app.routes.error_reports import router as error_reports_router, admin_router as error_reports_admin_router
     
     app.include_router(email_router)
     app.include_router(auth_router)
@@ -102,6 +103,8 @@ def create_app() -> FastAPI:
     app.include_router(admin_router)
     app.include_router(settings_router)
     app.include_router(override_requests_router)
+    app.include_router(error_reports_router)
+    app.include_router(error_reports_admin_router)
     
     # Health check endpoint
     @app.get("/health")
