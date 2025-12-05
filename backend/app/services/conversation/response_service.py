@@ -10,16 +10,18 @@ Simple orchestration:
 6. Return stream or error
 """
 
-from typing import Dict, Any, AsyncGenerator, Optional, List
+from typing import Dict, Any, AsyncGenerator, Optional, List, Tuple
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from langchain_core.language_models import BaseLanguageModel
 
 from app.services.vector_store.retriever import get_retriever_service
-from app.services.llm_router_service import get_llm_router
+from app.services.llm_router_service import get_llm_router, LLMType
 from app.services.conversation.service import ConversationService
 from app.services import activity_logger_service
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.utils.text_processing import preprocess_query
+from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
 from app.config.prompt_settings import get_prompt_settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
@@ -141,7 +143,8 @@ class ConversationResponseService:
             logger.info(f"Retrieved {len(documents)} documents, max_level={max_doc_label}")
 
             # Step 3: Route to appropriate LLM based on document security
-            llm = self.llm_router.select_llm(max_doc_level)
+            llm, llm_type = self.llm_router.select_llm(max_doc_level)
+            logger.info(f"Selected {llm_type.value} LLM for this request")
             
             # Step 4: Get conversation history
             history = await self.conversation_service.get_conversation_history(conversation_id, user_id)
@@ -153,6 +156,7 @@ class ConversationResponseService:
                     "streaming": True,
                     "generator": self._stream_response(
                         llm=llm,
+                        llm_type=llm_type,
                         user_query=user_query,
                         documents=documents,
                         history=history,
@@ -164,6 +168,7 @@ class ConversationResponseService:
                 # Non-streaming (if needed)
                 response_text = await self._generate_complete_response(
                     llm=llm,
+                    llm_type=llm_type,
                     user_query=user_query,
                     documents=documents,
                     history=history
@@ -275,6 +280,7 @@ class ConversationResponseService:
     async def _stream_response(
         self,
         llm: Any,
+        llm_type: LLMType,
         user_query: str,
         documents: List[Any],
         history: List[Dict[str, str]],
@@ -282,89 +288,230 @@ class ConversationResponseService:
         user_id: int
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Generate streaming response using LangChain.
-        Uses configurable system prompt from prompt_settings.
+        Generate streaming response using LangChain with fallback on error.
+        
+        If primary LLM fails with a transient error, tries fallback LLM.
+        Returns error if: auth/config error, or no fallback configured, or fallback also fails.
         """
+        primary_exception = None
+        attempted_fallback = False
+        fallback_exception = None
+        
         try:
-            # Build context from documents
-            context_text = "\n\n".join([
-                f"{doc.page_content}"
-                for doc in documents
-            ])
-            
-            # Use configurable system prompt
-            system_prompt = self.prompt_settings.RAG_SYSTEM_PROMPT
-            
-            prompt = ChatPromptTemplate.from_messages([
-                SystemMessage(content=system_prompt),
-                MessagesPlaceholder(variable_name="history"),
-                ("human", "Context:\n{context}\n\nQuestion: {question}")
-            ])
-            
-            # Convert history to LangChain messages
-            history_messages = []
-            for msg in history:
-                if msg["role"] == "user":
-                    history_messages.append(HumanMessage(content=msg["content"]))
-                elif msg["role"] == "assistant":
-                    history_messages.append(AIMessage(content=msg["content"]))
-                elif msg["role"] == "system":
-                    history_messages.append(SystemMessage(content=msg["content"]))
-            
-            # Create chain with history
-            chain = prompt | llm
-            
-            # Stream response
-            full_response = ""
-            async for chunk in chain.astream({
-                "context": context_text if context_text else "No relevant context found.",
-                "question": user_query,
-                "history": history_messages
-            }):
-                content = chunk.content if hasattr(chunk, 'content') else str(chunk)
-                full_response += content
-                yield {"type": "token", "content": content}
-            
-            sources = self._build_sources_payload(documents)
-            
-            # Cache the exchange (updates cache with both messages)
-            # But only persist assistant message to DB since user message was saved in handler
-            await self.conversation_service.cache_conversation_exchange(
-                conversation_id,
-                user_query,
-                full_response,
-                user_id=user_id,
-                persist_to_db=False,  # Don't persist user message again
-                assistant_meta={"sources": sources} if sources else None
-            )
-            
-            # Persist only the assistant message to DB
-            await self.conversation_service.add_message(
+            async for item in self._try_stream(
+                llm=llm,
+                user_query=user_query,
+                documents=documents,
+                history=history,
                 conversation_id=conversation_id,
-                user_id=user_id,
-                role=MessageRole.ASSISTANT,
-                content=full_response,
-                token_count=None,
-                meta={"sources": sources} if sources else None
-            )
-            
-            if sources:
-                yield {"type": "metadata", "sources": sources}
-
-            logger.info(f"Streaming completed for conversation {conversation_id}")
+                user_id=user_id
+            ):
+                yield item
+            return
         
         except Exception as e:
-            logger.error(f"Streaming failed: {e}", exc_info=True)
-            yield {"type": "error", "message": str(e)}
+            primary_exception = e
+            logger.error(f"Primary LLM error ({llm_type.value}): {e}", exc_info=True)
+            
+            # Determine if we should try fallback
+            should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
+                e,
+                fallback_configured=self.llm_router.is_fallback_configured()
+            )
+            
+            logger.info(f"Fallback decision: {reason}")
+            
+            if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
+                fallback_llm = self.llm_router.get_fallback_llm()
+                if fallback_llm:
+                    attempted_fallback = True
+                    logger.info("Attempting fallback LLM")
+                    try:
+                        async for item in self._try_stream(
+                            llm=fallback_llm,
+                            user_query=user_query,
+                            documents=documents,
+                            history=history,
+                            conversation_id=conversation_id,
+                            user_id=user_id,
+                            is_fallback=True
+                        ):
+                            yield item
+                        return
+                    except Exception as fallback_err:
+                        fallback_exception = fallback_err
+                        logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
+        
+        # If we get here, both primary and potentially fallback failed
+        error_response = LLMErrorHandler.format_error_response(
+            original_exception=primary_exception,
+            attempted_fallback=attempted_fallback,
+            fallback_exception=fallback_exception
+        )
+        
+        logger.error(f"Response generation failed: {error_response['message']}")
+        yield {"type": "error", "content": error_response["message"]}
     
-    async def _generate_complete_response(
+    async def _try_stream(
         self,
         llm: Any,
         user_query: str,
         documents: List[Any],
+        history: List[Dict[str, str]],
+        conversation_id: str,
+        user_id: int,
+        is_fallback: bool = False
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Attempt streaming response generation with given LLM.
+        Yields tokens or error. Persists successful response to DB.
+        """
+        # Build context from documents
+        context_text = "\n\n".join([
+            f"{doc.page_content}"
+            for doc in documents
+        ])
+        
+        # Use configurable system prompt
+        system_prompt = self.prompt_settings.RAG_SYSTEM_PROMPT
+        
+        prompt = ChatPromptTemplate.from_messages([
+            SystemMessage(content=system_prompt),
+            MessagesPlaceholder(variable_name="history"),
+            ("human", "Context:\n{context}\n\nQuestion: {question}")
+        ])
+        
+        # Convert history to LangChain messages
+        history_messages = []
+        for msg in history:
+            if msg["role"] == "user":
+                history_messages.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                history_messages.append(AIMessage(content=msg["content"]))
+            elif msg["role"] == "system":
+                history_messages.append(SystemMessage(content=msg["content"]))
+        
+        # Create chain with history
+        chain = prompt | llm
+        
+        # Stream response
+        full_response = ""
+        async for chunk in chain.astream({
+            "context": context_text if context_text else "No relevant context found.",
+            "question": user_query,
+            "history": history_messages
+        }):
+            content = chunk.content if hasattr(chunk, 'content') else str(chunk)
+            full_response += content
+            yield {"type": "token", "content": content}
+        
+        sources = self._build_sources_payload(documents)
+        
+        # Cache the exchange (updates cache with both messages)
+        # But only persist assistant message to DB since user message was saved in handler
+        await self.conversation_service.cache_conversation_exchange(
+            conversation_id,
+            user_query,
+            full_response,
+            user_id=user_id,
+            persist_to_db=False,  # Don't persist user message again
+            assistant_meta={"sources": sources} if sources else None
+        )
+        
+        # Persist only the assistant message to DB
+        meta = {"sources": sources} if sources else {}
+        if is_fallback:
+            meta["used_fallback_llm"] = True
+        
+        await self.conversation_service.add_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=MessageRole.ASSISTANT,
+            content=full_response,
+            token_count=None,
+            meta=meta
+        )
+        
+        if sources:
+            yield {"type": "metadata", "sources": sources}
+
+        logger.info(f"Streaming completed for conversation {conversation_id}")
+    
+    async def _generate_complete_response(
+        self,
+        llm: Any,
+        llm_type: LLMType,
+        user_query: str,
+        documents: List[Any],
         history: List[Dict[str, str]]
     ) -> str:
-        """Generate complete non-streaming response using configurable system prompt."""
+        """
+        Generate complete non-streaming response with fallback on error.
+        
+        If primary LLM fails with transient error, tries fallback.
+        Raises exception if: auth/config error, no fallback, or fallback also fails.
+        """
+        primary_exception = None
+        attempted_fallback = False
+        fallback_exception = None
+        
+        try:
+            return await self._try_generate(
+                llm=llm,
+                user_query=user_query,
+                documents=documents,
+                history=history,
+                is_fallback=False
+            )
+        
+        except Exception as e:
+            primary_exception = e
+            logger.error(f"Primary LLM error ({llm_type.value}): {e}", exc_info=True)
+            
+            # Determine if we should try fallback
+            should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
+                e,
+                fallback_configured=self.llm_router.is_fallback_configured()
+            )
+            
+            logger.info(f"Fallback decision: {reason}")
+            
+            if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
+                fallback_llm = self.llm_router.get_fallback_llm()
+                if fallback_llm:
+                    attempted_fallback = True
+                    logger.info("Attempting fallback LLM")
+                    try:
+                        return await self._try_generate(
+                            llm=fallback_llm,
+                            user_query=user_query,
+                            documents=documents,
+                            history=history,
+                            is_fallback=True
+                        )
+                    except Exception as fallback_err:
+                        fallback_exception = fallback_err
+                        logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
+            
+            # If we get here, both failed or we shouldn't retry
+            error_response = LLMErrorHandler.format_error_response(
+                original_exception=primary_exception,
+                attempted_fallback=attempted_fallback,
+                fallback_exception=fallback_exception
+            )
+            
+            logger.error(f"Response generation failed: {error_response['message']}")
+            raise Exception(error_response["message"])
+    
+    async def _try_generate(
+        self,
+        llm: Any,
+        user_query: str,
+        documents: List[Any],
+        history: List[Dict[str, str]],
+        is_fallback: bool = False
+    ) -> str:
+        """Attempt response generation with given LLM."""
         # Build context
         context_text = "\n\n".join([
             f"{doc.page_content}"
