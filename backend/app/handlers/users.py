@@ -40,29 +40,62 @@ async def handle_list_users(
     department_id: Optional[int],
     limit: int,
     offset: int,
+    current_user: User,
     session: AsyncSession
 ) -> dict:
     """
-    Handle list users request.
+    Handle list users request with authorization checks.
+    
+    Authorization:
+    - Admins can see all users or filter by department
+    - Department managers can only see users from their own department
     
     Args:
         active_only: Filter only active users
-        department_id: Optional department filter
+        department_id: Optional department filter (enforced for managers)
         limit: Pagination limit
         offset: Pagination offset
+        current_user: User making the request
         session: Database session
         
     Returns:
         Dict with users list and pagination info
     """
     try:
-        logger.info(f"Listing users with limit={limit}, offset={offset}")
+        # Check authorization
+        is_admin = current_user.has_role("admin")
+        is_dept_manager = current_user.department_id is not None and any(
+            d.name == "manager" for d in current_user.roles if d.name in ["manager", "department_manager"]
+        )
+        
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized list_users attempt by user {current_user.id}")
+            return {
+                "success": False,
+                "status_code": 403,
+                "error": "Only admins and department managers can view users"
+            }
+        
+        # Enforce department filter for managers
+        filtered_department_id = department_id
+        if is_dept_manager and not is_admin:
+            # Department managers can only see users from their own department
+            if department_id and department_id != current_user.department_id:
+                logger.warning(f"Manager {current_user.id} attempted to list users from different department {department_id}")
+                return {
+                    "success": False,
+                    "status_code": 403,
+                    "error": "You can only view users from your own department"
+                }
+            filtered_department_id = current_user.department_id
+        
+        logger.info(f"Listing users with limit={limit}, offset={offset}, dept={filtered_department_id}")
         
         user_service = UserAccountService(session)
         
         users = await user_service.list_users(
             active_only=active_only,
-            department_id=department_id,
+            department_id=filtered_department_id,
             limit=limit,
             offset=offset
         )
@@ -116,20 +149,40 @@ async def handle_list_users(
 
 async def handle_get_user(
     user_id: int,
+    current_user: User,
     session: AsyncSession
 ) -> dict:
     """
-    Handle get user details request.
+    Handle get user details request with authorization checks.
+    
+    Authorization:
+    - Admins can view any user
+    - Department managers can only view users from their own department
     
     Args:
         user_id: User ID to retrieve
+        current_user: User making the request
         session: Database session
         
     Returns:
         Dict with user data, or error
     """
     try:
-        logger.info(f"Getting user {user_id}")
+        # Check authorization
+        is_admin = current_user.has_role("admin")
+        is_dept_manager = current_user.department_id is not None and any(
+            d.name == "manager" for d in current_user.roles if d.name in ["manager", "department_manager"]
+        )
+        
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized get_user attempt by user {current_user.id}")
+            return {
+                "success": False,
+                "status_code": 403,
+                "error": "Only admins and department managers can view user details"
+            }
+        
+        logger.info(f"Getting user {user_id} by user {current_user.id}")
         
         # Fetch user with eager-loaded roles
         result = await session.execute(
@@ -143,9 +196,19 @@ async def handle_get_user(
             logger.warning(f"User not found: {user_id}")
             return {
                 "success": False,
-                "error": "User not found",
-                "user": None
+                "status_code": 404,
+                "error": "User not found"
             }
+        
+        # Department managers can only view users from their own department
+        if is_dept_manager and not is_admin:
+            if user.department_id != current_user.department_id:
+                logger.warning(f"Manager {current_user.id} attempted to view user {user_id} from different department")
+                return {
+                    "success": False,
+                    "status_code": 403,
+                    "error": "You can only view users from your own department"
+                }
         
         # Convert roles to response format
         roles = [
@@ -193,27 +256,54 @@ async def handle_suspend_user(
     session: AsyncSession
 ) -> dict:
     """
-    Handle suspend user request.
+    Handle suspend user request with authorization checks.
+    
+    Authorization:
+    - Admins can suspend any user
+    - Department managers can suspend users from their own department
     
     Args:
         user_id: User ID to suspend
         reason: Suspension reason
-        admin_user: Admin performing the action
+        admin_user: User performing the action
         session: Database session
         
     Returns:
         Dict with success status, or error
     """
     try:
-        # Prevent admin from suspending their own account
+        # Prevent user from suspending their own account
         if admin_user.id == user_id:
-            logger.warning(f"Admin {admin_user.id} attempted to suspend their own account")
+            logger.warning(f"User {admin_user.id} attempted to suspend their own account")
             return {
                 "success": False,
                 "error": "You cannot suspend your own account"
             }
         
-        logger.info(f"Suspending user {user_id} by admin {admin_user.id}")
+        # Check authorization
+        is_admin = admin_user.has_role("admin")
+        is_dept_manager = admin_user.department_id is not None and any(
+            d.name == "manager" for d in admin_user.roles if d.name in ["manager", "department_manager"]
+        )
+        
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized suspend attempt by user {admin_user.id}")
+            return {
+                "success": False,
+                "error": "Only admins and department managers can suspend users"
+            }
+        
+        # Verify department access for managers
+        if is_dept_manager and not is_admin:
+            target_user = await session.get(User, user_id)
+            if not target_user or target_user.department_id != admin_user.department_id:
+                logger.warning(f"User {admin_user.id} attempted to suspend user {user_id} from different department")
+                return {
+                    "success": False,
+                    "error": "You can only suspend users from your own department"
+                }
+        
+        logger.info(f"Suspending user {user_id} by user {admin_user.id}")
         
         user_service = UserAccountService(session)
         
@@ -250,26 +340,53 @@ async def handle_unsuspend_user(
     session: AsyncSession
 ) -> dict:
     """
-    Handle unsuspend user request.
+    Handle unsuspend user request with authorization checks.
+    
+    Authorization:
+    - Admins can unsuspend any user
+    - Department managers can unsuspend users from their own department
     
     Args:
         user_id: User ID to unsuspend
-        admin_user: Admin performing the action
+        admin_user: User performing the action
         session: Database session
         
     Returns:
         Dict with success status, or error
     """
     try:
-        # Prevent admin from unsuspending their own account
+        # Prevent user from unsuspending their own account
         if admin_user.id == user_id:
-            logger.warning(f"Admin {admin_user.id} attempted to unsuspend their own account")
+            logger.warning(f"User {admin_user.id} attempted to unsuspend their own account")
             return {
                 "success": False,
                 "error": "You cannot unsuspend your own account"
             }
         
-        logger.info(f"Unsuspending user {user_id} by admin {admin_user.id}")
+        # Check authorization
+        is_admin = admin_user.has_role("admin")
+        is_dept_manager = admin_user.department_id is not None and any(
+            d.name == "manager" for d in admin_user.roles if d.name in ["manager", "department_manager"]
+        )
+        
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized unsuspend attempt by user {admin_user.id}")
+            return {
+                "success": False,
+                "error": "Only admins and department managers can unsuspend users"
+            }
+        
+        # Verify department access for managers
+        if is_dept_manager and not is_admin:
+            target_user = await session.get(User, user_id)
+            if not target_user or target_user.department_id != admin_user.department_id:
+                logger.warning(f"User {admin_user.id} attempted to unsuspend user {user_id} from different department")
+                return {
+                    "success": False,
+                    "error": "You can only unsuspend users from your own department"
+                }
+        
+        logger.info(f"Unsuspending user {user_id} by user {admin_user.id}")
         
         user_service = UserAccountService(session)
         
@@ -823,31 +940,31 @@ def validate_clearance_limits(
 
 async def handle_invite_user(
     email: str,
-    role_id: int,
-    admin_user: User,
+    role_id: Optional[int],
     invitation_link_template: Optional[str],
     invitation_message: Optional[str] = None,
     department_id: Optional[int] = None,
     is_manager: bool = False,
     org_level_permission: int = 1,
     department_level_permission: Optional[int] = None,
+    inviter: User = None,
     session: AsyncSession = None
 ) -> dict:
     """
     Send invitation to new user with optional department assignment.
     
-    Enforces role-based authorization:
-    - Admins can invite to any department with any clearance
-    - Department managers can only invite to their own department with clearance <= their own
+    Authorization & Role Assignment:
+    - Admins: Can invite to any department with any role and clearance level
+    - Department Managers: Can only invite to their own department, always assign 'user' role
     
     Args:
         email: Email address to invite
-        role_id: Role to assign to invited user
-        admin_user: Admin user sending the invitation
+        role_id: Role to assign (admin only; managers always get 'user' role)
+        inviter: User sending the invitation
         invitation_link_template: Optional frontend link template
         invitation_message: Optional custom message for invitation
         department_id: Optional department to assign user to
-        is_manager: Whether to make user a manager of the department
+        is_manager: Whether to make user a manager of the department (managers cannot be assigned by other managers)
         org_level_permission: Organization-wide clearance level (1-4)
         department_level_permission: Department-specific clearance level (1-4)
         session: Database session
@@ -856,20 +973,58 @@ async def handle_invite_user(
         Dict with success status and message
     """
     try:
+        # Determine if inviter is admin or department manager
+        is_admin = inviter.has_role("admin")
+        is_dept_manager = inviter.department_id is not None and any(
+            d.name == "manager" for d in inviter.roles if d.name in ["manager", "department_manager"]
+        )
+        
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized invite attempt by user {inviter.id}")
+            return {"success": False, "error": "Only admins and department managers can invite users"}
+        
+        # For department managers: enforce constraints
+        if is_dept_manager and not is_admin:
+            # Managers must invite to their own department
+            if department_id and department_id != inviter.department_id:
+                logger.warning(f"Manager {inviter.id} attempted to invite to different department {department_id}")
+                return {"success": False, "error": "You can only invite users to your own department"}
+            
+            # Auto-assign inviter's department if not specified
+            if not department_id:
+                department_id = inviter.department_id
+            
+            # Managers cannot assign manager roles
+            if is_manager:
+                logger.warning(f"Manager {inviter.id} attempted to assign manager role")
+                return {"success": False, "error": "Department managers cannot assign manager roles to other users"}
+            
+            # Auto-assign 'user' role for managers (override any role_id parameter)
+            result = await session.execute(select(Role).where(Role.name == "user"))
+            user_role = result.scalar_one_or_none()
+            if not user_role:
+                logger.error("User role not found in database")
+                return {"success": False, "error": "System error: User role not found"}
+            role_id = user_role.id
+            logger.info(f"Manager {inviter.id} inviting {email}, auto-assigned 'user' role")
+        else:
+            # Admins must provide role_id
+            if not role_id:
+                return {"success": False, "error": "role_id is required"}
+        
         # Get inviter's clearance from cache
-        inviter_clearance = await get_user_clearance_cache(admin_user.id, session)
+        inviter_clearance = await get_user_clearance_cache(inviter.id, session)
         if not inviter_clearance:
-            logger.warning(f"Failed to get clearance cache for user {admin_user.id}")
+            logger.warning(f"Failed to get clearance cache for user {inviter.id}")
             return {"success": False, "error": "Could not verify your permissions. Please try again."}
         
         # Check if inviter can invite to target department
         can_invite, invite_error = can_invite_user(inviter_clearance, department_id)
         if not can_invite:
-            logger.warning(f"User {admin_user.id} unauthorized to invite to dept {department_id}: {invite_error}")
+            logger.warning(f"User {inviter.id} unauthorized to invite to dept {department_id}: {invite_error}")
             return {"success": False, "error": invite_error}
         
         # Validate clearance limits
-        is_admin = inviter_clearance.get("is_admin", False)
         inviter_org_max = inviter_clearance.get("org_clearance_value", 1)
         inviter_dept_max = inviter_clearance.get("dept_clearance_value")
         
@@ -881,8 +1036,15 @@ async def handle_invite_user(
             is_admin
         )
         if not clearance_valid:
-            logger.warning(f"User {admin_user.id} clearance validation failed: {clearance_error}")
+            logger.warning(f"User {inviter.id} clearance validation failed: {clearance_error}")
             return {"success": False, "error": clearance_error}
+        
+        # Get role name (for validation and service call)
+        result = await session.execute(select(Role).where(Role.id == role_id))
+        role = result.scalar_one_or_none()
+        if not role:
+            logger.warning(f"Role {role_id} not found for invitation by user {inviter.id}")
+            return {"success": False, "error": "The specified role does not exist"}
         
         # Validate is_manager flag
         if is_manager:
@@ -890,9 +1052,7 @@ async def handle_invite_user(
             if not department_id:
                 return {"success": False, "error": "Cannot assign manager role without specifying a department"}
             
-            # Only certain roles can be department managers
-            # Typically: admin, manager roles
-            # NOT: user, guest, etc.
+            # Only certain roles can be department managers (admins only, since managers are auto-assigned user role)
             allowed_manager_roles = {"admin", "manager", "department_manager"}
             if role.name.lower() not in allowed_manager_roles:
                 return {
@@ -900,18 +1060,11 @@ async def handle_invite_user(
                     "error": f"Role '{role.name}' cannot be assigned as a department manager. Only admin/manager roles can manage departments."
                 }
         
-        # Get role name
-        result = await session.execute(select(Role).where(Role.id == role_id))
-        role = result.scalar_one_or_none()
-        if not role:
-            logger.warning(f"Role {role_id} not found for invitation by admin {admin_user.id}")
-            return {"success": False, "error": "The specified role does not exist"}
-        
         # Create invitation via service with clearance fields
         service = InvitationService(session)
         invitation, error = await service.create_invitation(
             email=email,
-            inviter_id=admin_user.id,
+            inviter_id=inviter.id,
             role_name=role.name,
             custom_message=invitation_message,
             department_id=department_id,
@@ -928,7 +1081,7 @@ async def handle_invite_user(
                 return {"success": False, "error": "This email is already registered or has a pending invitation"}
             return {"success": False, "error": "Could not send invitation. Please try again."}
         
-        logger.info(f"Invitation sent to {email} by admin {admin_user.id} for role {role.name}")
+        logger.info(f"Invitation sent to {email} by user {inviter.id} for role {role.name}")
         return {
             "success": True,
             "message": f"Invitation sent to {email}",
@@ -943,25 +1096,46 @@ async def handle_list_invitations(
     status_filter: Optional[str],
     limit: int,
     offset: int,
+    current_user: User,
     session: AsyncSession
 ) -> dict:
     """
-    Handle list user invitations request.
+    Handle list user invitations request with authorization.
     
-    Delegates to InvitationService for all business logic.
+    Authorization:
+    - Admins can see all invitations
+    - Department managers can only see their own invitations
     
     Args:
         status_filter: Filter by invitation status (pending, accepted, expired)
         limit: Pagination limit
         offset: Pagination offset
+        current_user: User making the request
         session: Database session
         
     Returns:
         Dict with invitations list and total count
     """
     try:
+        # Check authorization
+        is_admin = current_user.has_role("admin")
+        is_dept_manager = current_user.department_id is not None and any(
+            d.name == "manager" for d in current_user.roles if d.name in ["manager", "department_manager"]
+        )
+        
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized list_invitations attempt by user {current_user.id}")
+            return {
+                "success": False,
+                "status_code": 403,
+                "error": "Only admins and department managers can view invitations"
+            }
+        
+        # For managers, filter by inviter_id (only show their own invitations)
+        inviter_id = None if is_admin else current_user.id
+        
         service = InvitationService(session)
-        result, error = await service.list_invitations(status_filter, limit, offset)
+        result, error = await service.list_invitations(status_filter, limit, offset, inviter_id)
         
         if error:
             logger.error(f"Error listing invitations: {error}")

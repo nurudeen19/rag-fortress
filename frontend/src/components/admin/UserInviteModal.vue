@@ -24,8 +24,8 @@
           <p v-if="emailError" class="text-alert text-xs mt-1">{{ emailError }}</p>
         </div>
 
-        <!-- Role Selection -->
-        <div>
+        <!-- Role Selection (Admin only) -->
+        <div v-if="invitationLimits?.is_admin">
           <label class="block text-sm font-medium text-fortress-300 mb-2">
             Assign Role <span class="text-alert">*</span>
           </label>
@@ -44,6 +44,16 @@
             </option>
           </select>
           <p v-if="roleError" class="text-alert text-xs mt-1">{{ roleError }}</p>
+        </div>
+        
+        <!-- Role Info (Manager only) -->
+        <div v-else-if="invitationLimits?.is_department_manager" class="p-3 bg-fortress-800 border border-fortress-700 rounded-lg">
+          <p class="text-sm text-fortress-300">
+            <span class="font-medium text-secure">Role:</span> user
+          </p>
+          <p class="text-xs text-fortress-400 mt-1">
+            As a department manager, you can only invite users with the "user" role
+          </p>
         </div>
 
         <!-- Department Selection (Optional) -->
@@ -71,8 +81,8 @@
           </p>
         </div>
 
-        <!-- Manager Checkbox -->
-        <div class="flex items-center gap-3">
+        <!-- Manager Checkbox (Admin only - managers cannot assign manager roles) -->
+        <div v-if="invitationLimits?.is_admin" class="flex items-center gap-3">
           <input
             v-model="isManager"
             type="checkbox"
@@ -84,7 +94,7 @@
             Make this user a manager of the assigned department
           </label>
         </div>
-        <p v-if="!canSelectRoleAsManager && selectedRoleId" class="text-xs text-alert mt-1">
+        <p v-if="invitationLimits?.is_admin && !canSelectRoleAsManager && selectedRoleId" class="text-xs text-alert mt-1">
           Only admin and manager roles can be assigned as department managers
         </p>
 
@@ -314,7 +324,8 @@ function validateForm() {
     return false
   }
 
-  if (!selectedRoleId.value) {
+  // Only admins need to select a role (managers auto-get user role from backend)
+  if (invitationLimits.value?.is_admin && !selectedRoleId.value) {
     roleError.value = 'Please select a role'
     return false
   }
@@ -333,7 +344,8 @@ async function handleInvite() {
     
     emit('invite', {
       email: email.value,
-      roleId: parseInt(selectedRoleId.value),
+      // For managers, pass null roleId (backend will auto-assign "user" role)
+      roleId: invitationLimits.value?.is_admin ? parseInt(selectedRoleId.value) : null,
       invitationLinkTemplate,
       invitationMessage: invitationMessage.value || null,
       departmentId: selectedDepartmentId.value ? parseInt(selectedDepartmentId.value) : null,

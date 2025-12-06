@@ -238,10 +238,12 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
 import { useAdminStore } from '../../stores/admin'
+import { useAuthStore } from '../../stores/auth'
 import UserInviteModal from '../../components/admin/UserInviteModal.vue'
 import api from '../../services/api'
 
 const adminStore = useAdminStore()
+const authStore = useAuthStore()
 
 const invitations = ref([])
 const loading = ref(false)
@@ -327,11 +329,14 @@ const formatDate = (dateString) => {
 }
 
 const loadRoles = async () => {
-  try {
-    await adminStore.fetchRoles()
-    roles.value = adminStore.roles
-  } catch (err) {
-    console.error('Failed to load roles:', err)
+  // Only admins can fetch roles (managers don't have access to roles endpoint)
+  if (authStore.isAdmin) {
+    try {
+      await adminStore.fetchRoles()
+      roles.value = adminStore.roles
+    } catch (err) {
+      console.error('Failed to load roles:', err)
+    }
   }
 }
 

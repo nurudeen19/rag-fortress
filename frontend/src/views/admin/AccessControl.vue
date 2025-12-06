@@ -304,7 +304,10 @@ async function loadUsers() {
 }
 
 async function loadRoles() {
-  await adminStore.fetchRoles()
+  // Only admins can fetch roles (managers don't have access to roles endpoint)
+  if (authStore.isAdmin) {
+    await adminStore.fetchRoles()
+  }
 }
 
 function handleSearch() {

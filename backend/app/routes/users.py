@@ -81,25 +81,27 @@ async def list_users(
     department_id: Optional[int] = Query(None, description="Filter by department"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    admin: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
     List users with optional filtering.
-    
-    Requires admin role.
+
+    - Admins can see all users or filter by department
+    - Department managers can only see users from their own department
     """
     result = await handle_list_users(
         active_only=active_only,
         department_id=department_id,
         limit=limit,
         offset=offset,
+        current_user=current_user,
         session=session
     )
     
     if not result.get("success"):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=result.get("status_code", status.HTTP_400_BAD_REQUEST),
             detail=result.get("error", "Failed to list users")
         )
     
@@ -114,16 +116,21 @@ async def list_users(
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user_details(
     user_id: int,
-    admin: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """Get user details by ID. Requires admin role."""
-    result = await handle_get_user(user_id, session)
+    """
+    Get user details by ID.
+    
+    - Admins can view any user
+    - Department managers can only view users from their own department
+    """
+    result = await handle_get_user(user_id, current_user, session)
     
     if not result.get("success"):
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=result.get("error", "User not found")
+            status_code=result.get("status_code", status.HTTP_400_BAD_REQUEST),
+            detail=result.get("error", "Failed to get user details")
         )
     
     return UserResponse(**result["user"])
@@ -133,21 +140,25 @@ async def get_user_details(
 async def suspend_user(
     user_id: int,
     request: UserSuspendRequest,
-    admin: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """Suspend user account. Requires admin role."""
+    """Suspend user account.
+    
+    - Admins can suspend any user
+    - Department managers can suspend users from their own department
+    """
     result = await handle_suspend_user(
         user_id=user_id,
         reason=request.reason or "",
-        admin_user=admin,
+        admin_user=current_user,
         session=session
     )
     
     if not result.get("success"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=result.get("error", "Failed to suspend user")
+            detail=result.get("error", result.get("error", "Failed to suspend user"))
         )
     
     return SuccessResponse(message=result.get("message", "User suspended"))
@@ -156,13 +167,17 @@ async def suspend_user(
 @router.post("/users/{user_id}/unsuspend", response_model=SuccessResponse)
 async def unsuspend_user(
     user_id: int,
-    admin: User = Depends(require_role("admin")),
+    current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """Unsuspend user account. Requires admin role."""
+    """Unsuspend user account.
+    
+    - Admins can unsuspend any user
+    - Department managers can unsuspend users from their own department
+    """
     result = await handle_unsuspend_user(
         user_id=user_id,
-        admin_user=admin,
+        admin_user=current_user,
         session=session
     )
     
@@ -260,17 +275,18 @@ async def invite_user(
     Requires admin role or department manager status.
     - Admins can invite to any department with any clearance level
     - Department managers can only invite to their own department with clearance <= their own
+    - Managers always assign 'user' role regardless of role_id parameter
     """
     result = await handle_invite_user(
         email=request.email,
         role_id=request.role_id,
-        admin_user=inviter,
         invitation_message=request.invitation_message,
         department_id=request.department_id,
         is_manager=request.is_manager,
         org_level_permission=request.org_level_permission,
         department_level_permission=request.department_level_permission,
         invitation_link_template=request.invitation_link_template,
+        inviter=inviter,
         session=session
     )
     
@@ -509,13 +525,14 @@ async def list_invitations(
     status_filter: Optional[str] = Query(None, description="Filter by status: pending, accepted, expired"),
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    admin: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_admin_or_department_manager),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    List all user invitations with filtering and pagination.
+    List user invitations with filtering and pagination.
     
-    Requires admin role.
+    - Admins can see all invitations
+    - Department managers can only see invitations they created
     
     Query Parameters:
     - status_filter: Filter by invitation status (pending, accepted, expired)
@@ -531,6 +548,7 @@ async def list_invitations(
         status_filter=status_filter,
         limit=limit,
         offset=offset,
+        current_user=current_user,
         session=session
     )
     

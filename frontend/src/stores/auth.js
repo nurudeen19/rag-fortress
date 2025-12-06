@@ -25,6 +25,18 @@ export const useAuthStore = defineStore('auth', () => {
     // Check if user has admin role
     return user.value.roles?.some(role => role.name === 'admin') || false
   })
+  const isManager = computed(() => {
+    if (!user.value) return false
+    // Check if user has manager or department_manager role
+    return user.value.roles?.some(role => 
+      role.name === 'manager' || role.name === 'department_manager'
+    ) || false
+  })
+  const isDepartmentManager = computed(() => {
+    if (!user.value) return false
+    // Check if user has department assigned and manager/department_manager role
+    return user.value.department_id && isManager.value
+  })
   const fullName = computed(() => {
     if (!user.value) return ''
     return `${user.value.first_name} ${user.value.last_name}`
@@ -55,6 +67,7 @@ export const useAuthStore = defineStore('auth', () => {
         full_name: response.user.full_name,
         is_verified: response.user.is_verified,
         is_active: response.user.is_active,
+        department_id: response.user.department_id || null,
         roles: response.user.roles || [],
       }
       
@@ -272,6 +285,8 @@ export const useAuthStore = defineStore('auth', () => {
     isTokenExpired,
     isAuthenticated,
     isAdmin,
+    isManager,
+    isDepartmentManager,
     fullName,
     // Actions
     login,

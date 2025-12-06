@@ -187,10 +187,17 @@ class UserSuspendRequest(BaseModel):
 
 
 class UserInviteRequest(BaseModel):
-    """Schema for inviting new user with optional department and manager assignment."""
+    """Schema for inviting new user with optional department and manager assignment.
+    
+    Note: Managers can only invite users with 'user' role. Role selection is only available to admins.
+    """
     
     email: EmailStr = Field(..., description="Email address to invite")
-    role_id: int = Field(..., gt=0, description="Role to assign to the invited user")
+    role_id: Optional[int] = Field(
+        None,
+        gt=0,
+        description="Role to assign (admin only). Managers always assign 'user' role."
+    )
     invitation_message: Optional[str] = Field(
         None,
         max_length=1000,

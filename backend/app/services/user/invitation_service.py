@@ -158,6 +158,7 @@ class InvitationService:
         status_filter: Optional[str] = None,
         limit: int = 10,
         offset: int = 0,
+        inviter_id: Optional[int] = None,
     ) -> Tuple[Dict[str, Any], Optional[str]]:
         """
         List invitations with optional filtering and pagination.
@@ -166,6 +167,7 @@ class InvitationService:
             status_filter: Filter by status (pending, accepted, expired)
             limit: Number of results per page
             offset: Pagination offset
+            inviter_id: Optional filter by inviter user ID (for managers)
         
         Returns:
             Tuple of (result_dict, error_message) where error_message is user-friendly
@@ -173,6 +175,10 @@ class InvitationService:
         try:
             # Build query
             query = select(UserInvitation).order_by(UserInvitation.created_at.desc())
+            
+            # Apply inviter filter (for managers)
+            if inviter_id is not None:
+                query = query.where(UserInvitation.inviter_id == inviter_id)
             
             # Apply status filter
             if status_filter == "expired":
@@ -186,6 +192,8 @@ class InvitationService:
             
             # Get total count
             count_query = select(UserInvitation)
+            if inviter_id is not None:
+                count_query = count_query.where(UserInvitation.inviter_id == inviter_id)
             if status_filter == "expired":
                 now = datetime.now(timezone.utc)
                 count_query = count_query.where(
