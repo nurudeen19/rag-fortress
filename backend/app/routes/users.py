@@ -43,6 +43,7 @@ from app.schemas.user import (
     SuccessResponse,
     InvitationsListResponse,
     InvitationLimitsResponse,
+    ResendInvitationRequest,
     ClearanceLevelOption,
 )
 from app.models.user import User
@@ -569,6 +570,7 @@ async def list_invitations(
 @router.post("/invitations/{invitation_id}/resend", response_model=SuccessResponse)
 async def resend_invitation(
     invitation_id: int,
+    request: ResendInvitationRequest,
     current_user: User = Depends(require_admin_or_department_manager),
     session: AsyncSession = Depends(get_session)
 ):
@@ -588,6 +590,7 @@ async def resend_invitation(
     result = await handle_resend_invitation(
         invitation_id=invitation_id,
         current_user=current_user,
+        invitation_link_template=request.invitation_link_template,
         session=session
     )
     

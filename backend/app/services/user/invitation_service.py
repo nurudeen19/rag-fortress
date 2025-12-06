@@ -232,7 +232,7 @@ class InvitationService:
             logger.error(f"Error listing invitations (filter: {status_filter}): {str(e)}", exc_info=True)
             return None, "Failed to list invitations"
     
-    async def resend_invitation(self, invitation_id: int) -> Tuple[bool, Optional[str]]:
+    async def resend_invitation(self, invitation_id: int, invitation_link_template: Optional[str] = None) -> Tuple[bool, Optional[str]]:
         """
         Resend invitation email for a pending invitation.
         
@@ -268,10 +268,11 @@ class InvitationService:
                 logger.error(f"Inviter information missing for invitation {invitation_id}")
                 return False, "Inviter information not found"
             
-            # Resend email
+            # Resend email (use provided frontend link template if given)
             email_sent = await self._send_invitation_email(
                 invitation=invitation,
                 inviter_name=f"{inviter.first_name} {inviter.last_name}".strip(),
+                link_template=invitation_link_template,
             )
             
             if not email_sent:

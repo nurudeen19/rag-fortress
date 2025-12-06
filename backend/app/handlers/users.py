@@ -1157,6 +1157,7 @@ async def handle_list_invitations(
 async def handle_resend_invitation(
     invitation_id: int,
     current_user: User,
+    invitation_link_template: Optional[str],
     session: AsyncSession
 ) -> dict:
     """
@@ -1200,7 +1201,7 @@ async def handle_resend_invitation(
                 return {"success": False, "status_code": 403, "error": "You can only resend invitations you created"}
 
         service = InvitationService(session)
-        success, error = await service.resend_invitation(invitation_id)
+        success, error = await service.resend_invitation(invitation_id, invitation_link_template)
         
         if error:
             # Provide user-friendly error messages

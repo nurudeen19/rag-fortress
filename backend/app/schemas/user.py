@@ -231,6 +231,15 @@ class UserInviteRequest(BaseModel):
     )
 
 
+class ResendInvitationRequest(BaseModel):
+    """Schema for resend invitation request allowing optional frontend link template."""
+
+    invitation_link_template: Optional[str] = Field(
+        None,
+        description="Frontend invitation link template with {token} placeholder. Example: https://app.example.com/signup?token={token}"
+    )
+
+
 class SignupWithInviteRequest(BaseModel):
     """Schema for signing up with invitation token."""
     

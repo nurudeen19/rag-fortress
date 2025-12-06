@@ -289,10 +289,16 @@ const loadInvitations = async () => {
 
 const resendInvitation = async (invitationId) => {
   resendingId.value = invitationId
-  
+
   try {
-    const response = await api.post(`/v1/admin/invitations/${invitationId}/resend`)
-    
+    // Provide the frontend signup link template to backend so emails use correct URL
+    const baseUrl = window.location.origin
+    const invitationLinkTemplate = `${baseUrl}/signup?token={token}`
+
+    const response = await api.post(`/v1/admin/invitations/${invitationId}/resend`, {
+      invitation_link_template: invitationLinkTemplate
+    })
+
     if (response.message) {
       // Show success message
       await loadInvitations()
