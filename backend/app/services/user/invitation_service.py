@@ -176,9 +176,9 @@ class InvitationService:
             # Build query
             query = select(UserInvitation).order_by(UserInvitation.created_at.desc())
             
-            # Apply inviter filter (for managers)
+            # Apply inviter filter (for managers) - use invited_by_id field
             if inviter_id is not None:
-                query = query.where(UserInvitation.inviter_id == inviter_id)
+                query = query.where(UserInvitation.invited_by_id == inviter_id)
             
             # Apply status filter
             if status_filter == "expired":
@@ -190,10 +190,11 @@ class InvitationService:
             elif status_filter and status_filter in ["pending", "accepted"]:
                 query = query.where(UserInvitation.status == status_filter)
             
-            # Get total count
-            count_query = select(UserInvitation)
+            # Get total count using proper count query
+            from sqlalchemy import func
+            count_query = select(func.count()).select_from(UserInvitation)
             if inviter_id is not None:
-                count_query = count_query.where(UserInvitation.inviter_id == inviter_id)
+                count_query = count_query.where(UserInvitation.invited_by_id == inviter_id)
             if status_filter == "expired":
                 now = datetime.now(timezone.utc)
                 count_query = count_query.where(
@@ -204,7 +205,7 @@ class InvitationService:
                 count_query = count_query.where(UserInvitation.status == status_filter)
             
             count_result = await self.session.execute(count_query)
-            total = len(count_result.scalars().all())
+            total = count_result.scalar() or 0
             
             # Apply pagination
             query = query.limit(limit).offset(offset)
