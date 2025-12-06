@@ -3,7 +3,7 @@
 Setup script for RAG Fortress application.
 
 Usage:
-    python setup.py                          # Run full setup (all seeders by default)
+    python setup.py                          # Run full setup (all 8 seeders by default)
     python setup.py --verify                 # Verify setup is complete
     python setup.py --clear-db               # Clear database (for recovery/restart)
     python setup.py --list-seeders           # Show available seeders and current config
@@ -13,6 +13,10 @@ Usage:
 Environment Variables (optional):
     ENABLED_SEEDERS                          # Comma-separated seeders to run (empty = all)
     DISABLED_SEEDERS                         # Comma-separated seeders to skip (empty = none)
+
+Available Seeders:
+    admin, roles_permissions, departments, application_settings, jobs, 
+    knowledge_base, conversations, activity_logs
 
 NOTE: If both ENABLED_SEEDERS and DISABLED_SEEDERS are set, ENABLED_SEEDERS takes priority.
       CLI flags (--only-seeder, --skip-seeder) override environment variables.
@@ -57,8 +61,11 @@ SEEDING_ORDER = [
     "roles_permissions",
     "departments",
     "admin",
+    "application_settings",
     "jobs",
     "knowledge_base",
+    "conversations",
+    "activity_logs",
 ]
 
 
@@ -117,15 +124,18 @@ AVAILABLE SEEDERS:
     • admin                 Create admin user account (critical)
     • roles_permissions     Create roles and permissions (critical)
     • departments           Create department records (optional)
+    • application_settings  Create application settings (optional)
     • jobs                  Create initial job records (optional)
     • knowledge_base        Create knowledge base records (optional)
+    • conversations         Create sample conversations (optional)
+    • activity_logs         Create sample activity logs (optional)
 
 DEPENDENCIES:
     • admin requires roles_permissions (automatically included if needed)
     • Other seeders have no dependencies
 
 EXAMPLES:
-    # Run everything (default, all 5 seeders)
+    # Run everything (default, all 8 seeders)
     python setup.py
 
     # View what will run based on current config
@@ -135,7 +145,7 @@ EXAMPLES:
     ENABLED_SEEDERS=admin,roles_permissions python setup.py
 
     # Development without optional data
-    DISABLED_SEEDERS=departments,jobs python setup.py
+    DISABLED_SEEDERS=conversations,activity_logs python setup.py
 
     # Test specific seeders
     python setup.py --only-seeder admin,roles_permissions
@@ -224,6 +234,43 @@ def list_seeders() -> None:
         logger.info(f"Configuration: DISABLED_SEEDERS={disabled}")
     else:
         logger.info("Configuration: Default (no env vars set)")
+
+
+async def cleanup_postgres_enums() -> None:
+    """Clean up PostgreSQL ENUM types that may conflict with migrations.
+    
+    This handles the case where ENUM types already exist from previous migrations,
+    which can cause "type already exists" errors.
+    """
+    db_settings = DatabaseSettings()
+    
+    # Only for PostgreSQL
+    if db_settings.DATABASE_PROVIDER.lower() != 'postgresql':
+        return
+    
+    try:
+        import psycopg2
+        conn = psycopg2.connect(
+            host=db_settings.DB_HOST,
+            port=db_settings._get_port(),
+            user=db_settings.DB_USER,
+            password=db_settings.DB_PASSWORD,
+            database=db_settings.DB_NAME
+        )
+        cursor = conn.cursor()
+        
+        # Drop ENUM types if they exist
+        cursor.execute('DROP TYPE IF EXISTS errorreportcategory CASCADE;')
+        cursor.execute('DROP TYPE IF EXISTS errorreportstatus CASCADE;')
+        cursor.execute('DROP TYPE IF EXISTS filestatus CASCADE;')
+        conn.commit()
+        cursor.close()
+        conn.close()
+        
+    except ImportError:
+        logger.warning("psycopg2 not available - skipping ENUM cleanup")
+    except Exception as e:
+        logger.debug(f"ENUM cleanup (non-critical): {e}")
 
 
 async def run_migrations() -> bool:
@@ -469,6 +516,9 @@ async def main(args):
     
     # Full setup: migrate -> seed
     logger.info("Setting up RAG Fortress...\n")
+    
+    # Clean up PostgreSQL ENUM types before migrations (prevents "type already exists" errors)
+    await cleanup_postgres_enums()
     
     if not await run_migrations():
         logger.error("\nSetup failed at migrations")
