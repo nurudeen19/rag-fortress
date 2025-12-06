@@ -354,24 +354,155 @@ COPY . .
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
-## Next Steps
+## Setup vs Startup
 
-After installation:
+### First-Time Setup (Once)
 
-1. **Configure environment variables**:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys and settings
-   ```
+**Use `setup.py` for initial deployment:**
 
-2. **Run the application**:
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
+```bash
+cd backend
 
-3. **Access API documentation**:
-   - Swagger UI: http://localhost:8000/docs
-   - ReDoc: http://localhost:8000/redoc
+# 1. Configure environment
+cp .env.example .env
+# Edit .env with your API keys and database URL
+
+# 2. Run setup (migrations + seeders)
+python setup.py
+```
+
+**What it does:**
+- Runs database migrations (`alembic upgrade head`)
+- Seeds database with default data (roles, permissions, admin user)
+- Verifies tables exist
+- Creates initial job queue
+
+**When to use:**
+- Initial deployment
+- After major database schema changes
+- Reset database and reseed
+
+### Regular Startup (Every Time)
+
+**Use `run.py` for regular app starts:**
+
+```bash
+python run.py  # Development
+# or
+python run_production.py  # Production (Gunicorn)
+```
+
+**What it does:**
+- Connects to existing database
+- Recovers pending jobs from database
+- Initializes embeddings and services
+- Starts serving requests
+
+**When to use:**
+- Every regular app restart
+- After code changes
+- Development restarts
+
+### Component Initialization Order
+
+Both flows initialize in this order:
+
+```
+1. DATABASE → 2. JOB QUEUE → 3. EMBEDDINGS → 4. VECTOR STORE → 5. LLM
+```
+
+### Startup Controller
+
+The `StartupController` manages initialization:
+
+```python
+from app.core.startup import get_startup_controller
+
+# Initialize all services
+startup = get_startup_controller()
+await startup.initialize()
+
+# Check if ready
+if startup.is_ready():
+    print("Application ready!")
+```
+
+## Configuration
+
+### Environment Variables
+
+Create `.env` file from template:
+
+```bash
+cp .env.example .env
+```
+
+**Required Settings:**
+```bash
+# Application
+APP_NAME=RAG Fortress
+SECRET_KEY=your-secret-key-here
+ENVIRONMENT=development
+
+# Database
+DATABASE_URL=postgresql://user:pass@localhost/rag_fortress
+
+# LLM Provider (choose one)
+LLM_PROVIDER=openai
+OPENAI_API_KEY=sk-...
+
+# Embedding Provider
+EMBEDDING_PROVIDER=huggingface  # Free, no API key
+
+# Vector Database
+VECTOR_DB_PROVIDER=qdrant
+QDRANT_URL=http://localhost:6333
+```
+
+See [Settings Guide](SETTINGS_GUIDE.md) for complete configuration options.
+
+## Default Credentials
+
+After running `setup.py`, use these credentials:
+
+- **Super Admin**: `superadmin@ragfortress.local` / `SuperAdmin123!`
+- **Admin**: `admin@ragfortress.local` / `Admin123!`
+- **Manager**: `manager@ragfortress.local` / `Manager123!`
+- **User**: `user@ragfortress.local` / `User123!`
+
+**⚠️ Change these in production!**
+
+## Running the Application
+
+### Development
+
+```bash
+# Method 1: Using uvicorn directly
+uvicorn app.main:app --reload --port 8000
+
+# Method 2: Using run script
+python run.py
+```
+
+### Production
+
+```bash
+# Using Gunicorn with multiple workers
+python run_production.py
+
+# Or manually:
+gunicorn app.main:app \
+  --workers 4 \
+  --worker-class uvicorn.workers.UvicornWorker \
+  --bind 0.0.0.0:8000
+```
+
+## Access API Documentation
+
+Once running, visit:
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **Health Check**: http://localhost:8000/health
 
 ## Getting Help
 

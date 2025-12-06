@@ -401,6 +401,197 @@ cp rag_fortress.db rag_fortress.db.backup
 - Test downgrades on a dev database first
 - Check for data integrity issues
 
+## Quick Reference Commands
+
+### Common Commands
+
+```bash
+# Apply all pending migrations
+python migrate.py upgrade head
+
+# Rollback last migration
+python migrate.py downgrade -1
+
+# Check current migration version
+python migrate.py current
+
+# View migration history
+python migrate.py history
+
+# Create new migration
+python migrate.py revision -m "description"
+```
+
+### Current Migrations Status
+
+| Migration | Tables Created | Purpose |
+|-----------|---------------|---------|
+| 001 | `application_settings` | Store app configuration in database |
+| 002 | `users`, `roles`, `permissions`, associations | User authentication, RBAC |
+| 003+ | Various tables | Additional features |
+
+### Default Data
+
+**Roles:** admin, user, viewer
+
+**Permissions:**
+- `user:create`, `user:read`, `user:update`, `user:delete`
+- `document:create`, `document:read`, `document:update`, `document:delete`
+- `settings:read`, `settings:update`
+
+## SQLite Compatibility
+
+All migrations are compatible with SQLite, MySQL, and PostgreSQL without modification.
+
+### Batch Mode for SQLite
+
+SQLite doesn't support `ALTER TABLE` operations outside of table creation. All migrations use Alembic's batch mode:
+
+```python
+# migrations/env.py
+context.configure(
+    connection=connection,
+    target_metadata=target_metadata,
+    render_as_batch=True,  # Enable batch mode for SQLite
+    # ... other config
+)
+```
+
+### Testing Multi-Provider Compatibility
+
+A comprehensive test suite validates all providers:
+
+```bash
+cd backend
+
+# Test all providers (SQLite, MySQL, PostgreSQL)
+python test_all_db_providers.py
+
+# Test specific providers only
+python test_all_db_providers.py --providers sqlite mysql
+```
+
+**Test Results:**
+- ✅ SQLite: All migrations, schema verification, seeders pass
+- ✅ MySQL: All migrations, schema verification, seeders pass  
+- ✅ PostgreSQL: All migrations, schema verification, seeders pass
+
+**Requirements:**
+- PostgreSQL: Requires `psycopg2-binary` package
+- MySQL: Requires `pymysql` package
+- SQLite: No additional requirements
+
+### SQLite-Specific Testing
+
+For detailed SQLite testing with CRUD operations:
+
+```bash
+cd backend
+python test_sqlite_migration.py --clean
+```
+
+This validates:
+- ✅ All migrations run successfully
+- ✅ Schema is correctly created
+- ✅ Seeders execute without errors
+- ✅ CRUD operations function properly
+
+## Database-Agnostic Migration Patterns
+
+### ✅ DO: Use Batch Mode for ALTER Operations
+
+```python
+def upgrade() -> None:
+    with op.batch_alter_table('table_name', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('new_col', sa.String(50)))
+        batch_op.create_foreign_key('fk_name', 'other_table', ['col'], ['id'])
+```
+
+### ✅ DO: Use SQLAlchemy Expressions for Defaults
+
+```python
+# Good - works across all databases
+sa.Column('is_active', sa.Boolean(), server_default=sa.false())
+sa.Column('count', sa.Integer(), server_default=sa.text('0'))
+
+# Bad - database-specific
+sa.Column('is_active', sa.Boolean(), server_default='0')  # SQLite treats as string
+```
+
+### ✅ DO: Use Standard CURRENT_TIMESTAMP
+
+```python
+# Good - works across all databases
+sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP'))
+
+# Bad - MySQL-specific
+sa.Column('updated_at', sa.DateTime(), 
+          server_default=sa.text('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'))
+```
+
+### ❌ DON'T: Use Direct ALTER Operations
+
+```python
+# Bad - fails on SQLite
+def upgrade() -> None:
+    op.add_column('users', sa.Column('new_col', sa.String(50)))
+    op.create_foreign_key('fk_users_dept', 'users', 'departments', ['dept_id'], ['id'])
+
+# Good - works on all databases
+def upgrade() -> None:
+    with op.batch_alter_table('users', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('new_col', sa.String(50)))
+        batch_op.create_foreign_key('fk_users_dept', 'departments', ['dept_id'], ['id'])
+```
+
+## Provider-Agnostic Migration Checklist
+
+When creating a new migration:
+
+1. ✅ Use `batch_alter_table` for any ALTER operations
+2. ✅ Use SQLAlchemy expressions for server defaults
+3. ✅ Avoid database-specific syntax (ON UPDATE, etc.)
+4. ✅ Test with SQLite: `python test_sqlite_migration.py --clean`
+5. ✅ Verify both upgrade and downgrade functions
+
+## Common Pitfalls
+
+### 1. Column Comments
+SQLite doesn't support column comments, but Alembic ignores them gracefully:
+```python
+sa.Column('name', sa.String(100), comment='User name')  # OK - ignored in SQLite
+```
+
+### 2. Server Defaults with Text
+Be careful with `sa.text()` - ensure the SQL is compatible across databases:
+```python
+# Works on all databases
+server_default=sa.text('CURRENT_TIMESTAMP')
+server_default=sa.text("'approved'")  # String literal
+
+# Database-specific - avoid
+server_default=sa.text('NOW()')  # PostgreSQL-specific
+server_default=sa.text('GETDATE()')  # SQL Server-specific
+```
+
+### 3. Boolean Values
+SQLite stores booleans as integers (0/1):
+```python
+# Use SQLAlchemy expressions
+server_default=sa.false()  # Correctly handles 0/1
+server_default=sa.true()
+
+# Not raw values
+server_default='0'  # May be interpreted as string
+```
+
+## Benefits of Multi-Provider Support
+
+1. **Single Migration Codebase** - Same migrations work across SQLite, MySQL, and PostgreSQL
+2. **Easier Development** - Developers can use SQLite locally without Docker
+3. **Faster CI/CD** - Tests can run with SQLite instead of requiring database containers
+4. **Production Flexibility** - Choose any supported database provider without migration changes
+
 ## References
 
 - [SQLAlchemy Documentation](https://docs.sqlalchemy.org/)
