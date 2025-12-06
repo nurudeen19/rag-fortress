@@ -569,30 +569,31 @@ async def list_invitations(
 @router.post("/invitations/{invitation_id}/resend", response_model=SuccessResponse)
 async def resend_invitation(
     invitation_id: int,
-    admin: User = Depends(require_role("admin")),
+    current_user: User = Depends(require_admin_or_department_manager),
     session: AsyncSession = Depends(get_session)
 ):
     """
     Resend invitation email for a pending invitation.
-    
-    Requires admin role.
-    
+
+    Requires admin role or department manager status.
+
     Path Parameters:
     - invitation_id: ID of the invitation to resend
-    
+
     Returns:
         Success message or error
     """
     from app.handlers.users import handle_resend_invitation
-    
+
     result = await handle_resend_invitation(
         invitation_id=invitation_id,
+        current_user=current_user,
         session=session
     )
     
     if not result.get("success"):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
+            status_code=result.get("status_code", status.HTTP_400_BAD_REQUEST),
             detail=result.get("error", "Failed to resend invitation")
         )
     

@@ -15,11 +15,17 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Header
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from app.models.department import Department
+from sqlalchemy.orm import selectinload
 
 from app.config.settings import settings
 from app.models.user import User
 from app.core.database import get_session
 from app.core import get_logger
+from app.services.user import RolePermissionService
+
+    
 
 
 logger = get_logger(__name__)
@@ -181,8 +187,6 @@ async def get_current_user(
     Raises:
         HTTPException if user not found or account locked
     """
-    from sqlalchemy import select
-    from sqlalchemy.orm import selectinload
     
     result = await session.execute(
         select(User).where(User.id == user_id).options(selectinload(User.roles))
@@ -226,8 +230,7 @@ def require_permission(permission_code: str):
     async def check_permission(
         current_user: User = Depends(get_current_user),
         session: AsyncSession = Depends(get_session)
-    ) -> User:
-        from app.services.user import RolePermissionService
+    ) -> User:        
         
         role_service = RolePermissionService(session)
         has_permission = await role_service.user_has_permission(
@@ -329,8 +332,6 @@ async def require_admin_or_department_manager(
         return current_user
     
     # Check if department manager
-    from sqlalchemy import select
-    from app.models.department import Department
     
     result = await session.execute(
         select(Department).where(Department.manager_id == current_user.id)

@@ -25,6 +25,7 @@ from app.services.user import (
     PasswordService,
     InvitationService,
 )
+from app.models.user_invitation import UserInvitation
 from app.services.email.builders.specialized import InvitationEmailBuilder
 from app.utils.user_clearance_cache import get_user_clearance_cache
 
@@ -1155,6 +1156,7 @@ async def handle_list_invitations(
 
 async def handle_resend_invitation(
     invitation_id: int,
+    current_user: User,
     session: AsyncSession
 ) -> dict:
     """
@@ -1170,6 +1172,33 @@ async def handle_resend_invitation(
         Dict with success/error status
     """
     try:
+        # Authorization: only admins or department managers may resend.
+        is_admin = current_user.has_role("admin")
+        is_dept_manager = current_user.department_id is not None and any(
+            d.name == "manager" for d in current_user.roles if d.name in ["manager", "department_manager"]
+        )
+
+        if not (is_admin or is_dept_manager):
+            logger.warning(f"Unauthorized resend_invitation attempt by user {current_user.id}")
+            return {"success": False, "status_code": 403, "error": "Only admins and department managers can resend invitations"}
+
+        # For department managers, only allow resending invitations they created.
+        if is_dept_manager and not is_admin:
+            try:
+                result = await session.execute(select(UserInvitation).where(UserInvitation.id == invitation_id))
+                invitation = result.scalar_one_or_none()
+            except Exception as e:
+                logger.error(f"DB error fetching invitation {invitation_id}: {str(e)}", exc_info=True)
+                return {"success": False, "error": "Could not verify invitation ownership"}
+
+            if not invitation:
+                logger.warning(f"Attempt to resend non-existent invitation {invitation_id}")
+                return {"success": False, "status_code": 404, "error": "Invitation not found"}
+
+            if invitation.invited_by_id != current_user.id:
+                logger.warning(f"Manager {current_user.id} attempted to resend invitation {invitation_id} they did not create")
+                return {"success": False, "status_code": 403, "error": "You can only resend invitations you created"}
+
         service = InvitationService(session)
         success, error = await service.resend_invitation(invitation_id)
         
