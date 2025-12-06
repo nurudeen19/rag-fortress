@@ -105,8 +105,8 @@
             </div>
           </div>
 
-          <!-- Roles -->
-          <div class="card p-6">
+          <!-- Roles (Admin only - managers don't have access to role management) -->
+          <div v-if="authStore.isAdmin" class="card p-6">
             <h2 class="text-lg font-semibold text-fortress-100 mb-4">Roles</h2>
             <div v-if="user.roles && user.roles.length > 0" class="space-y-2">
               <div
@@ -138,6 +138,29 @@
               No roles assigned
             </div>
           </div>
+          
+          <!-- Roles Display for Managers (read-only) -->
+          <div v-else class="card p-6">
+            <h2 class="text-lg font-semibold text-fortress-100 mb-4">Roles</h2>
+            <div v-if="user.roles && user.roles.length > 0" class="space-y-2">
+              <div
+                v-for="role in user.roles"
+                :key="role.id"
+                class="p-3 bg-fortress-800/50 rounded-lg"
+              >
+                <div class="flex items-center gap-2">
+                  <span class="font-medium text-fortress-100">{{ role.name }}</span>
+                  <span v-if="role.is_system" class="px-2 py-1 bg-secure/20 text-secure text-xs rounded">
+                    System
+                  </span>
+                </div>
+                <p class="text-sm text-fortress-400 mt-1">{{ role.description }}</p>
+              </div>
+            </div>
+            <div v-else class="text-fortress-400 text-sm">
+              No roles assigned
+            </div>
+          </div>
         </div>
 
         <!-- Right Column: Actions -->
@@ -163,8 +186,8 @@
             </div>
           </div>
 
-          <!-- Assign Role -->
-          <div class="card p-6">
+          <!-- Assign Role (Admin only) -->
+          <div v-if="authStore.isAdmin" class="card p-6">
             <h3 class="text-lg font-semibold text-fortress-100 mb-4">Assign Role</h3>
             <div class="space-y-3">
               <select
@@ -190,8 +213,8 @@
             </div>
           </div>
 
-          <!-- Department Manager Roles -->
-          <div class="card p-6">
+          <!-- Department Manager Roles (Admin only) -->
+          <div v-if="authStore.isAdmin" class="card p-6">
             <h3 class="text-lg font-semibold text-fortress-100 mb-4">Manager Roles</h3>
             <div v-if="userManagedDepartments.length > 0" class="space-y-2">
               <div
@@ -331,11 +354,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminStore } from '../../stores/admin'
+import { useAuthStore } from '../../stores/auth'
 import api from '../../services/api'
 
 const route = useRoute()
 const router = useRouter()
 const adminStore = useAdminStore()
+const authStore = useAuthStore()
 
 const userId = parseInt(route.params.userId)
 const selectedRoleToAssign = ref('')
@@ -363,7 +388,8 @@ const availableRoles = computed(() => {
 
 async function loadUserDetails() {
   await adminStore.fetchUserDetails(userId)
-  if (!adminStore.roles || adminStore.roles.length === 0) {
+  // Only admins can fetch roles (managers don't have access to roles endpoint)
+  if (authStore.isAdmin && (!adminStore.roles || adminStore.roles.length === 0)) {
     await adminStore.fetchRoles()
   }
 }
