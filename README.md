@@ -1,311 +1,158 @@
 # RAG Fortress
 
-A modular Retrieval-Augmented Generation (RAG) platform built with FastAPI and Vue.js.
+Enterprise-grade Retrieval-Augmented Generation (RAG) platform with role-based access control, multi-provider support, and adaptive retrieval strategies. Built with FastAPI and Vue.js.
 
-## 🏗️ Architecture
+## ✨ Key Features
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        RAG FORTRESS                              │
-└─────────────────────────────────────────────────────────────────┘
+- **Role-Based Access Control (RBAC)**: Department-based permissions with admin, manager, and user roles
+- **Multi-Tier Invitation System**: Email invitations with organization and department assignment
+- **Adaptive Retrieval**: Automatic fallback strategies (vector → hybrid → full-text → LLM-only)
+- **Multi-Provider Support**: OpenAI, Google Gemini, HuggingFace, Llama.cpp with automatic fallback
+- **5 Vector Databases**: Chroma, Qdrant, Pinecone, Weaviate, Milvus
+- **Document Management**: Upload tracking, folder-based organization, reprocessing jobs
+- **Smart Caching**: Query result caching with configurable TTL
+- **Reranking**: Cohere/HuggingFace rerankers for improved retrieval accuracy
+- **Real-time Notifications**: In-app notification system with read/unread tracking
+- **Database Migrations**: Alembic migrations with SQLite/PostgreSQL/MySQL support
+- **Comprehensive Testing**: 93+ test cases covering all configurations
+- **Production Ready**: Health checks, logging, exception handling, job queue system
 
-┌──────────────────────┐          ┌──────────────────────────────┐
-│      Frontend        │          │         Backend              │
-│      (Vue.js)        │◄────────►│        (FastAPI)             │
-│                      │   HTTP   │                              │
-│  ┌────────────────┐  │          │  ┌────────────────────────┐  │
-│  │  Components    │  │          │  │  Routes/Handlers       │  │
-│  │  - Home        │  │          │  │  - /api/chat           │  │
-│  │  - Chat UI     │  │          │  │  - /api/documents      │  │
-│  └────────────────┘  │          │  └────────────────────────┘  │
-│                      │          │                              │
-│  ┌────────────────┐  │          │  ┌────────────────────────┐  │
-│  │  Services      │  │          │  │  Services              │  │
-│  │  - API Client  │  │          │  │  - RAG Pipeline        │  │
-│  │  - Axios       │  │          │  │  - Document Processing │  │
-│  └────────────────┘  │          │  │  - Embedding Service   │  │
-│                      │          │  │  - LLM Integration     │  │
-│  ┌────────────────┐  │          │  └────────────────────────┘  │
-│  │  State Mgmt    │  │          │                              │
-│  │  - Pinia       │  │          │  ┌────────────────────────┐  │
-│  └────────────────┘  │          │  │  Core                  │  │
-│                      │          │  │  - Config              │  │
-│  ┌────────────────┐  │          │  │  - Database            │  │
-│  │  Router        │  │          │  │  - Settings            │  │
-│  │  - Vue Router  │  │          │  └────────────────────────┘  │
-│  └────────────────┘  │          │                              │
-│                      │          │  ┌────────────────────────┐  │
-│  Port: 3000          │          │  │  Utils                 │  │
-│  Vite + Vue 3        │          │  │  - Helpers             │  │
-└──────────────────────┘          │  │  - Validators          │  │
-                                  │  └────────────────────────┘  │
-                                  │                              │
-                                  │  ┌────────────────────────┐  │
-                                  │  │  Models/Schemas        │  │
-                                  │  │  - Data Models         │  │
-                                  │  │  - Pydantic Schemas    │  │
-                                  │  └────────────────────────┘  │
-                                  │                              │
-                                  │  Port: 8000                  │
-                                  │  Python + FastAPI            │
-                                  └──────────────────────────────┘
-                                            │
-                                            │
-                    ┌───────────────────────┼───────────────────────┐
-                    │                       │                       │
-                    ▼                       ▼                       ▼
-          ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-          │  Vector Database │   │   LLM Provider   │   │   File Storage   │
-          │   (ChromaDB)     │   │    (OpenAI)      │   │   (Local/S3)     │
-          └──────────────────┘   └──────────────────┘   └──────────────────┘
-```
-
-## 📁 Project Structure
-
-```
-rag-fortress/
-├── backend/                    # FastAPI Backend
-│   ├── app/
-│   │   ├── core/              # Core configuration & settings
-│   │   │   ├── logging.py     # Centralized logging with colored output
-│   │   │   └── exceptions.py  # Custom exceptions & handlers (26 types)
-│   │   ├── config/            # Modular configuration system
-│   │   │   ├── settings.py    # Main settings (composition)
-│   │   │   ├── app_settings.py      # App configuration
-│   │   │   ├── llm_settings.py      # LLM providers config
-│   │   │   ├── embedding_settings.py # Embedding providers config
-│   │   │   └── vectordb_settings.py # Vector DB config
-│   │   ├── services/          # Business logic & RAG pipeline
-│   │   ├── routes/            # API endpoints
-│   │   ├── models/            # Database models
-│   │   ├── schemas/           # Pydantic schemas
-│   │   ├── middleware/        # Custom middleware
-│   │   └── utils/             # Helper functions
-│   ├── tests/                 # Backend tests (93+ test cases)
-│   ├── docs/                  # Backend documentation
-│   │   ├── settings-architecture.md
-│   │   ├── settings-architecture-visual.md
-│   │   ├── settings-migration-guide.md
-│   │   └── refactoring-summary.md
-│   ├── logs/                  # Application logs (rotating)
-│   ├── requirements.txt       # Python dependencies
-│   ├── .env.example          # Environment template
-│   └── .gitignore
-│
-├── frontend/                  # Vue.js Frontend
-│   ├── src/
-│   │   ├── components/       # Reusable Vue components
-│   │   ├── views/            # Page components (Home, Chat)
-│   │   ├── router/           # Vue Router configuration
-│   │   ├── stores/           # Pinia state management
-│   │   ├── services/         # API service layer
-│   │   ├── assets/           # Static assets & styles
-│   │   ├── App.vue           # Root component
-│   │   └── main.js           # Entry point
-│   ├── public/               # Public static files
-│   ├── package.json          # Node dependencies
-│   ├── vite.config.js        # Vite configuration
-│   ├── .env.example          # Frontend env template
-│   └── .gitignore
-│
-├── docs/                     # Documentation
-│   └── initial-backlog.md
-├── LICENSE
-└── README.md
-```
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- **Python 3.9+**
-- **Node.js 18+**
-- **Git**
+- Python 3.9-3.13 (3.14 not compatible with Chroma - see compatibility notice below)
+- Node.js 18+
+- PostgreSQL/MySQL/SQLite
+- API key for at least one LLM provider (OpenAI, Google, or HuggingFace)
 
-### Backend Setup
+### Installation
 
+**Backend:**
 ```bash
 cd backend
-
-# Create virtual environment
 python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your API keys and settings
-
-# Run the server
-uvicorn app.main:app --reload --port 8000
+cp .env.example .env  # Configure your API keys and database
+python setup.py  # Initialize database with seeders
+python run.py  # Start server on http://localhost:8000
 ```
 
-The backend API will be available at `http://localhost:8000`
-
-### Frontend Setup
-
+**Frontend:**
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Configure environment
-cp .env.example .env
-
-# Run development server
-npm run dev
+cp .env.example .env  # Configure API URL
+npm run dev  # Start on http://localhost:5173
 ```
 
-The frontend will be available at `http://localhost:3000`
+**Default Credentials:**
+- Super Admin: `superadmin@ragfortress.local` / `SuperAdmin123!`
+- Admin: `admin@ragfortress.local` / `Admin123!`
+- Manager: `manager@ragfortress.local` / `Manager123!`
+- User: `user@ragfortress.local` / `User123!`
 
-## 🛠️ Technology Stack
+## 📚 Documentation
 
-### Backend
-- **FastAPI** - Modern Python web framework
-- **Pydantic Settings** - Modular environment-based configuration
-- **ChromaDB / Qdrant** - Vector databases for embeddings (5 providers supported)
-- **LangChain** - LLM orchestration framework
-- **OpenAI / Google / HuggingFace** - Multiple LLM providers with fallback support
-- **SQLAlchemy** - Database ORM
-- **Pytest** - Testing framework (93+ test cases)
+- **[Installation Guide](backend/docs/installation-guide.md)** - Detailed setup instructions
+- **[Quick Start: Ingestion](backend/docs/quick-start-ingestion.md)** - Document upload workflow
+- **[Settings Architecture](backend/docs/complete-settings-architecture.md)** - Configuration deep dive
+- **[Migrations Guide](backend/docs/MIGRATIONS_GUIDE.md)** - Database migrations
+- **[Adaptive Retrieval](backend/docs/ADAPTIVE_RETRIEVAL.md)** - Fallback strategies
+- **[RBAC System](docs/ROLE_BASED_ACCESS_CONTROL.md)** - Role and permission management
+- **[Email System](backend/docs/EMAIL_SYSTEM.md)** - Invitation system
+- **[Job Manager](backend/docs/JOB_MANAGER.md)** - Background job processing
+- **API Docs**: `http://localhost:8000/docs` (Swagger) or `/redoc` (ReDoc)
 
-### Frontend
-- **Vue 3** - Progressive JavaScript framework
-- **Vite** - Next-generation build tool
-- **Vue Router** - Official routing library
-- **Pinia** - State management
-- **Axios** - HTTP client
+## 🛠️ Tech Stack
 
-## ⚙️ Configuration Architecture
+**Backend:** FastAPI, SQLAlchemy, LangChain, Alembic, Pydantic, Pytest  
+**Frontend:** Vue 3, Vite, Vue Router, Pinia, TailwindCSS, Axios  
+**Databases:** PostgreSQL, MySQL, SQLite  
+**Vector Stores:** Chroma, Qdrant, Pinecone, Weaviate, Milvus  
+**LLMs:** OpenAI (GPT-3.5/4), Google Gemini, HuggingFace, Llama.cpp  
+**Embeddings:** HuggingFace, OpenAI, Google, Cohere, Voyage AI
 
-RAG Fortress uses a **modular configuration system** for improved maintainability:
+## ⚙️ Configuration
 
-### Modular Settings Structure
-```python
-Settings (Main)
-├── AppSettings         # General app config
-├── LLMSettings        # LLM providers (OpenAI, Google, HuggingFace)
-├── EmbeddingSettings  # Embedding providers (5 options)
-└── VectorDBSettings   # Vector databases (5 options)
-```
+RAG Fortress uses environment variables for all configuration. Key settings:
+
+### Required
+- `SECRET_KEY` - JWT secret
+- `DATABASE_URL` - Database connection string
+- `LLM_PROVIDER` - Primary LLM (openai/google/huggingface/llamacpp)
+- `EMBEDDING_PROVIDER` - Embedding provider (huggingface/openai/google/cohere/voyage)
+- `VECTOR_DB_PROVIDER` - Vector database (chroma/qdrant/pinecone/weaviate/milvus)
+- Provider-specific API keys (OPENAI_API_KEY, GOOGLE_API_KEY, etc.)
+
+### Optional
+- `FALLBACK_LLM_PROVIDER` - Automatic LLM fallback
+- `INTERNAL_LLM_PROVIDER` - Separate LLM for sensitive operations
+- `RERANKER_PROVIDER` - Cohere/HuggingFace reranking
+- `ENABLE_CACHING` - Query result caching
+- `CHUNK_SIZE` / `CHUNK_OVERLAP` - Document chunking parameters
+- `TOP_K_RESULTS` / `SIMILARITY_THRESHOLD` - Retrieval parameters
+
+See `.env.example` files for complete configuration options.
 
 ### Supported Providers
 
-#### LLM Providers
-- **OpenAI**: GPT-3.5, GPT-4 models
-- **Google**: Gemini Pro models
-- **HuggingFace**: Llama, Flan-T5, and more
-- **Fallback**: Automatic fallback with smart defaults
+**LLMs:** OpenAI (GPT-4/5), Google Gemini, HuggingFace, Llama.cpp  
+**Embeddings:** HuggingFace (free), OpenAI, Google, Cohere, Voyage AI  
+**Vector DBs:** Qdrant (recommended), Pinecone, Weaviate, Milvus, Chroma (dev only)
 
-#### Embedding Providers
-- **HuggingFace**: Sentence Transformers (default, free)
-- **OpenAI**: text-embedding models
-- **Google**: Gemini embeddings
-- **Cohere**: embed-english models
-- **Voyage AI**: voyage-2 model
+> **⚠️ Python 3.14 Compatibility**  
+> Chroma requires Python ≤3.13 due to pydantic v1 dependencies. Use Qdrant/Pinecone/Weaviate for Python 3.14+, or downgrade to Python 3.12. Fix pending in [chromadb PR #5555](https://github.com/chroma-core/chroma/pull/5555).
 
-#### Vector Databases
-- **Chroma**: Development only
-- **Qdrant**: Recommended for production
-- **Pinecone**: Fully managed
-- **Weaviate**: Open-source
-- **Milvus**: High-performance
+## 🧪 Testing
 
-### Core Features
-- ✅ **Multi-Provider Support**: Switch between providers with environment variables
-- ✅ **Fallback LLM**: Automatic fallback if primary LLM fails
-- ✅ **Environment Validation**: Production restrictions (e.g., Chroma blocked)
-- ✅ **Comprehensive Testing**: 93+ test cases covering all configurations
-- ✅ **Exception Handling**: 26 custom exception types with proper handlers
-- ✅ **Structured Logging**: Colored console output + rotating file logs
+```bash
+cd backend
+pytest  # Run all tests (93+ test cases)
+pytest tests/test_services/  # Specific test directory
+pytest -v  # Verbose output
+pytest --cov=app  # Coverage report
+```
 
-📚 **Documentation**: See `backend/docs/settings-architecture.md` for detailed configuration guide
+## 🚢 Deployment
 
-## 📝 Development Workflow
+**Database Migrations:**
+```bash
+cd backend
+alembic upgrade head  # Apply migrations
+alembic revision --autogenerate -m "description"  # Create new migration
+```
 
-1. **Backend Development**: Work in the `backend/` directory
-   - Add routes in `app/routes/`
-   - Implement business logic in `app/services/`
-   - Define data models in `app/models/` and `app/schemas/`
+**Production:**
+```bash
+# Backend
+python run_production.py  # Uses Gunicorn with multiple workers
 
-2. **Frontend Development**: Work in the `frontend/` directory
-   - Create components in `src/components/`
-   - Add views/pages in `src/views/`
-   - API calls go through `src/services/api.js`
+# Frontend
+npm run build  # Creates dist/ folder for static hosting
+```
 
-3. **Testing**
-   - Backend: `pytest` in `backend/tests/`
-   - Frontend: Jest/Vitest (to be configured)
-
-## 🔐 Environment Variables
-
-### Backend (.env)
-
-#### Application Settings
-- `APP_NAME` - Application name (default: "RAG Fortress")
-- `APP_DESCRIPTION` - Short description used in branding and emails (default: "Secure document intelligence platform")
-- `ENVIRONMENT` - Environment (development/staging/production)
-- `DEBUG` - Debug mode (auto-disabled in production)
-- `SECRET_KEY` - JWT secret key (required)
-- `DATABASE_URL` - Database connection string
-
-#### LLM Configuration
-- `LLM_PROVIDER` - Primary LLM (openai/google/huggingface/llamacpp)
-- `OPENAI_API_KEY` - OpenAI API key
-- `GOOGLE_API_KEY` - Google Gemini API key
-- `HF_API_TOKEN` - HuggingFace API token
-- `LLAMACPP_MODEL_PATH` - Local llama.cpp GGUF path (only required if not using the endpoint)
-- `LLAMACPP_ENDPOINT_URL` / `LLAMACPP_ENDPOINT_API_KEY` / `LLAMACPP_ENDPOINT_MODEL` (optional) - Preferred OpenAI-compatible llama.cpp HTTP endpoint; leave `LLAMACPP_MODEL_PATH` unset when pointing at a remote model.
-- `FALLBACK_LLM_PROVIDER` - Fallback LLM provider (optional)
-- `INTERNAL_LLM_PROVIDER` / `INTERNAL_LLM_API_KEY` / `INTERNAL_LLM_MODEL` - Internal model overrides (used for sensitive data)
-- `INTERNAL_LLAMACPP_ENDPOINT_URL` / `INTERNAL_LLAMACPP_ENDPOINT_MODEL` / `INTERNAL_LLAMACPP_ENDPOINT_API_KEY` - Internal endpoint-style llama.cpp configuration; works without a local model path.
-
-#### Embedding Configuration
-- `EMBEDDING_PROVIDER` - Embedding provider (huggingface/openai/google/cohere/voyage)
-- Provider-specific API keys and models
-
-#### Vector Database Configuration
-- `VECTOR_DB_PROVIDER` - Vector DB (chroma/qdrant/pinecone/weaviate/milvus)
-- Provider-specific connection settings
-
-#### RAG Parameters
-- `CHUNK_SIZE` - Document chunk size (default: 1000)
-- `CHUNK_OVERLAP` - Chunk overlap (default: 200)
-- `TOP_K_RESULTS` - Top-K retrieval (default: 5)
-- `SIMILARITY_THRESHOLD` - Similarity threshold (default: 0.7)
-
-📝 **See `.env.example` for complete list and documentation**
-
-### Frontend (.env)
-- `VITE_API_BASE_URL` - Backend API URL (default: http://localhost:8000)
-
-## 📚 API Documentation
-
-Once the backend is running, visit:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
+**Environment:** Set `ENVIRONMENT=production` to enable production safeguards (blocks Chroma, enforces HTTPS, etc.)
 
 ## 🤝 Contributing
 
-1. Create a feature branch
-2. Make your changes
-3. Write/update tests
-4. Submit a pull request
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📄 License
 
-See [LICENSE](LICENSE) file for details.
+This project is licensed under the terms in the [LICENSE](LICENSE) file.
 
-## 🗺️ Roadmap
+## 📞 Support
 
-- [ ] Core RAG pipeline implementation
-- [ ] Document upload & processing
-- [ ] Vector database integration
-- [ ] LLM query interface
-- [ ] User authentication
-- [ ] Document management UI
-- [ ] Advanced search features
-- [ ] Deployment configurations
+- **Documentation**: See `backend/docs/` for detailed guides
+- **API Reference**: `http://localhost:8000/docs`
+- **Issues**: Submit via GitHub Issues
+
+---
+
+Built with ❤️ using FastAPI and Vue.js
