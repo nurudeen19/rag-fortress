@@ -33,7 +33,7 @@ def with_user_relations(query: Any, include_profile: bool = True, include_depart
         
     Example:
         # Load users with all relationships
-        query = select(User).where(User.is_active == True)
+        query = select(User).where(User.is_active.is_(True))
         query = with_user_relations(query)
         result = await session.execute(query)
         users = result.scalars().all()

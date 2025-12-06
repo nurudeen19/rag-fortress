@@ -447,7 +447,7 @@ class OverrideRequestService:
                     and_(
                         PermissionOverride.status == OverrideStatus.PENDING.value,
                         PermissionOverride.override_type == OverrideType.DEPARTMENT.value,
-                        PermissionOverride.auto_escalated == False,
+                        PermissionOverride.auto_escalated.is_(False),
                         PermissionOverride.created_at <= cutoff_time
                     )
                 )

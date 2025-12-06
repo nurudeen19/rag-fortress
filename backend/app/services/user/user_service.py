@@ -277,7 +277,7 @@ class UserAccountService:
             query = select(User).options(selectinload(User.roles))
             
             if active_only:
-                query = query.where(User.is_active == True)
+                query = query.where(User.is_active.is_(True))
             
             if department_id:
                 query = query.where(User.department_id == department_id)

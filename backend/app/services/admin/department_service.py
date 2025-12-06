@@ -132,7 +132,7 @@ class DepartmentService:
             query = select(Department)
             
             if active_only:
-                query = query.where(Department.is_active == True)
+                query = query.where(Department.is_active.is_(True))
             
             query = query.offset(skip).limit(limit)
             

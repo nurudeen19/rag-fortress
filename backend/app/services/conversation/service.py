@@ -98,7 +98,7 @@ class ConversationService:
             and_(
                 Conversation.id == conversation_id,
                 Conversation.user_id == user_id,
-                Conversation.is_deleted == False,
+                Conversation.is_deleted.is_(False),
             )
         )
         result = await self.session.execute(stmt)
@@ -144,7 +144,7 @@ class ConversationService:
             stmt = select(Conversation).where(Conversation.user_id == user_id)
             
             if not include_deleted:
-                stmt = stmt.where(Conversation.is_deleted == False)
+                stmt = stmt.where(Conversation.is_deleted.is_(False))
             
             # Order by most recent activity
             stmt = stmt.order_by(Conversation.last_message_at.desc())
@@ -152,7 +152,7 @@ class ConversationService:
             # Count total (without pagination)
             count_stmt = select(Conversation).where(Conversation.user_id == user_id)
             if not include_deleted:
-                count_stmt = count_stmt.where(Conversation.is_deleted == False)
+                count_stmt = count_stmt.where(Conversation.is_deleted.is_(False))
             
             count_result = await self.session.execute(count_stmt)
             total = len(count_result.scalars().all())

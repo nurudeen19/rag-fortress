@@ -60,7 +60,7 @@ class NotificationService:
         return notifications, total
 
     async def get_unread_count(self, user_id: int) -> int:
-        stmt = select(Notification).where(Notification.user_id == user_id, Notification.is_read == False)
+        stmt = select(Notification).where(Notification.user_id == user_id, Notification.is_read.is_(False))
         result = await self.session.execute(stmt)
         return len(result.scalars().all())
 
@@ -74,7 +74,7 @@ class NotificationService:
         return True
 
     async def mark_all_read(self, user_id: int) -> int:
-        stmt = select(Notification).where(Notification.user_id == user_id, Notification.is_read == False)
+        stmt = select(Notification).where(Notification.user_id == user_id, Notification.is_read.is_(False))
         result = await self.session.execute(stmt)
         notifs = result.scalars().all()
         for n in notifs:

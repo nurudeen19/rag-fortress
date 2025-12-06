@@ -220,7 +220,7 @@ class PasswordService:
             result = await self.session.execute(
                 select(PasswordResetToken).where(
                     PasswordResetToken.user_id == user_id,
-                    PasswordResetToken.is_used == False
+                    PasswordResetToken.is_used.is_(False)
                 )
             )
             unused_tokens = result.scalars().all()

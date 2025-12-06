@@ -49,7 +49,7 @@ class DocumentLoader:
             # Load all pending approved files (not yet processed)
             stmt = select(FileUpload).where(
                 (FileUpload.status == FileStatus.APPROVED) &
-                (FileUpload.is_processed == False)
+                (FileUpload.is_processed.is_(False))
             ).order_by(FileUpload.created_at)
             logger.info("Loading all pending approved files")
         

@@ -42,7 +42,7 @@ class AdminService:
             result = await self.session.execute(
                 select(func.count(FileUpload.id)).where(
                     (FileUpload.status == FileStatus.APPROVED) &
-                    (FileUpload.is_processed == False)
+                    (FileUpload.is_processed.is_(False))
                 )
             )
             pending_file_count = result.scalar() or 0
