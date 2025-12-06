@@ -180,7 +180,7 @@
         </button>
         <button
           @click="handleInvite"
-          :disabled="!email || !selectedRoleId || loading"
+          :disabled="!email || (invitationLimits?.is_admin && !selectedRoleId) || loading"
           class="btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {{ loading ? 'Sending...' : 'Send Invite' }}
