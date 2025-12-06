@@ -45,7 +45,7 @@ class NotificationService:
     ) -> Tuple[List[Notification], int]:
         stmt = select(Notification).where(Notification.user_id == user_id)
         if is_read is not None:
-            stmt = stmt.where(Notification.is_read == is_read)
+            stmt = stmt.where(Notification.is_read.is_(is_read))
         stmt = stmt.order_by(Notification.created_at.desc()).limit(limit).offset(offset)
 
         result = await self.session.execute(stmt)
@@ -54,7 +54,7 @@ class NotificationService:
         # total count (with same filter sans pagination)
         count_stmt = select(Notification).where(Notification.user_id == user_id)
         if is_read is not None:
-            count_stmt = count_stmt.where(Notification.is_read == is_read)
+            count_stmt = count_stmt.where(Notification.is_read.is_(is_read))
         count_result = await self.session.execute(count_stmt)
         total = len(count_result.scalars().all())
         return notifications, total

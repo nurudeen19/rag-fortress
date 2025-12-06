@@ -884,6 +884,22 @@ async def handle_invite_user(
             logger.warning(f"User {admin_user.id} clearance validation failed: {clearance_error}")
             return {"success": False, "error": clearance_error}
         
+        # Validate is_manager flag
+        if is_manager:
+            # User must be assigned to a department to be a manager
+            if not department_id:
+                return {"success": False, "error": "Cannot assign manager role without specifying a department"}
+            
+            # Only certain roles can be department managers
+            # Typically: admin, manager roles
+            # NOT: user, guest, etc.
+            allowed_manager_roles = {"admin", "manager", "department_manager"}
+            if role.name.lower() not in allowed_manager_roles:
+                return {
+                    "success": False,
+                    "error": f"Role '{role.name}' cannot be assigned as a department manager. Only admin/manager roles can manage departments."
+                }
+        
         # Get role name
         result = await session.execute(select(Role).where(Role.id == role_id))
         role = result.scalar_one_or_none()

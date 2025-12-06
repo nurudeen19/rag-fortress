@@ -78,12 +78,15 @@
             type="checkbox"
             id="manager-checkbox"
             class="w-4 h-4 rounded border-fortress-600 bg-fortress-800 text-secure focus:ring-secure cursor-pointer"
-            :disabled="loading || !selectedDepartmentId"
+            :disabled="loading || !selectedDepartmentId || !canSelectRoleAsManager"
           />
-          <label for="manager-checkbox" class="text-sm text-fortress-300 cursor-pointer" :class="{ 'opacity-50': !selectedDepartmentId }">
+          <label for="manager-checkbox" class="text-sm text-fortress-300 cursor-pointer" :class="{ 'opacity-50': !selectedDepartmentId || !canSelectRoleAsManager }">
             Make this user a manager of the assigned department
           </label>
         </div>
+        <p v-if="!canSelectRoleAsManager && selectedRoleId" class="text-xs text-alert mt-1">
+          Only admin and manager roles can be assigned as department managers
+        </p>
 
         <!-- Organization Clearance Level -->
         <div>
@@ -207,6 +210,19 @@ const orgLevelPermission = ref(1)
 const deptLevelPermission = ref(null)
 const invitationLimits = ref(null)
 
+// Roles that can be assigned as department managers
+const MANAGER_CAPABLE_ROLES = ['admin', 'manager', 'department_manager']
+
+// Computed: Check if selected role can be a department manager
+const canSelectRoleAsManager = computed(() => {
+  if (!selectedRoleId.value) return false
+  
+  const role = props.roles.find(r => r.id === parseInt(selectedRoleId.value))
+  if (!role) return false
+  
+  return MANAGER_CAPABLE_ROLES.includes(role.name.toLowerCase())
+})
+
 // Computed: Available clearance levels based on user's limits
 const availableOrgLevels = computed(() => {
   if (!invitationLimits.value) return []
@@ -216,9 +232,17 @@ const availableOrgLevels = computed(() => {
 })
 
 const availableDeptLevels = computed(() => {
-  if (!invitationLimits.value || !invitationLimits.value.max_dept_clearance) return []
+  if (!invitationLimits.value) return []
   
+  // Check if max_dept_clearance is available
+  // For admins without department assignment, it should be 4 (all levels)
+  // For others, if undefined/null, return empty (no department access)
   const maxLevel = invitationLimits.value.max_dept_clearance
+  if (maxLevel === undefined || maxLevel === null) {
+    // Department clearance not available for this user type
+    return []
+  }
+  
   return invitationLimits.value.clearance_levels.filter(level => level.value <= maxLevel)
 })
 

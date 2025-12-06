@@ -282,6 +282,30 @@ class UserClearanceCache:
         return f"user:clearance:{user_id}"
 
 
-def get_user_clearance_cache(session: AsyncSession) -> UserClearanceCache:
-    """Get UserClearanceCache instance."""
-    return UserClearanceCache(session)
+def get_user_clearance_cache(user_id_or_session, session: Optional[AsyncSession] = None):
+    """
+    Get user clearance information or cache instance.
+    
+    Can be called two ways:
+    1. get_user_clearance_cache(session) -> Returns UserClearanceCache instance
+    2. get_user_clearance_cache(user_id, session) -> Returns coroutine for clearance data
+    
+    Args:
+        user_id_or_session: Either user_id (int) or AsyncSession
+        session: AsyncSession (only when first arg is user_id)
+        
+    Returns:
+        UserClearanceCache instance if called with session only,
+        Coroutine that returns clearance dict if called with user_id and session
+    """
+    # Check if first argument is a session (when called with just session)
+    if isinstance(user_id_or_session, AsyncSession):
+        # get_user_clearance_cache(session) -> return instance
+        return UserClearanceCache(user_id_or_session)
+    else:
+        # get_user_clearance_cache(user_id, session) -> return coroutine
+        user_id = user_id_or_session
+        if session is None:
+            raise ValueError("session parameter required when user_id is provided")
+        cache_instance = UserClearanceCache(session)
+        return cache_instance.get_clearance(user_id)

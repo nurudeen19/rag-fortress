@@ -222,7 +222,12 @@ async def get_invitation_limits(
     
     # Get clearance values
     max_org_clearance = clearance.get("org_clearance_value", 1)
-    max_dept_clearance = clearance.get("dept_clearance_value")
+    # For admins with no department, allow all clearance levels (4)
+    # For others, use their actual department clearance
+    if is_admin and clearance.get("dept_clearance_value") is None:
+        max_dept_clearance = 4  # Admins can assign any clearance level
+    else:
+        max_dept_clearance = clearance.get("dept_clearance_value")
     
     # Build clearance level options
     clearance_levels = [
