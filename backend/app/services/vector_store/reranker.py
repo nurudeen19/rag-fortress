@@ -36,7 +36,6 @@ class RerankerService:
             try:
                 from sentence_transformers import CrossEncoder
                 self._model = CrossEncoder(self.model_name)
-                logger.info(f"✓ Cross-encoder model loaded: {self.model_name}")
             except ImportError:
                 logger.error(
                     "sentence-transformers not installed. "
@@ -88,10 +87,10 @@ class RerankerService:
             reranked_docs = [doc for doc, _ in top_results]
             reranked_scores = [float(score) for _, score in top_results]
             
-            logger.info(
-                f"Reranked {len(documents)} documents, returning top {len(reranked_docs)} "
-                f"(scores: {[f'{s:.3f}' for s in reranked_scores]})"
-            )
+            # logger.info(
+            #     f"Reranked {len(documents)} documents, returning top {len(reranked_docs)} "
+            #     f"(scores: {[f'{s:.3f}' for s in reranked_scores]})"
+            # )
             
             return reranked_docs, reranked_scores
         

@@ -671,26 +671,40 @@ const sendMessage = async () => {
 
   let conversationId = activeChat.value?.id
   let createdConversation = false
+  let newConversation = null
 
   try {
     // Create conversation if needed (new chat)
     if (!conversationId || route.params.id === 'new') {
       suppressAutoLoad.value = true
-      // Create conversation without navigation - we'll update URL after streaming
-      const conversation = await createConversation(userMessage, false)
-      conversationId = conversation.id
+      // Create conversation without navigation or activeChat update
+      // We'll update both after streaming completes to prevent UI disruption
+      newConversation = await createConversation(userMessage, false, false)
+      conversationId = newConversation.id
       createdConversation = true
+      
+      // DON'T update activeChat yet - wait until after streaming completes
+      // This prevents ChatModeLayout's router-view from remounting
     }
 
     // Stream assistant response (updates the placeholder in-place)
     await streamAssistantResponse(conversationId, userMessage)
 
-    // After successful streaming, update URL silently without triggering navigation/reload
+    // After successful streaming, update URL and activeChat silently
     // This preserves the analyzing bubble UX and prevents layout jumps
     if (createdConversation && conversationId) {
-      // Use replaceState to update URL without triggering route watcher
+      // Update activeChat AFTER streaming completes
+      if (newConversation) {
+        activeChat.value = newConversation
+      }
+      
+      // Use history.replaceState for completely silent URL update
+      // This doesn't trigger any Vue Router reactivity or watchers
       const newUrl = `/chat/${conversationId}`
-      window.history.replaceState({ ...window.history.state }, '', newUrl)
+      window.history.replaceState({}, '', newUrl)
+      
+      // Force route params update without navigation
+      route.params.id = conversationId
     }
 
     // Avoid reload of entire message list after streaming to prevent layout jumps.

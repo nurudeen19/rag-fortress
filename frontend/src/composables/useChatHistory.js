@@ -120,9 +120,10 @@ export function useChatHistory() {
    * 
    * @param {string} firstMessage - The first message to use for generating the title
    * @param {boolean} navigate - Whether to navigate to the new conversation (default: false)
+   * @param {boolean} updateActiveChat - Whether to update activeChat immediately (default: true)
    * @returns {Promise<Object>} The created conversation object
    */
-  const createConversation = async (firstMessage, navigate = false) => {
+  const createConversation = async (firstMessage, navigate = false, updateActiveChat = true) => {
     loading.value = true
     error.value = null
     
@@ -138,7 +139,12 @@ export function useChatHistory() {
       
       // Response is already unwrapped by axios interceptor
       chats.value.unshift(newChat)
-      activeChat.value = newChat
+      
+      // Only update activeChat if requested (default true for backwards compatibility)
+      // Caller can defer this to prevent UI remounts during streaming
+      if (updateActiveChat) {
+        activeChat.value = newChat
+      }
       
       // Update cache
       setCache(chats.value)
