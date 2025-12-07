@@ -536,10 +536,66 @@ async def main(args):
     if not await verify_setup():
         logger.error("\nSetup verification failed")
         return 1
-    
+
+    # Run optional reranker availability check during setup (non-blocking)
+    try:
+        reranker_ok = await run_reranker_check()
+        if not reranker_ok:
+            logger.warning("Reranker check did not pass - reranker may be unavailable or misconfigured.")
+            logger.info("To skip this check in future runs, set ENABLE_RERANKER=false in your environment.")
+    except Exception as e:
+        logger.debug(f"Reranker check raised an unexpected error: {e}")
+
     logger.info("\n✓ Setup complete!")
     logger.info("Next: python run.py\n")
     return 0
+
+
+async def run_reranker_check() -> bool:
+    """Optional: verify reranker model is accessible during setup.
+
+    This test is lightweight: it instantiates the reranker service and
+    runs a minimal query against a single dummy document to trigger
+    lazy-loading of the model. Any failures are logged but do not fail
+    the overall setup (non-blocking).
+    """
+    try:
+        app_settings = AppSettings()
+        if not getattr(app_settings, "ENABLE_RERANKER", False):
+            logger.info("Reranker disabled in settings - skipping reranker check")
+            return True
+
+        from app.services.vector_store.reranker import get_reranker_service
+
+        logger.info("Running reranker availability check...")
+        reranker = get_reranker_service()
+
+        # Minimal test document to trigger model download
+        class SimpleDoc:
+            def __init__(self, content):
+                self.page_content = content
+
+        test_query = "test"
+        test_docs = [SimpleDoc("test")]
+
+        try:
+            results, scores = reranker.rerank(test_query, test_docs, top_k=1)
+            if results and len(scores) > 0:
+                logger.info(f"✓ Reranker check passed (model: {reranker.model_name})")
+                return True
+            else:
+                logger.warning("Reranker check returned no results")
+                return False
+        except ImportError:
+            logger.warning("sentence-transformers not installed - skipping reranker check")
+            return False
+        except Exception as e:
+            logger.warning(f"Reranker check failed: {e}")
+            return False
+
+    except Exception as e:
+        logger.debug(f"Unexpected error during reranker check: {e}")
+        return False
 
 
 if __name__ == "__main__":

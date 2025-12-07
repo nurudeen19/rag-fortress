@@ -101,8 +101,10 @@ class StartupController:
             if settings.llm_settings.USE_INTERNAL_LLM:
                 await self._initialize_internal_llm()
             
-            # ========== STEP 8: Reranker (OPTIONAL - pre-download model) ==========
-            await self._initialize_reranker()
+            # ========== STEP 8: Reranker (OPTIONAL) ==========
+            # Reranker initialization/validation moved to setup.py to avoid
+            # performing model availability checks on every application startup.
+            # The reranker service will still be lazy-loaded on first use.
             
             # ========== STEP 9: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
