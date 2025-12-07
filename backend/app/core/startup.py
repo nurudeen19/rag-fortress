@@ -27,6 +27,7 @@ from app.config.settings import settings
 from app.config.database_settings import DatabaseSettings
 from app.jobs import get_job_manager
 from app.jobs.integration import JobQueueIntegration
+from app.services.vector_store.reranker import get_reranker_service
 
 
 logger = get_logger(__name__)
@@ -94,16 +95,19 @@ class StartupController:
             
             # ========== STEP 6: LLM Provider (CRITICAL) ==========
             await self._initialize_llm()
-            # await self._initialize_fallback_llm()
+            await self._initialize_fallback_llm()
 
             # ========== STEP 7: Internal LLM Provider (optional) ==========
             if settings.llm_settings.USE_INTERNAL_LLM:
                 await self._initialize_internal_llm()
             
-            # ========== STEP 7: Email Client (OPTIONAL) ==========
+            # ========== STEP 8: Reranker (OPTIONAL - pre-download model) ==========
+            await self._initialize_reranker()
+            
+            # ========== STEP 9: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
             
-            # ========== STEP 8: Job Queue (OPTIONAL, at end) ==========
+            # ========== STEP 10: Job Queue (OPTIONAL, at end) ==========
             await self._initialize_job_queue()
 
             self.initialized = True
@@ -306,6 +310,54 @@ class StartupController:
 
         except Exception as e:
             logger.warning(f"⚠ Internal LLM initialization skipped: {e}")
+    
+    async def _initialize_reranker(self):
+        """Check if reranker is enabled and model is accessible.
+        
+        Validates reranker configuration by testing model availability.
+        The model is downloaded once and cached locally for subsequent uses.
+        """
+        logger.info("Checking reranker configuration...")
+        
+        try:
+            # Check if reranker is enabled in settings
+            if not settings.app_settings.ENABLE_RERANKER:
+                logger.info("Reranker is disabled (ENABLE_RERANKER=False)")
+                return
+            
+            logger.info("Reranker is enabled, testing model availability...")
+            
+            # Get reranker service instance
+            reranker = get_reranker_service()
+            
+            # Test with minimal query to verify model works and is accessible
+            # This triggers the download once (cached locally after)
+            class SimpleDoc:
+                def __init__(self, content):
+                    self.page_content = content
+            
+            test_query = "test"
+            test_docs = [SimpleDoc("test")]
+            
+            # Minimal rerank test - triggers actual model load/download
+            test_results, test_scores = reranker.rerank(test_query, test_docs, top_k=1)
+            
+            if test_results and len(test_scores) > 0:
+                logger.info(
+                    f"Reranker ready (model: {reranker.model_name}, "
+                    f"cached locally for subsequent queries)"
+                )
+            else:
+                raise RuntimeError("Reranker model test returned no results")
+        
+        except ImportError as e:
+            logger.error(f"Missing reranker dependency: {e}")
+            logger.warning("Install with: pip install sentence-transformers")
+        except Exception as e:
+            logger.error(f"Failed to initialize reranker: {e}")
+            logger.warning(
+                "Reranker unavailable - set ENABLE_RERANKER=false to disable this check"
+            )
     
     async def _initialize_retriever(self):
         """Initialize retriever (optional - catches errors without blocking startup)."""
