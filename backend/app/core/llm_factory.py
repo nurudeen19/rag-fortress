@@ -140,28 +140,32 @@ def _build_llm_from_config(config: dict) -> BaseLanguageModel:
     
     if provider == "huggingface":
         try:
-            from langchain_huggingface import ChatHuggingFace
-            from langchain_community.llms import HuggingFaceEndpoint
+            # New preferred package: langchain-huggingface
+            from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
         except ImportError:
             raise ConfigurationError(
                 "langchain-huggingface not installed. "
                 "Install with: pip install langchain-huggingface"
             )
-        
-        model_kwargs = {
-            "temperature": config.get("temperature", 0.7),
+
+        # Pass generation parameters explicitly (avoid model_kwargs deprecation)
+        hf_kwargs = {
+            "repo_id": config.get("model"),
+            "endpoint_url": config.get("endpoint_url"),
+            "huggingfacehub_api_token": config.get("api_key"),
+            "task": config.get("task", "text-generation"),
+            "timeout": config.get("timeout"),
         }
+
+        # Explicit generation params required by newer LangChain versions
+        temperature = config.get("temperature")
+        if temperature is not None:
+            hf_kwargs["temperature"] = temperature
+
         if config.get("max_tokens") is not None:
-            model_kwargs["max_new_tokens"] = config["max_tokens"]
-        
-        llm = HuggingFaceEndpoint(
-            repo_id=config.get("model"),
-            endpoint_url=config.get("endpoint_url"),
-            huggingfacehub_api_token=config.get("api_key"),
-            task=config.get("task", "text-generation"),
-            timeout=config.get("timeout"),
-            model_kwargs=model_kwargs,
-        )
+            hf_kwargs["max_new_tokens"] = config.get("max_tokens")
+
+        llm = HuggingFaceEndpoint(**hf_kwargs)
         return ChatHuggingFace(llm=llm)
     
     if provider == "llamacpp":
