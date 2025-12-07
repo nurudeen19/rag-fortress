@@ -176,6 +176,10 @@ class InvitationService:
             # Build query
             query = select(UserInvitation).order_by(UserInvitation.created_at.desc())
             
+            # Eager load the invited_by relationship to avoid lazy loading in list comprehension
+            from sqlalchemy.orm import selectinload
+            query = query.options(selectinload(UserInvitation.invited_by))
+            
             # Apply inviter filter (for managers) - use invited_by_id field
             if inviter_id is not None:
                 query = query.where(UserInvitation.invited_by_id == inviter_id)

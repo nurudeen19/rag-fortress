@@ -107,8 +107,12 @@
         <!-- Messages -->
         <div class="max-w-6xl mx-auto space-y-6">
         <template v-for="(message, index) in [...messages].reverse()" :key="index">
+          <!-- Skip assistant placeholder with no content (shown as loading indicator instead) -->
+          <template v-if="message.isPlaceholder && !message.content">
+            <!-- Skip rendering, loading indicator handles this -->
+          </template>
           <!-- User Message -->
-          <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
+          <div v-else-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
             <div class="w-full max-w-[90%] lg:max-w-[85%]">
               <div class="bg-gradient-to-br from-secure/30 to-secure/20 border border-secure/40 rounded-2xl rounded-tr-sm px-6 py-4 shadow-lg">
                 <div class="text-fortress-50 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
@@ -491,7 +495,14 @@ watch(
 const scrollToBottom = async () => {
   await nextTick()
   if (messagesContainer.value) {
-    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+    // Use requestAnimationFrame to ensure layout has settled before scrolling
+    window.requestAnimationFrame(() => {
+      try {
+        messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+      } catch (e) {
+        // ignore
+      }
+    })
   }
 }
 
@@ -535,7 +546,12 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
     }
 
     if (payload.type === 'token') {
-      // Create assistant entry on first token
+      // Use existing assistant placeholder if present, otherwise create one
+      if (!assistantMessage) {
+        // Try to reuse an existing placeholder (pushed by sendMessage)
+        assistantMessage = messages.value.find(m => m.role === 'assistant' && m.isPlaceholder)
+      }
+
       if (!assistantMessage) {
         assistantMessage = {
           role: 'assistant',
@@ -546,6 +562,8 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
         }
         messages.value.push(assistantMessage)
       }
+
+      // Update assistant content in-place to avoid re-rendering the whole list
       assistantMessage.content += payload.content || ''
       assistantMessage.timestamp = new Date().toISOString()
     } else if (payload.type === 'metadata') {
@@ -613,6 +631,11 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
     buffer += decoder.decode(value, { stream: true })
     await processBuffer()
   }
+
+  // Finalize placeholder state: mark it no longer a placeholder so UI can render normally
+  if (assistantMessage && assistantMessage.isPlaceholder) {
+    assistantMessage.isPlaceholder = false
+  }
 }
 
 // Send message
@@ -631,6 +654,18 @@ const sendMessage = async () => {
   messages.value.push(userEntry)
   scrollToBottom()
 
+  // Create assistant placeholder immediately so UI shows analyzing bubble
+  const assistantPlaceholder = {
+    role: 'assistant',
+    content: '',
+    timestamp: new Date().toISOString(),
+    sources: [],
+    error: null,
+    isPlaceholder: true
+  }
+  messages.value.push(assistantPlaceholder)
+  await scrollToBottom()
+
   // Show loading indicator
   loading.value = true
 
@@ -641,19 +676,25 @@ const sendMessage = async () => {
     // Create conversation if needed (new chat)
     if (!conversationId || route.params.id === 'new') {
       suppressAutoLoad.value = true
-      const conversation = await createConversation(userMessage)
+      // Create conversation without navigation - we'll update URL after streaming
+      const conversation = await createConversation(userMessage, false)
       conversationId = conversation.id
       createdConversation = true
     }
 
-    // Stream assistant response (entry will be created when first token arrives)
+    // Stream assistant response (updates the placeholder in-place)
     await streamAssistantResponse(conversationId, userMessage)
 
-    // Only reload from DB if it's an existing conversation (not newly created)
-    // For new conversations, messages are already in memory from streaming
-    if (!createdConversation) {
-      await loadMessagesForConversation(conversationId)
+    // After successful streaming, update URL silently without triggering navigation/reload
+    // This preserves the analyzing bubble UX and prevents layout jumps
+    if (createdConversation && conversationId) {
+      // Use replaceState to update URL without triggering route watcher
+      const newUrl = `/chat/${conversationId}`
+      window.history.replaceState({ ...window.history.state }, '', newUrl)
     }
+
+    // Avoid reload of entire message list after streaming to prevent layout jumps.
+    // The streaming updates the assistant message in-place and persists to DB server-side.
   } catch (error) {
     console.error('Chat error:', error)
     // Error is already handled in streamAssistantResponse

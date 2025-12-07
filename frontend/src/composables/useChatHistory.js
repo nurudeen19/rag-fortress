@@ -114,10 +114,15 @@ export function useChatHistory() {
   }
 
   /**
-   * Create a new chat conversation and navigate to it.
-   * The first user message is sent via the streaming endpoint.
+   * Create a new chat conversation without navigation.
+   * The caller is responsible for handling navigation or URL updates.
+   * This allows streaming to complete before any route changes.
+   * 
+   * @param {string} firstMessage - The first message to use for generating the title
+   * @param {boolean} navigate - Whether to navigate to the new conversation (default: false)
+   * @returns {Promise<Object>} The created conversation object
    */
-  const createConversation = async (firstMessage) => {
+  const createConversation = async (firstMessage, navigate = false) => {
     loading.value = true
     error.value = null
     
@@ -138,8 +143,11 @@ export function useChatHistory() {
       // Update cache
       setCache(chats.value)
       
-      // Navigate to the new chat
-      await router.push('/chat/' + newChat.id)
+      // Only navigate if explicitly requested
+      // For streaming flows, caller should update URL after streaming completes
+      if (navigate) {
+        await router.push('/chat/' + newChat.id)
+      }
       
       return newChat
     } catch (err) {

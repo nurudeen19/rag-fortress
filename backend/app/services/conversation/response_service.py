@@ -99,7 +99,7 @@ class ConversationResponseService:
                 if error_type in ["no_documents", "low_quality_results", "reranker_no_quality"]:
                     try:
                         await activity_logger_service.log_activity(
-                            db=self.db,
+                            db=self.session,
                             user_id=user_id,
                             incident_type="retrieval_no_context",
                             severity="info",

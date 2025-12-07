@@ -301,6 +301,16 @@ const resendInvitation = async (invitationId) => {
 
     if (response.message) {
       // Show success message
+      notification.value = {
+        show: true,
+        type: 'success',
+        message: response.message || `Invitation resent to ${invitationId}`
+      }
+      // Auto-hide notification after 3 seconds
+      setTimeout(() => {
+        notification.value.show = false
+      }, 3000)
+
       await loadInvitations()
     }
   } catch (err) {
