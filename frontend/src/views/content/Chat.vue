@@ -106,7 +106,7 @@
 
         <!-- Messages -->
         <div class="max-w-6xl mx-auto space-y-6">
-        <template v-for="(message, index) in [...messages].reverse()" :key="index">
+        <template v-for="(message, index) in messages" :key="message.id || index">
           <!-- Skip assistant placeholder with no content (shown as loading indicator instead) -->
           <template v-if="message.isPlaceholder && !message.content">
             <!-- Skip rendering, loading indicator handles this -->
@@ -396,12 +396,9 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000
 const currentChatTitle = computed(() => activeChat.value?.title || 'New Conversation')
 
 const currentChatSubtitle = computed(() => {
-  if (activeChat.value) {
-    const messageCount = activeChat.value.message_count || 0
-    const messageText = messageCount === 1 ? 'message' : 'messages'
-    return `${messageCount} ${messageText}`
-  }
-  return 'Start a conversation to unlock insights'
+  // Chat message-count removed — subtitle intentionally minimal.
+  // If there's an active chat we show an empty subtitle; otherwise a prompt.
+  return activeChat.value ? '' : 'Start a conversation to unlock insights'
 })
 
 // Render markdown content
@@ -679,14 +676,32 @@ const sendMessage = async () => {
       suppressAutoLoad.value = true
       // Create conversation without navigation or activeChat update
       // We'll update both after streaming completes to prevent UI disruption
-      newConversation = await createConversation(userMessage, false, false)
-      conversationId = newConversation.id
-      createdConversation = true
-      
-      // DON'T update activeChat yet - wait until after streaming completes
-      // This prevents ChatModeLayout's router-view from remounting
+      try {
+        newConversation = await createConversation(userMessage, false, false)
+        conversationId = newConversation.id
+        createdConversation = true
+        console.log('Created new conversation:', conversationId)
+        
+        // DON'T update activeChat yet - wait until after streaming completes
+        // This prevents ChatModeLayout's router-view from remounting
+      } catch (err) {
+        console.error('Failed to create conversation:', err)
+        // Find assistant placeholder and update with error
+        const placeholder = messages.value.find(m => m.role === 'assistant' && m.isPlaceholder)
+        if (placeholder) {
+          placeholder.error = `Failed to create conversation: ${err.message}`
+          placeholder.isPlaceholder = false
+        }
+        throw err
+      }
     }
 
+    // Validate conversationId before streaming
+    if (!conversationId) {
+      throw new Error('No conversation ID available')
+    }
+
+    console.log('Streaming response for conversation:', conversationId)
     // Stream assistant response (updates the placeholder in-place)
     await streamAssistantResponse(conversationId, userMessage)
 
