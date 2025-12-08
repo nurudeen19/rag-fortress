@@ -29,6 +29,9 @@ class AppSettings(BaseSettings):
     DEBUG: bool = Field(False, env="DEBUG")
     ENVIRONMENT: str = Field("development", env="ENVIRONMENT")
     
+    # Demo Mode - Prevents destructive actions for public demos
+    DEMO_MODE: bool = Field(False, env="DEMO_MODE")
+    
     # Server Configuration
     HOST: str = Field("0.0.0.0", env="HOST")
     PORT: int = Field(8000, env="PORT")

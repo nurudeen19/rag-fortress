@@ -24,6 +24,7 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.models.user import User
 from app.core import get_logger
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.schemas.conversation import (
     ConversationCreateRequest,
     ConversationUpdateRequest,
@@ -171,6 +172,7 @@ async def update_conversation(
 
 
 @router.delete("/{conversation_id}", response_model=SuccessResponse)
+@prevent_in_demo_mode("Delete conversation")
 async def delete_conversation(
     conversation_id: str,
     current_user: User = Depends(get_current_user),

@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
 from app.core.security import get_current_user
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.schemas.user import (
     LoginRequest,
     LoginResponse,
@@ -401,11 +402,12 @@ async def change_password(
 
 
 @router.delete("/me", response_model=SuccessResponse)
+@prevent_in_demo_mode("Delete account")
 async def delete_account(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """Delete current user account (soft delete)."""
+    """Delete current user account (soft delete).\"\"\"
     result = await handle_delete_account(current_user, session)
     
     if not result.get("success"):

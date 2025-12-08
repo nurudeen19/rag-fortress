@@ -48,6 +48,7 @@ from app.schemas.user import (
 )
 from app.models.user import User
 from app.core import get_logger
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.handlers.users import (
     handle_list_users,
     handle_get_user,
@@ -138,6 +139,7 @@ async def get_user_details(
 
 
 @router.post("/users/{user_id}/suspend", response_model=SuccessResponse)
+@prevent_in_demo_mode("Suspend user")
 async def suspend_user(
     user_id: int,
     request: UserSuspendRequest,
@@ -166,6 +168,7 @@ async def suspend_user(
 
 
 @router.post("/users/{user_id}/unsuspend", response_model=SuccessResponse)
+@prevent_in_demo_mode("Unsuspend user")
 async def unsuspend_user(
     user_id: int,
     current_user: User = Depends(get_current_user),
@@ -323,6 +326,7 @@ async def get_user_roles(
 
 
 @router.post("/users/{user_id}/roles", response_model=SuccessResponse)
+@prevent_in_demo_mode("Assign role")
 async def assign_role_to_user(
     user_id: int,
     request: RoleAssignRequest,
@@ -347,6 +351,7 @@ async def assign_role_to_user(
 
 
 @router.delete("/users/{user_id}/roles/{role_id}", response_model=SuccessResponse)
+@prevent_in_demo_mode("Revoke role")
 async def revoke_role_from_user(
     user_id: int,
     role_id: int,
@@ -399,6 +404,7 @@ async def list_roles(
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=201)
+@prevent_in_demo_mode("Create role")
 async def create_role(
     request: CreateRoleRequest,
     admin: User = Depends(require_role("admin")),
@@ -445,6 +451,7 @@ async def list_permissions(
 
 
 @router.post("/permissions", response_model=PermissionResponse, status_code=201)
+@prevent_in_demo_mode("Create permission")
 async def create_permission(
     request: CreatePermissionRequest,
     admin: User = Depends(require_role("admin")),
@@ -470,6 +477,7 @@ async def create_permission(
 
 
 @router.post("/roles/{role_id}/permissions", response_model=SuccessResponse)
+@prevent_in_demo_mode("Assign permission to role")
 async def assign_permission_to_role(
     role_id: int,
     request: AssignPermissionToRoleRequest,
@@ -494,6 +502,7 @@ async def assign_permission_to_role(
 
 
 @router.delete("/roles/{role_id}/permissions/{permission_id}", response_model=SuccessResponse)
+@prevent_in_demo_mode("Revoke permission from role")
 async def revoke_permission_from_role(
     role_id: int,
     permission_id: int,

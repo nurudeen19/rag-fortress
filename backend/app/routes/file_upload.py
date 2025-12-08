@@ -23,6 +23,7 @@ from app.schemas.file_upload import (
 from app.schemas.user import SuccessResponse
 from app.models.user import User
 from app.core import get_logger
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.handlers.file_upload import (
     handle_upload_file,
     handle_get_file,
@@ -44,6 +45,7 @@ router = APIRouter(prefix="/api/v1/files", tags=["files"])
 
 
 @router.post("/upload", response_model=FileUploadResponse, status_code=201)
+@prevent_in_demo_mode("Upload file")
 async def upload_file(
     file: UploadFile = File(...),
     file_purpose: Optional[str] = Query(None),
@@ -328,6 +330,7 @@ async def list_pending_approval(
 
 
 @router.post("/{file_id}/approve", response_model=SuccessResponse)
+@prevent_in_demo_mode("Approve file")
 async def approve_file(
     file_id: int,
     admin: User = Depends(require_role("admin")),
@@ -353,6 +356,7 @@ async def approve_file(
 
 
 @router.post("/{file_id}/reject", response_model=SuccessResponse)
+@prevent_in_demo_mode("Reject file")
 async def reject_file(
     file_id: int,
     reason: str = Form(..., min_length=1),
@@ -393,6 +397,7 @@ async def reject_file(
 
 
 @router.delete("/{file_id}", response_model=SuccessResponse)
+@prevent_in_demo_mode("Delete file")
 async def delete_file(
     file_id: int,
     user: User = Depends(get_current_user),
@@ -412,6 +417,7 @@ async def delete_file(
 
 
 @router.post("/{file_id}/ingest", response_model=SuccessResponse, status_code=202)
+@prevent_in_demo_mode("Manually ingest file")
 async def manual_ingest_file(
     file_id: int,
     admin: User = Depends(require_role("admin")),

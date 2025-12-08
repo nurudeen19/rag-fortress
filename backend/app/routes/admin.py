@@ -7,12 +7,14 @@ from app.core.database import get_session
 from app.core.security import require_role
 from app.models.user import User
 from app.services.permission_service import PermissionService
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.handlers.admin import handle_trigger_batch_ingestion
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
 @router.post("/files/trigger-batch-ingestion")
+@prevent_in_demo_mode("Trigger batch ingestion")
 async def trigger_batch_ingestion(
     admin_user: User =  Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)

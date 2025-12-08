@@ -21,6 +21,7 @@ from app.core.database import get_session
 from app.core.security import get_current_user
 from app.models.user import User
 from app.core import get_logger
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.schemas.department import (
     DepartmentCreateRequest,
     DepartmentUpdateRequest,
@@ -76,6 +77,7 @@ async def list_departments(
 
 
 @router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
+@prevent_in_demo_mode("Create department")
 async def create_department(
     request: DepartmentCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -145,6 +147,7 @@ async def get_department(
 
 
 @router.put("/{department_id}", response_model=DepartmentResponse)
+@prevent_in_demo_mode("Update department")
 async def update_department(
     department_id: int,
     request: DepartmentUpdateRequest,
@@ -183,6 +186,7 @@ async def update_department(
 
 
 @router.delete("/{department_id}", status_code=status.HTTP_204_NO_CONTENT)
+@prevent_in_demo_mode("Delete department")
 async def delete_department(
     department_id: int,
     current_user: User = Depends(get_current_user),
@@ -203,6 +207,7 @@ async def delete_department(
 
 
 @router.post("/{department_id}/manager", response_model=DepartmentResponse)
+@prevent_in_demo_mode("Set department manager")
 async def set_manager(
     department_id: int,
     request: SetManagerRequest,
@@ -238,6 +243,7 @@ async def set_manager(
 
 
 @router.delete("/{department_id}/manager", response_model=DepartmentResponse)
+@prevent_in_demo_mode("Remove department manager")
 async def remove_manager(
     department_id: int,
     current_user: User = Depends(get_current_user),
@@ -271,6 +277,7 @@ async def remove_manager(
 
 
 @router.post("/{department_id}/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@prevent_in_demo_mode("Assign user to department")
 async def assign_user_to_department(
     department_id: int,
     user_id: int,
@@ -293,6 +300,7 @@ async def assign_user_to_department(
 
 
 @router.delete("/{department_id}/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@prevent_in_demo_mode("Remove user from department")
 async def remove_user_from_department(
     department_id: int,
     user_id: int,

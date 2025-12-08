@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import require_role
 from app.models.user import User
+from app.utils.demo_mode import prevent_in_demo_mode
 from app.schemas.settings import (
     SettingResponse,
     SettingCreateRequest,
@@ -90,6 +91,7 @@ async def get_setting(
 
 
 @router.put("/{key}", response_model=SettingResponse)
+@prevent_in_demo_mode("Update setting")
 async def update_setting(
     key: str,
     request: SettingUpdateRequest,
@@ -123,6 +125,7 @@ async def update_setting(
 
 
 @router.post("/", response_model=SettingResponse)
+@prevent_in_demo_mode("Create setting")
 async def create_setting(
     request: SettingCreateRequest,
     admin_user: User = Depends(require_role("admin")),
@@ -155,6 +158,7 @@ async def create_setting(
 
 
 @router.put("/", response_model=SettingBulkUpdateResponse)
+@prevent_in_demo_mode("Bulk update settings")
 async def update_settings_bulk(
     request: SettingBulkUpdateRequest,
     admin_user: User = Depends(require_role("admin")),
