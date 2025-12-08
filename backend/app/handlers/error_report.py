@@ -20,6 +20,10 @@ from typing import Optional, Tuple
 from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Generate filename
+import uuid
+from datetime import datetime
+
 from app.services.error_report_service import ErrorReportService
 from app.models.user import User
 from app.schemas.error_report import (
@@ -127,9 +131,7 @@ async def handle_upload_error_report_image(
     logger.info(f"Uploading image for error report {report_id} by user {user_id}")
     service = ErrorReportService(session)
     
-    # Generate filename
-    import uuid
-    from datetime import datetime
+    
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
     unique_id = uuid.uuid4().hex[:8]
     filename = f"error_report_{report_id}_{timestamp}_{unique_id}_{file.filename}"
@@ -179,12 +181,13 @@ async def handle_get_all_error_reports_admin(
         offset=offset,
     )
     
+    # Map service response into the schema expected by the route
     return ErrorReportListAdminResponse(
-        items=reports,
+        reports=reports,
         total=total,
-        limit=limit,
-        offset=offset,
-        status_counts=status_counts,
+        open_count=status_counts.get("open", 0),
+        investigating_count=status_counts.get("investigating", 0),
+        resolved_count=status_counts.get("resolved", 0),
     )
 
 

@@ -160,7 +160,7 @@ async def get_all_error_reports_admin(
     """Get all error reports (admin only)."""
     try:
         # Check admin status
-        if not getattr(current_user, "is_admin", False):
+        if not current_user.has_role("admin"):
             raise HTTPException(status_code=403, detail="Admin access required")
         
         return await handle_get_all_error_reports_admin(
@@ -187,7 +187,7 @@ async def update_error_report_admin(
     """Update error report status and notes (admin only)."""
     try:
         # Check admin status
-        if not getattr(current_user, "is_admin", False):
+        if not current_user.has_role("admin"):
             raise HTTPException(status_code=403, detail="Admin access required")
         
         success, response = await handle_update_error_report_admin(
