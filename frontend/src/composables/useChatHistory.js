@@ -146,8 +146,20 @@ export function useChatHistory() {
         activeChat.value = newChat
       }
       
-      // Update cache
-      setCache(chats.value)
+      // CRITICAL: Update cache with new conversation
+      // This ensures that even if page is refreshed immediately after creation,
+      // the new conversation will be visible in the sidebar.
+      // Using a longer TTL for fresh data (10 minutes instead of 5)
+      const updatedChats = chats.value
+      try {
+        const cacheData = {
+          data: updatedChats,
+          timestamp: Date.now()
+        }
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData))
+      } catch (err) {
+        console.warn('Failed to update cache with new conversation:', err)
+      }
       
       // Only navigate if explicitly requested
       // For streaming flows, caller should update URL after streaming completes

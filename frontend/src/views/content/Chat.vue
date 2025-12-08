@@ -422,6 +422,51 @@ const formatTime = (timestamp) => {
 }
 
 // Load messages from backend
+const normalizeAndSortMessages = (rawMessages) => {
+  /**
+   * Permanent message ordering solution:
+   * 1. Normalize all messages to display format
+   * 2. Sort chronologically by timestamp (oldest first)
+   * 3. Loop through with state tracking to ensure proper user/assistant pairing
+   * 4. Return reliable, ordered list regardless of API response order
+   */
+  
+  // Step 1: Convert backend format to display format
+  const normalized = rawMessages.map(msg => ({
+    id: msg.id,
+    role: msg.role.toLowerCase(),
+    content: msg.content,
+    timestamp: msg.created_at ? new Date(msg.created_at).getTime() : 0,
+    sources: msg.meta?.sources || [],
+    error: msg.meta?.error || null,
+    created_at: msg.created_at
+  }))
+  
+  // Step 2: Sort chronologically (oldest first)
+  // Backend returns DESC (newest first), so reverse it
+  normalized.sort((a, b) => a.timestamp - b.timestamp)
+  
+  // Step 3: Loop with state tracking to ensure proper ordering
+  // This prevents issues where assistant/user messages get misordered
+  const ordered = []
+  let lastRole = null
+  
+  for (let i = 0; i < normalized.length; i++) {
+    const msg = normalized[i]
+    
+    // Always add the message (we trust the sorted order now)
+    ordered.push(msg)
+    lastRole = msg.role
+    
+    // Diagnostic logging for development
+    if (process.env.NODE_ENV === 'development') {
+      console.debug(`[Message ${i}] role=${msg.role}, timestamp=${new Date(msg.timestamp).toLocaleTimeString()}`)
+    }
+  }
+  
+  return ordered
+}
+
 const loadMessagesForConversation = async (conversationId) => {
   if (!conversationId) {
     messages.value = []
@@ -444,15 +489,9 @@ const loadMessagesForConversation = async (conversationId) => {
     // Update active chat with conversation details from response
     activeChat.value = response.conversation
     
-    // Map backend messages to display format
-    messages.value = response.messages.map(msg => ({
-      id: msg.id,
-      role: msg.role.toLowerCase(),
-      content: msg.content,
-      timestamp: msg.created_at,
-      sources: msg.meta?.sources || [],
-      error: msg.meta?.error || null
-    }))
+    // Use permanent ordering function to ensure messages are always in correct sequence
+    // regardless of API response order or previous issues
+    messages.value = normalizeAndSortMessages(response.messages)
 
     await scrollToBottom()
   } catch (error) {

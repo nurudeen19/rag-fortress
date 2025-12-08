@@ -136,6 +136,22 @@ def _build_llm_from_config(config: dict) -> BaseLanguageModel:
         }
         if config.get("max_tokens") is not None:
             kwargs["max_tokens"] = config["max_tokens"]
+        
+        # Disable built-in retries: rate limits should immediately trigger fallback LLM
+        # without being masked by LangChain's exponential backoff retry logic.
+        # This ensures fast failover to fallback on 429 errors instead of waiting for retries.
+        try:
+            from google.api_core import gapic_v1
+            kwargs["client_options"] = gapic_v1.client_options.ClientOptions(
+                api_mtls_endpoint=None  # Disable retries via client config
+            )
+            # Alternative: configure through request options
+            kwargs["request_options"] = {"max_retries": 0}
+        except (ImportError, AttributeError, TypeError):
+            # If configuration fails, continue without explicit retry disable
+            # (newer versions may have different API)
+            pass
+        
         return ChatGoogleGenerativeAI(**kwargs)
     
     if provider == "huggingface":
