@@ -138,15 +138,12 @@ PASSWORD_RESET_TOKEN_EXPIRE_MINUTES=60
 INVITE_TOKEN_EXPIRE_DAYS=7
 
 # Frontend URLs (for email links)
-FRONTEND_URL=http://localhost:5173
-EMAIL_VERIFICATION_URL=http://localhost:5173/verify-email
-PASSWORD_RESET_URL=http://localhost:5173/reset-password
-INVITE_URL=http://localhost:5173/accept-invite
+passed from the frontend as url template which the backend attaches
 ```
 
 ### Configuration File
 
-All email settings are defined in `app/config/app_settings.py` and loaded automatically via Pydantic BaseSettings from environment variables.
+All email settings are defined in `app/config/email_settings.py` and loaded automatically via Pydantic BaseSettings from environment variables.
 
 ```python
 from app.config.settings import settings
@@ -164,61 +161,6 @@ Email configuration is validated at application startup:
 - Cannot use both TLS and SSL simultaneously
 - Optional (doesn't fail if email not configured)
 
-## Usage Examples
-
-### Using Convenience Functions
-
-```python
-from app.services.email_service import (
-    send_account_activation_email,
-    send_password_reset_email,
-    send_invitation_email,
-    send_notification_email,
-)
-
-# Account activation
-await send_account_activation_email(
-    recipient_email="user@example.com",
-    recipient_name="John Doe",
-    activation_token="abc123"
-)
-
-# Password reset
-await send_password_reset_email(
-    recipient_email="user@example.com",
-    recipient_name="John Doe",
-    reset_token="xyz789"
-)
-```
-
-### Integrating with FastAPI Routes
-
-```python
-from fastapi import APIRouter, HTTPException
-from app.services.email_service import send_account_activation_email
-
-router = APIRouter()
-
-@router.post("/register")
-async def register_user(request: RegisterRequest):
-    # Create user in database
-    user = await create_user(request.email, request.password)
-    
-    # Generate token
-    token = generate_verification_token(user.id)
-    
-    # Send activation email
-    success = await send_account_activation_email(
-        recipient_email=user.email,
-        recipient_name=user.full_name,
-        activation_token=token
-    )
-    
-    if not success:
-        raise HTTPException(status_code=500, detail="Failed to send activation email")
-    
-    return {"message": "User created. Verification email sent."}
-```
 
 ### Using Background Tasks
 
