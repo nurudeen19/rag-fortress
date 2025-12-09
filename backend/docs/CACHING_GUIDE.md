@@ -2,7 +2,7 @@
 
 ## Overview
 
-RAG Fortress implements a flexible caching layer that supports both **Redis** (production) and **in-memory** (development) backends. The system uses a **cache-aside pattern** with automatic invalidation on data changes.
+RAG Fortress implements a flexible caching layer that supports both **Redis** and **in-memory** backends. The system uses a **cache-aside pattern** with automatic invalidation on data changes.
 
 ## Architecture
 
@@ -10,8 +10,8 @@ RAG Fortress implements a flexible caching layer that supports both **Redis** (p
 
 1. **Cache Backend** (`app/core/cache.py`)
    - Abstract interface supporting multiple backends
-   - Redis backend (production)
-   - In-memory backend (development/testing)
+   - Redis backend 
+   - In-memory backend 
 
 2. **Cache Manager** (`app/core/cache.py`)
    - Unified API for cache operations
@@ -117,24 +117,58 @@ await cache.delete("user:123")
 await cache.invalidate_pattern("user:*")
 ```
 
-### 2. Decorator-Based Caching
+### 2. Helper-based Caching (no built-in decorator)
+
+The core cache implementation (`app/core/cache.py`) exposes a `Cache` API and a global `get_cache()` helper.
+
+Example: direct use
 
 ```python
-from app.core.cache import cached
 from datetime import timedelta
+from app.core.cache import get_cache
 
-@cached("user_profile", ttl=timedelta(minutes=5))
-async def get_user_profile(user_id: int):
-    # This will be cached automatically
-    return await db.query(User).filter(User.id == user_id).first()
+async def get_user_profile_cached(user_id: int):
+    cache = get_cache()
+    key = f"user:profile:{user_id}"
+    data = await cache.get(key)
+    if data is not None:
+        return data
 
-# Custom key builder
-@cached("file_stats", key_builder=lambda user_id: f"user_{user_id}")
-async def get_file_stats(user_id: int):
-    return await calculate_stats(user_id)
+    # Fallback to DB and then cache
+    profile = await db.query(User).filter(User.id == user_id).first()
+    await cache.set(key, profile, ttl=int(timedelta(minutes=5).total_seconds()))
+    return profile
 ```
 
-### 3. Statistics Caching (Recommended)
+Example: minimal async decorator using the cache
+
+```python
+from functools import wraps
+from app.core.cache import get_cache
+from datetime import timedelta
+
+def simple_cached(key_builder, ttl: timedelta):
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            cache = get_cache()
+            key = key_builder(*args, **kwargs)
+            val = await cache.get(key)
+            if val is not None:
+                return val
+            result = await func(*args, **kwargs)
+            await cache.set(key, result, ttl= int(ttl.total_seconds()))
+            return result
+        return wrapper
+    return decorator
+
+# Usage
+@simple_cached(lambda user_id: f"user:profile:{user_id}", ttl=timedelta(minutes=5))
+async def get_user_profile(user_id: int):
+    return await db.query(User).filter(User.id == user_id).first()
+```
+
+### 3. Statistics Caching
 
 ```python
 from app.services.stats_cache import StatsCache
@@ -153,20 +187,26 @@ user_stats = await StatsCache.get_file_stats(session, user_id=123)
 
 ### Automatic Invalidation
 
-The system automatically invalidates relevant cache entries when data changes:
+The system should invalidate relevant cache entries when the underlying data changes. The cache implementation provides `delete` and `invalidate_pattern` for this purpose; how you trigger invalidation is up to your application logic (handlers, services, or background jobs).
+
+General examples:
 
 ```python
-# When file is uploaded
-await on_file_upload_created(file_id, user_id)
-# Invalidates: user file stats + global file stats
+# Example: resource created
+await on_resource_created(resource_type="document", resource_id=123)
+# Suggested invalidation: invalidate listings or summaries for that resource type
+await cache.invalidate_pattern("documents:list*")
 
-# When file status changes
-await on_file_status_changed(file_id, user_id, old_status, new_status)
-# Invalidates: user file stats + global file stats
+# Example: resource updated
+await on_resource_updated(resource_type="document", resource_id=123)
+# Suggested invalidation: invalidate the resource's cache key and any derived summaries
+await cache.delete(f"document:{123}")
+await cache.invalidate_pattern("documents:*summary*")
 
-# When job status changes
-await on_job_status_changed(job_id, old_status, new_status)
-# Invalidates: global job stats
+# Example: job status changed
+await on_job_status_changed(job_id=42, old_status="running", new_status="completed")
+# Suggested invalidation: job status caches and any dashboards
+await cache.invalidate_pattern("jobs:*")
 ```
 
 ### Manual Invalidation
@@ -183,33 +223,23 @@ await StatsCache.invalidate_job_stats()               # Job stats
 await StatsCache.invalidate_all_stats()
 ```
 
-### Cache Warming
 
-Pre-populate cache after bulk operations:
-
-```python
-from app.services.stats_cache import StatsCache
-
-# Warm cache with common stats
-await StatsCache.warm_cache(session)
-```
 
 ## Integration Points
 
-### 1. Handlers (Automatic Invalidation)
+### 1. Event handlers (Automatic Invalidation)
 
-Cache invalidation is integrated into file upload handlers:
+Cache invalidation is typically triggered from event handlers when resources change. Keep handlers generic (resource type + id) and let service-layer code decide which cache keys/patterns to invalidate.
 
 ```python
-# app/handlers/file_upload.py
-
-async def handle_upload_file(...):
-    # ... upload logic ...
+# app/handlers/resource.py
+async def handle_create_resource(resource_type: str, resource_id: int, session):
+    # ... create logic ...
     await session.commit()
-    
-    # Invalidate cache
-    from app.services.stats_cache import on_file_upload_created
-    await on_file_upload_created(file_upload.id, user.id)
+
+    # Trigger domain-level invalidation
+    from app.services.cache_invalidation import on_resource_created
+    await on_resource_created(resource_type, resource_id)
 ```
 
 ### 2. Routes (Cached Endpoints)
@@ -237,16 +267,16 @@ async def get_job_status(
 
 ### 3. Job Handlers (Bulk Operations)
 
-After bulk operations, warm the cache:
+After bulk operations, warm or rebuild caches for the affected resource sets. Use service-layer warming functions to avoid hammering the cache from many concurrent workers.
 
 ```python
-# After ingesting multiple files
-async def bulk_ingest_handler():
-    # ... ingest files ...
-    
-    # Warm cache for quick access
-    from app.services.stats_cache import StatsCache
-    await StatsCache.warm_cache(session)
+# After processing many resources
+async def bulk_process_handler():
+    # ... processing logic ...
+
+    # Warm cache for quick access (example service)
+    from app.services.cache_warmer import warm_resource_caches
+    await warm_resource_caches(session, resource_type="document")
 ```
 
 ## Best Practices
@@ -293,23 +323,6 @@ return {
     "cache_backend": settings.cache_backend
 }
 ```
-
-## Migration Path
-
-### Phase 1: Development (Current)
-- Use in-memory cache
-- Test cache behavior
-- Verify invalidation logic
-
-### Phase 2: Staging
-- Deploy Redis instance
-- Switch to Redis backend
-- Monitor performance
-
-### Phase 3: Production
-- Redis cluster (if needed)
-- Enable persistence
-- Set up monitoring/alerts
 
 ## Troubleshooting
 
@@ -406,32 +419,3 @@ async def get_cache_stats():
         "size": cache.get_size()
     }
 ```
-
-## Performance Impact
-
-### Before Caching (Direct DB Queries)
-- Job stats endpoint: ~50-100ms
-- File stats endpoint: ~100-200ms
-- Repeated queries: N * query_time
-
-### After Caching
-- First request: ~50-100ms (cache miss)
-- Subsequent requests: ~1-5ms (cache hit)
-- **95% reduction in response time**
-
-### Memory Usage
-
-- In-memory backend: ~10-50MB (depends on data)
-- Redis backend: ~20-100MB (with persistence)
-
-## Summary
-
-The caching layer provides:
-
-✅ **Performance**: 95% faster for cached queries  
-✅ **Scalability**: Redis clustering for growth  
-✅ **Flexibility**: Easy switch between backends  
-✅ **Reliability**: Graceful fallback on cache failures  
-✅ **Maintainability**: Automatic invalidation on changes  
-
-Start with in-memory cache for development, then switch to Redis for production. The system handles both seamlessly.
