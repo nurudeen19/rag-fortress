@@ -25,7 +25,6 @@ keywords = [
     "qdrant",
     "pinecone",
     "chroma",
-    "faiss",
     "embeddings",
     "rbac",
     "multi-tenant",

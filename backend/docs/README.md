@@ -11,13 +11,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 ### Core Guides
 
 #### Configuration & Settings
-- [Settings Guide](SETTINGS_GUIDE.md) - Complete configuration reference
-  - Application settings
-  - LLM providers (OpenAI, Google, HuggingFace, Llama.cpp)
-  - Embedding providers (5 options)
-  - Vector databases (5 options)
-  - SQL databases (PostgreSQL, MySQL, SQLite)
-  - Fallback LLM configuration
+- [Settings Guide](SETTINGS_GUIDE.md) - Complete configuration reference (covers application, LLMs, embeddings, vector DBs, databases, prompts, email, cache, demo mode, and seeder control)
 
 - [Fallback LLM Guide](FALLBACK_LLM_GUIDE.md) - Automatic failover configuration
 
@@ -74,6 +68,8 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Configuration options
   - Available seeders
   - Adding new seeders
+
+- [Installation Guide](installation-guide.md) - Includes `uv` package manager usage and seeder execution examples
 
 #### Background Jobs
 - [Jobs Guide](JOBS_GUIDE.md) - Background task management
