@@ -19,32 +19,26 @@ Enterprise-grade Retrieval-Augmented Generation (RAG) platform with role-based a
 
 ## 🚀 Quick Start
 
-### Prerequisites
+See **[Installation Guide](backend/INSTALLATION.md)** for complete setup instructions.
 
-- Python 3.9-3.13 (3.14 not compatible with Chroma - see compatibility notice below)
-- Node.js 18+
-- PostgreSQL/MySQL/SQLite
-- API key for at least one LLM provider (OpenAI, Google, or HuggingFace)
-
-### Installation
+### TL;DR
 
 **Backend:**
 ```bash
 cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env  # Configure your API keys and database
-python setup.py  # Initialize database with seeders
-python run.py  # Start server on http://localhost:8000
+uv sync                    # Install dependencies
+.venv\Scripts\Activate     # Activate environment (Windows) or source .venv/bin/activate (macOS/Linux)
+cp .env.example .env       # Configure your API keys and database
+python setup.py            # Initialize database with migrations and seeders
+python run.py              # Start server on http://localhost:8000
 ```
 
 **Frontend:**
 ```bash
 cd frontend
 npm install
-cp .env.example .env  # Configure API URL
-npm run dev  # Start on http://localhost:5173
+cp .env.example .env       # Configure API URL
+npm run dev                # Start on http://localhost:5173
 ```
 
 **Default Credentials:**
@@ -55,7 +49,7 @@ npm run dev  # Start on http://localhost:5173
 
 ## 📚 Documentation
 
-- **[Installation Guide](backend/docs/installation-guide.md)** - Detailed setup instructions
+- **[Installation Guide](backend/docs/INSTALLATION.md)** - Complete setup with uv, prerequisites, and troubleshooting
 - **[Quick Start: Ingestion](backend/docs/quick-start-ingestion.md)** - Document upload workflow
 - **[Settings Architecture](backend/docs/complete-settings-architecture.md)** - Configuration deep dive
 - **[Migrations Guide](backend/docs/MIGRATIONS_GUIDE.md)** - Database migrations

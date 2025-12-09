@@ -407,7 +407,7 @@ async def delete_account(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """Delete current user account (soft delete).\"\"\"
+    """Delete current user account (soft delete)."""
     result = await handle_delete_account(current_user, session)
     
     if not result.get("success"):
