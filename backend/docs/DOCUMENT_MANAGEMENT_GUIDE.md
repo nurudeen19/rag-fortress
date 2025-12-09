@@ -42,7 +42,7 @@ Document File
    - Output: List[List[float]] (embeddings)
     ↓
 4. STORE (VectorStore)
-   - Provider: ChromaDB (extensible)
+   - Provider: Qdrant, Pinecone, ChromaDB
    - Output: Stored chunks with embeddings
     ↓
 SUCCESS/FAILURE (tracked in database)
@@ -117,7 +117,7 @@ APPROVAL REQUIRED
 | **PUBLIC** | Publicly available data | No restrictions |
 | **INTERNAL** | Company internal documents | Internal users only |
 | **CONFIDENTIAL** | Sensitive business data | Restricted group |
-| **RESTRICTED** | Highly sensitive (PII, secrets) | Explicit approval required |
+| **RESTRICTED** | Highly sensitive | Explicit approval required |
 
 ## Upload Workflow
 
@@ -234,27 +234,6 @@ async with DocumentIngestionService() as ingestion:
             print(f"✗ {result.document_path}: {result.error_message}")
 ```
 
-### Folder-Based Ingestion
-
-Quick workflow for processing files from a pending folder:
-
-```bash
-# Add documents to pending folder
-cp my-document.pdf data/knowledge_base/pending/
-```
-
-```python
-async with DocumentIngestionService() as ingestion:
-    results = await ingestion.ingest_from_pending()
-    
-    for result in results:
-        if result.success:
-            print(f"✓ {result.document_path}: {result.chunks_count} chunks")
-        else:
-            print(f"✗ {result.document_path}: {result.error_message}")
-```
-
-Successfully processed files automatically move to `processed/` folder.
 
 ## Configuration
 
@@ -266,8 +245,8 @@ EMBEDDING_PROVIDER=huggingface
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 
 # Chunking
-CHUNK_SIZE=512
-CHUNK_OVERLAP=50
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
 
 # Vector Store
 VECTOR_DB_PROVIDER=chroma
@@ -298,77 +277,60 @@ file.is_department_only = True
 ### Checking Access
 
 ```python
-# Check if user's department can access file
-can_access = file.is_department_accessible(user_department_id=3)
 
-# Full access control check
-async def can_user_access_file(user: User, file: FileUpload) -> bool:
-    # 1. Check department membership
-    if not file.is_department_accessible(user.department_id):
-        return False  # User not in required department
-    
-    # 2. Check security clearance
-    if not user.permission:
-        return False
-    
-    effective_level = user.permission.get_effective_permission()
-    
-    # 3. Compare security levels
-    file_requires_level = map_security_to_permission(file.security_level)
-    return effective_level >= file_requires_level
+Important: `get_user_clearance_cache` only returns user clearance information clearance cache is used to fetch the user's effective clearance (including overrides) and that information is then passed to the vector-store retriever or permission/service layer which enforces access to documents or other resources.
+
+Example — retrieval flow (preferred):
+
+
+from app.utils.user_clearance_cache import get_user_clearance_cache
+from app.services.vector_store.retriever import get_retriever_service
+
+async def retrieve_user_context(user: User, query_text: str, session):
+    # 1) Get a cache instance and fetch clearance for the user
+    clearance_cache = get_user_clearance_cache(session)
+    clearance = await clearance_cache.get_clearance(user.id)
+    if not clearance:
+        # handle missing user / deny
+        return {"success": False, "error": "user_not_found"}
+
+    # 2) Pass numeric clearance and department info to the retriever
+    retriever = get_retriever_service()
+    retrieval_result = await retriever.query(
+        query_text=query_text,
+        user_security_level=clearance["org_clearance_value"],
+        user_department_id=clearance.get("department_id"),
+        user_department_security_level=clearance.get("dept_clearance_value"),
+        user_id=user.id
+    )
+
+    # 3) The retriever enforces document-level filtering and returns only accessible context
+    return retrieval_result
 ```
 
 ### Scenarios
 
-**Scenario 1: Organization-Wide File**
-```python
-# Financial report accessible to entire company
-file = FileUpload(
-    file_name="Q4_Financial_Report.pdf",
-    department_id=1,  # Finance uploaded it
-    is_department_only=False,  # Everyone can access
-    security_level=SecurityLevel.CONFIDENTIAL
-)
+**Organization-wide document (plain language flow)**
 
-# Accessible to any user with CONFIDENTIAL clearance
-```
+- An organization-wide document is uploaded with a security level (for example, CONFIDENTIAL) and marked as not `is_department_only`.
+- When a user requests context related to that document, the service first obtains the user's effective clearance (including overrides) using `get_user_clearance_cache(...)`.
+- The service converts the clearance to the numeric values the retriever expects and calls the vector-store retriever, supplying `user_security_level`, optional `user_department_id`, `user_department_security_level`, and `user_id`.
+- The retriever applies document-level filters: it compares the numeric clearance thresholds against each stored chunk's required clearance and removes any chunks the user is not allowed to see.
+- If the retriever returns one or more contexts, those are returned to the user; if it returns no contexts the service responds with an `insufficient_clearance` message informing the user they don't have the required clearance.
 
-**Scenario 2: Department-Only File**
-```python
-# Sales strategy - only for sales team
-file = FileUpload(
-    file_name="Sales_Strategy_2025.pdf",
-    department_id=2,  # Sales department
-    is_department_only=True,  # Only Sales can access
-    security_level=SecurityLevel.RESTRICTED
-)
+**Department-only document (plain language flow)**
 
-# Only accessible to Sales users with RESTRICTED clearance
-```
+- A department-only document is associated with a owning `department_id` and marked `is_department_only=True` in its metadata.
+- On a retrieval request the service first fetches the user's effective clearance via `get_user_clearance_cache(...)`. The clearance also contains the user's department affiliation and role flags (for example, `is_department_manager`).
+- Before calling the retriever many services perform a quick department-membership check: if the document is department-only and the user is not a member of the owning department (and not a department manager) the service will return an `insufficient_department_membership` response immediately.
+- If the user passes the membership check, the service calls the retriever with the user's numeric clearance and department information. The retriever further filters returned contexts by numeric clearance and department scope.
+- If the retriever yields no accessible contexts, the service returns an `insufficient_clearance` message explaining the user lacks the necessary clearance within that department.
+
+These plain-language scenarios match the code-level example shown earlier in the "Checking Access" section: the cache fetches clearance, the service passes numeric values to the retriever, and the retriever enforces access, returning only permitted contexts.
 
 ## File Tracking and Status Management
 
-### Retrieve Files
 
-```python
-# Get pending approvals
-pending = await file_service.get_pending_approvals(limit=10)
-
-# Get user's files
-my_files = await file_service.get_by_user(
-    user_id=42,
-    status=FileStatus.PROCESSED,
-    limit=20
-)
-
-# Get files by security level
-confidential = await file_service.get_by_security_level(
-    SecurityLevel.CONFIDENTIAL
-)
-
-# Get department files
-dept_files = await file_service.get_by_department(department_id=2)
-```
 
 ### Statistics
 
@@ -390,60 +352,6 @@ stats = await file_service.get_statistics()
 # }
 ```
 
-## Error Handling and Retry Logic
-
-### Automatic Retries
-
-```python
-# First failure: retry_count = 1, status = PENDING
-await file_service.mark_processing_failed(file_id, "Network timeout")
-
-# Second failure: retry_count = 2, status = PENDING
-await file_service.mark_processing_failed(file_id, "Out of memory")
-
-# Third failure (max_retries=3): status = FAILED (final)
-await file_service.mark_processing_failed(file_id, "Corrupted PDF")
-```
-
-### Get Retryable Files
-
-```python
-retryable = await file_service.get_failed_retryable(limit=50)
-# Returns files where: retry_count < max_retries
-
-for file in retryable:
-    # Retry processing
-    await process_file(file)
-```
-
-## Reprocessing Documents
-
-### Using API
-
-```python
-# Move file back to pending for reprocessing
-ingestion.reprocess_document("my-document.pdf")
-# Moves from processed/ back to pending/
-```
-
-### Manually
-
-```bash
-# Move from processed back to pending
-mv data/knowledge_base/processed/my-document.pdf data/knowledge_base/pending/
-
-# Then run ingestion again
-python -c "
-from app.services.document_ingestion import DocumentIngestionService
-import asyncio
-
-async def reprocess():
-    async with DocumentIngestionService() as ing:
-        await ing.ingest_from_pending()
-
-asyncio.run(reprocess())
-"
-```
 
 ## Duplicate Detection
 
@@ -509,19 +417,6 @@ file_upload = await file_service.create_file_upload(
 )
 ```
 
-### Cleanup Task
-
-```python
-async def cleanup_expired_files():
-    """Periodic task to delete expired files."""
-    expired = await file_service.get_expired_files(limit=100)
-    
-    for file_upload in expired:
-        await file_service.delete_file(
-            file_upload.id,
-            delete_physical_file=True  # Remove from disk
-        )
-```
 
 ## Supported File Types
 
@@ -571,17 +466,6 @@ async def cleanup_expired_files():
   - `ingest_from_pending()` - Folder-based workflow
 - **Returns**: IngestionResult with success/failure
 
-## Performance Characteristics
-
-### Query Performance
-- `get_pending_approvals()`: O(1) with indexed status
-- `get_by_user()`: O(1) with composite index
-- `get_expired_files()`: O(1) with indexed retention_until
-
-### Storage Efficiency
-- SHA-256 hashes: 32 bytes per file
-- Average file record: ~2KB
-- Scales to millions of files
 
 ## Troubleshooting
 
@@ -600,14 +484,6 @@ echo "Test content" > data/knowledge_base/pending/test.txt
 - Ensure file type is supported
 - Document will remain in pending for retry
 
-### Want to reprocess everything
-```bash
-# Move all from processed back to pending
-mv data/knowledge_base/processed/* data/knowledge_base/pending/
-
-# Optionally clear vector database
-# Then run ingestion again
-```
 
 ## Security Considerations
 
@@ -621,22 +497,23 @@ mv data/knowledge_base/processed/* data/knowledge_base/pending/
 
 ```
 app/services/
-├── document_loader.py         # Load documents
-├── chunking.py                # Type-aware chunking
-├── embedding.py               # Generate embeddings
-├── document_ingestion.py      # Orchestrate pipeline
-├── file_upload_service.py     # File lifecycle management
+├── document_ingestion.py        # DocumentIngestionService — orchestrator for ingestion & retrieval workflows
+├── file_upload_service.py       # File lifecycle management (create/approve/process)
 └── vector_store/
-    ├── base.py               # VectorStore interface
-    └── chroma.py             # ChromaDB implementation
+    ├── loader.py               # DocumentLoader implementations (PDF, DOCX, CSV, JSON, etc.)
+    ├── chunker.py              # DocumentChunker and chunking strategies
+    ├── storage.py              # Vector store adapters (Chroma/Qdrant/etc.)
+    ├── retriever.py            # Retriever service (applies clearance filters and returns contexts)
+    └── reranker.py             # Optional re-ranking / scoring logic
 
 examples/
-├── simple_ingestion.py        # Complete example
-└── file_upload_examples.py    # Upload workflow examples
+├── simple_ingestion.py         # Example using DocumentIngestionService
+└── file_upload_examples.py     # Upload workflow examples
 
-data/knowledge_base/
-├── pending/                   # Drop files here
-└── processed/                 # Successfully processed files
+data/
+├── files/                      # Sample source files and fixtures
+├── uploads/                    # Uploaded/staging files
+└── knowledge_base/             # Processed knowledge (chunks, embeddings, indexes)
 ```
 
 ## Future Enhancements
@@ -651,5 +528,3 @@ data/knowledge_base/
 - [ ] Automated metadata extraction
 
 ---
-
-**Status:** ✅ Production Ready
