@@ -13,7 +13,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 #### Configuration & Settings
 - [Settings Guide](SETTINGS_GUIDE.md) - Complete configuration reference (covers application, LLMs, embeddings, vector DBs, databases, prompts, email, cache, demo mode, and seeder control)
 
-- [Fallback LLM Guide](FALLBACK_LLM_GUIDE.md) - Automatic failover configuration
+- [LLM Guide](LLM_GUIDE.md) - LLM configuration (primary, internal, and fallback LLMs)
 
 #### Document Management
 - [Document Management Guide](DOCUMENT_MANAGEMENT_GUIDE.md) - Complete document lifecycle
