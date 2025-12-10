@@ -187,7 +187,7 @@
                     <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
                     <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
                   </div>
-                  <span class="text-fortress-300 text-sm font-medium">Analyzing your documents...</span>
+                  <span class="text-fortress-300 text-sm font-medium">Analyzing Knowledge Base...</span>
                 </div>
               </div>
             </div>

@@ -153,6 +153,26 @@ export function useRoleAccess() {
       )
     }
 
+    // User management features - available to all users
+    nav.push(
+      {
+        name: 'Request Access',
+        path: '/request-access',
+        routeName: 'request-access',
+        icon: 'key',
+        roles: ['user', 'manager', 'admin'],
+        group: 'user',
+      },
+      {
+        name: 'Report Error',
+        path: '/error-reports',
+        routeName: 'error-reports',
+        icon: 'alerts',
+        roles: ['user', 'manager', 'admin'],
+        group: 'user',
+      }
+    )
+
     // Admin only navigation
     if (isAdmin.value) {
       nav.push({

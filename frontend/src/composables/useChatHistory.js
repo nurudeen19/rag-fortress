@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 import api from '../services/api'
 import { useAuthStore } from '../stores/auth'
 
-const CACHE_KEY = 'fortress_conversations_cache'
+const CACHE_KEY_PREFIX = 'fortress_conversations_cache'
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
 
 // Singleton state - shared across all components
@@ -17,11 +17,23 @@ export function useChatHistory() {
   const authStore = useAuthStore()
 
   /**
-   * Get cache from local storage
+   * Get user-specific cache key
+   */
+  const getCacheKey = () => {
+    const userId = authStore.user?.id
+    if (!userId) return null
+    return `${CACHE_KEY_PREFIX}_user_${userId}`
+  }
+
+  /**
+   * Get cache from local storage (user-specific)
    */
   const getCache = () => {
     try {
-      const cached = localStorage.getItem(CACHE_KEY)
+      const cacheKey = getCacheKey()
+      if (!cacheKey) return null
+      
+      const cached = localStorage.getItem(cacheKey)
       if (!cached) return null
       
       const { data, timestamp } = JSON.parse(cached)
@@ -29,7 +41,7 @@ export function useChatHistory() {
       
       // Check if cache has expired
       if (now - timestamp > CACHE_TTL) {
-        localStorage.removeItem(CACHE_KEY)
+        localStorage.removeItem(cacheKey)
         return null
       }
       
@@ -41,26 +53,32 @@ export function useChatHistory() {
   }
 
   /**
-   * Set cache in local storage
+   * Set cache in local storage (user-specific)
    */
   const setCache = (data) => {
     try {
+      const cacheKey = getCacheKey()
+      if (!cacheKey) return
+      
       const cacheData = {
         data,
         timestamp: Date.now()
       }
-      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData))
+      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
     } catch (err) {
       console.error('Error writing cache:', err)
     }
   }
 
   /**
-   * Clear cache from local storage
+   * Clear cache from local storage (user-specific)
    */
   const clearCache = () => {
     try {
-      localStorage.removeItem(CACHE_KEY)
+      const cacheKey = getCacheKey()
+      if (cacheKey) {
+        localStorage.removeItem(cacheKey)
+      }
     } catch (err) {
       console.error('Error clearing cache:', err)
     }
