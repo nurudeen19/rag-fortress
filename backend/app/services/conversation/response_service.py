@@ -22,7 +22,10 @@ from app.services import activity_logger_service
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.utils.text_processing import preprocess_query
 from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
+from app.utils.intent_classifier import get_intent_classifier, IntentType
 from app.config.prompt_settings import get_prompt_settings
+from app.config.response_templates import get_template_response
+from app.config.settings import get_settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.core import get_logger
@@ -43,6 +46,15 @@ class ConversationResponseService:
         self.llm_router = get_llm_router()
         self.conversation_service = ConversationService(session)
         self.prompt_settings = get_prompt_settings()
+        
+        # Initialize intent classifier if enabled
+        self.settings = get_settings()
+        self.intent_classifier = None
+        if self.settings.app.ENABLE_INTENT_CLASSIFIER:
+            self.intent_classifier = get_intent_classifier(
+                confidence_threshold=self.settings.app.INTENT_CONFIDENCE_THRESHOLD
+            )
+            logger.info("Intent classifier enabled")
     
     async def generate_response(
         self,
@@ -64,6 +76,53 @@ class ConversationResponseService:
             Dict with success status and either generator or error
         """
         try:
+            # Step 0: Intent Classification Interceptor
+            # Check if this is a simple pleasantry/greeting that doesn't need RAG pipeline
+            if self.intent_classifier:
+                intent_result = self.intent_classifier.classify(user_query)
+                
+                # If we should use a template response (high confidence non-knowledge query)
+                if self.intent_classifier.should_use_template(intent_result):                    
+                    # Return template response directly without RAG pipeline
+                    if stream:
+                        return {
+                            "success": True,
+                            "streaming": True,
+                            "generator": self._stream_template_response(
+                                intent=intent_result.intent,
+                                conversation_id=conversation_id,
+                                user_id=user_id,
+                                user_query=user_query
+                            )
+                        }
+                    else:
+                        template_response = get_template_response(intent_result.intent)
+                        
+                        # Cache and persist the template response
+                        await self.conversation_service.cache_conversation_exchange(
+                            conversation_id,
+                            user_query,
+                            template_response,
+                            user_id=user_id,
+                            persist_to_db=False,
+                            assistant_meta={"intent": intent_result.intent.value}
+                        )
+                        
+                        await self.conversation_service.add_message(
+                            conversation_id=conversation_id,
+                            user_id=user_id,
+                            role=MessageRole.ASSISTANT,
+                            content=template_response,
+                            token_count=None,
+                            meta={"intent": intent_result.intent.value}
+                        )
+                        
+                        return {
+                            "success": True,
+                            "streaming": False,
+                            "response": template_response
+                        }
+            
             # Step 1: Get user info from cache (clearance, department)
             user_info = await self._get_user_info(user_id)
             if not user_info:
@@ -547,6 +606,51 @@ class ConversationResponseService:
         
         return response.content if hasattr(response, 'content') else str(response)
 
+    async def _stream_template_response(
+        self,
+        intent: IntentType,
+        conversation_id: str,
+        user_id: int,
+        user_query: str
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Stream a template response for simple intents.
+        
+        Simulates streaming behavior to maintain consistent UX with RAG responses.
+        Streams character-by-character with small delays for natural feel.
+        """
+        import asyncio
+        
+        # Get template response
+        template_response = get_template_response(intent)
+        
+        # Stream character by character for natural feel
+        for char in template_response:
+            yield {"type": "token", "content": char}
+            # Small delay to simulate streaming (adjust as needed)
+            await asyncio.sleep(0.01)
+        
+        # Cache and persist the template response
+        await self.conversation_service.cache_conversation_exchange(
+            conversation_id,
+            user_query,
+            template_response,
+            user_id=user_id,
+            persist_to_db=False,
+            assistant_meta={"intent": intent.value, "template_response": True}
+        )
+        
+        await self.conversation_service.add_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=MessageRole.ASSISTANT,
+            content=template_response,
+            token_count=None,
+            meta={"intent": intent.value, "template_response": True}
+        )
+        
+        logger.info(f"Template response streamed for intent: {intent.value}")
+    
     def _build_sources_payload(self, documents: List[Any]) -> List[Dict[str, Any]]:
         """Extract lightweight source metadata for the frontend."""
         sources: List[Dict[str, Any]] = []

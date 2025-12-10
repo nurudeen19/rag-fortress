@@ -56,6 +56,10 @@ class AppSettings(BaseSettings):
     RERANKER_TOP_K: int = Field(3, env="RERANKER_TOP_K")
     RERANKER_SCORE_THRESHOLD: float = Field(0.3, env="RERANKER_SCORE_THRESHOLD")
     
+    # Intent Classifier Configuration
+    ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
+    INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
+    
     # Security
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")
@@ -178,3 +182,7 @@ class AppSettings(BaseSettings):
             raise ValueError("RERANKER_TOP_K must be at least 1")
         if not (0.0 <= self.RERANKER_SCORE_THRESHOLD <= 1.0):
             raise ValueError("RERANKER_SCORE_THRESHOLD must be between 0.0 and 1.0")
+        
+        # Intent classifier validation
+        if not (0.0 <= self.INTENT_CONFIDENCE_THRESHOLD <= 1.0):
+            raise ValueError("INTENT_CONFIDENCE_THRESHOLD must be between 0.0 and 1.0")

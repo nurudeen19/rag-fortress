@@ -36,6 +36,13 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 
 - [Reranker Implementation](RERANKER_IMPLEMENTATION.md) - Cross-encoder reranking details
 
+- [Intent Classifier Guide](INTENT_CLASSIFIER_GUIDE.md) - Smart query routing system
+  - Rule-based intent classification
+  - Template responses for pleasantries
+  - Confidence scoring and thresholds
+  - Performance optimization
+  - Pattern customization
+
 #### Vector Stores & Embeddings
 - [Vector Stores Guide](VECTOR_STORES_GUIDE.md) - Vector databases and embeddings
   - Embedding providers comparison
