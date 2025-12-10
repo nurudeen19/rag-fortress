@@ -5,8 +5,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 ## 📖 Table of Contents
 
 ### Getting Started
-- [Installation Guide](installation-guide.md) - Setup, dependencies, and first-time configuration
-- [Quick Start: Ingestion](quick-start-ingestion.md) - Upload and process your first documents
+- [Installation Guide](INSTALLATION.md) - Setup, dependencies, and first-time configuration
 
 ### Core Guides
 
@@ -34,7 +33,11 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Fallback strategies
   - Service architecture
 
-- [Reranker Implementation](RERANKER_IMPLEMENTATION.md) - Cross-encoder reranking details
+- [Reranker Guide](RERANKER_GUIDE.md) - Cross-encoder reranking
+  - How reranking works
+  - Configuration options
+  - Performance tuning
+  - Model selection
 
 - [Intent Classifier Guide](INTENT_CLASSIFIER_GUIDE.md) - Smart query routing system
   - Rule-based intent classification
@@ -83,8 +86,6 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Available seeders
   - Adding new seeders
 
-- [Installation Guide](installation-guide.md) - Includes `uv` package manager usage and seeder execution examples
-
 #### Background Jobs
 - [Jobs Guide](JOBS_GUIDE.md) - Background task management
   - APScheduler integration
@@ -128,7 +129,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 ### I want to...
 
 **Set up the application**
-1. [Installation Guide](installation-guide.md)
+1. [Installation Guide](INSTALLATION.md)
 2. [Settings Guide](SETTINGS_GUIDE.md)
 3. Run `python setup.py`
 
@@ -144,7 +145,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 
 **Improve search quality**
 1. [Retrieval Guide](RETRIEVAL_GUIDE.md)
-2. [Reranker Implementation](RERANKER_IMPLEMENTATION.md)
+2. [Reranker Guide](RERANKER_IMPLEMENTATION.md)
 
 **Manage permissions**
 1. [Permissions Guide](PERMISSIONS_GUIDE.md)
@@ -180,7 +181,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 
 **Configuration**
 - Settings Guide
-- Fallback LLM Guide
+- LLM Guide
 - Vector Stores Guide
 
 **Development**
@@ -200,12 +201,12 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 
 **Operations**
 - Jobs Guide
-- Reranker Implementation
+- Reranker Guide
 
 ### By Role
 
 **System Administrator**
-- Installation Guide
+- Installation Guide (INSTALLATION.md)
 - Settings Guide
 - Migrations Guide
 - Seeders Guide
@@ -262,5 +263,4 @@ When updating documentation:
 ---
 
 **Last Updated**: December 2025  
-**Version**: 1.0  
-**Status**: Production Ready
+**Version**: 1.0 

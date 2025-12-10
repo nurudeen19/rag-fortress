@@ -1,47 +1,28 @@
-# Reranker Integration Summary
+# Reranker Guide
+
+Comprehensive guide to cross-encoder reranking for improved retrieval accuracy in RAG Fortress.
 
 ## Overview
 
-Added cross-encoder reranking to improve retrieval quality when initial vector similarity search yields poor results.
+The reranker system uses cross-encoder models to improve retrieval quality when initial vector similarity search yields poor results. It provides semantic relevance scoring that's more accurate than bi-encoder similarity alone.
 
-## Implementation
+## How It Works
 
-### New Files
+### Reranker Service
 
-**`backend/app/services/vector_store/reranker.py`**
-- `RerankerService` class using sentence-transformers CrossEncoder
-- Model: `cross-encoder/ms-marco-MiniLM-L-6-v2`
+The `RerankerService` in `app/services/vector_store/reranker.py` provides:
+- Cross-encoder model: `cross-encoder/ms-marco-MiniLM-L-6-v2`
 - Lazy loading for efficient memory usage
 - Singleton pattern for service management
-- Returns top-k documents with relevance scores
+- Top-k document selection with relevance scores
 
-### Modified Files
+### Integration with Retrieval
 
-**`backend/app/services/vector_store/retriever.py`**
-- Integrated reranker into adaptive retrieval flow
-- Added `_rerank_retrieval()` method
-- Reranking triggers when MIN_TOP_K results are poor quality
-- Retrieves MAX_TOP_K documents, applies reranking, returns top RERANKER_TOP_K
-
-**`backend/app/config/app_settings.py`**
-- Added reranker configuration fields:
-  - `ENABLE_RERANKER`: Boolean to enable/disable
-  - `RERANKER_MODEL`: Cross-encoder model name
-  - `RERANKER_TOP_K`: Number of results after reranking
-  - `RERANKER_SCORE_THRESHOLD`: Minimum quality score
-- Added validation for reranker settings
-
-**`backend/app/seeders/application_settings.py`**
-- Added 4 new settings keys for reranker configuration
-- Category: "retrieval"
-
-**`backend/.env.example`**
-- Added reranker environment variables with defaults
-
-**`backend/docs/ADAPTIVE_RETRIEVAL.md`**
-- Updated documentation with reranker details
-- Added reranking flow diagrams
-- Documented cross-encoder benefits
+Reranking is integrated into the adaptive retrieval flow in `app/services/vector_store/retriever.py`:
+- Triggers when initial MIN_TOP_K results have poor quality scores
+- Retrieves expanded MAX_TOP_K documents from vector store
+- Applies cross-encoder reranking for semantic relevance
+- Returns top RERANKER_TOP_K documents above score threshold
 
 ## Retrieval Flow
 
