@@ -48,13 +48,13 @@ class IntentClassifier:
     # Pattern definitions with confidence scores
     PATTERNS = {
         IntentType.GREETING: [
-            # High confidence - exact greetings
+            # High confidence - exact greetings (handling both one-word and multi-word variations)
             (r"^(hi|hey|hello|greetings|good morning|good afternoon|good evening)[\s!.?]*$", 0.95),
-            (r"^(what's up|wassup|sup|yo)[\s!.?]*$", 0.95),
-            (r"^(howdy|hiya|hey there|hi there)[\s!.?]*$", 0.95),
-            # Medium confidence - greetings with minor additions
-            (r"^(hi|hey|hello)\s+(there|again|bot|assistant|friend)[\s!.?]*$", 0.85),
-            (r"^(good\s+(morning|afternoon|evening|day))[\s!.?]+", 0.85),
+            (r"^(good\s+(morning|afternoon|evening|day))[\s!.?]*$", 0.95),
+            (r"^(what's up|wassup|sup|yo|howdy|hiya)[\s!.?]*$", 0.95),
+            # Medium confidence - greetings with context
+            (r"^(hey|hi|hello)\s+(there|again|bot|assistant|friend)[\s!.?]*$", 0.85),
+            (r"^(hey there|hi there|hello there)[\s!.?]*$", 0.85),
         ],
         
         IntentType.ACKNOWLEDGEMENT: [
@@ -68,13 +68,15 @@ class IntentClassifier:
         ],
         
         IntentType.GOODBYE: [
-            # High confidence - exact goodbyes
-            (r"^(bye|goodbye|farewell|see you|later|cheers|peace|adios)[\s!.?]*$", 0.95),
-            (r"^(see you (later|soon|tomorrow)|catch you later|take care)[\s!.?]*$", 0.95),
-            (r"^(have a (good|great|nice) (day|evening|night|one))[\s!.?]*$", 0.95),
-            # Medium confidence - goodbyes with additions
+            # High confidence - exact goodbyes (one or two word variations)
+            (r"^(bye|goodbye|good\s+bye|farewell|cheers|peace|adios)[\s!.?]*$", 0.95),
+            (r"^(see you|see\s+ya|catch you|later|gotta go)[\s!.?]*$", 0.95),
+            (r"^(see you (later|soon|tomorrow|around)|catch you (later|around)|talk (to you )?later)[\s!.?]*$", 0.95),
+            (r"^(have a (good|great|nice) (day|evening|night|one)|take care)[\s!.?]*$", 0.95),
+            # Medium confidence - goodbyes with additions or punctuation
             (r"^(bye|goodbye|see you),?\s+(thanks|thank you)[\s!.?]*$", 0.85),
-            (r"^(gotta go|i('m|\s+am) (leaving|off|done))[\s!.?]*$", 0.80),
+            (r"^(gotta go|i('m|\s+am) (leaving|off|done)|time to go)[\s!.?]*$", 0.80),
+            (r"^(bye\s+(for\s+now|bye|then)|see\s+you\s+(then|next\s+time))[\s!.?]*$", 0.80),
         ],
         
         IntentType.GRATITUDE: [

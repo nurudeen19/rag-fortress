@@ -29,17 +29,25 @@ class TestIntentClassifier:
         greetings = [
             "hi",
             "hello",
+            "hey",
             "hey there",
+            "hi there",
             "good morning",
+            "good afternoon",
+            "good evening",
             "what's up",
+            "wassup",
+            "sup",
+            "howdy",
+            "hiya",
             "greetings",
         ]
         
         for greeting in greetings:
             result = classifier.classify(greeting)
-            assert result.intent == IntentType.GREETING
-            assert result.confidence >= 0.7
-            assert classifier.should_use_template(result)
+            assert result.intent == IntentType.GREETING, f"Failed for: {greeting}"
+            assert result.confidence >= 0.7, f"Low confidence for: {greeting}"
+            assert classifier.should_use_template(result), f"Template not used for: {greeting}"
     
     def test_acknowledgement_patterns(self, classifier):
         """Test acknowledgement intent detection."""
@@ -64,17 +72,24 @@ class TestIntentClassifier:
         goodbyes = [
             "bye",
             "goodbye",
+            "good bye",           # Two-word variation (the reported issue)
+            "see you",
             "see you later",
+            "catch you later",
             "farewell",
             "take care",
             "have a good day",
+            "have a great evening",
+            "gotta go",
+            "bye for now",
+            "time to go",
         ]
         
         for goodbye in goodbyes:
             result = classifier.classify(goodbye)
-            assert result.intent == IntentType.GOODBYE
-            assert result.confidence >= 0.7
-            assert classifier.should_use_template(result)
+            assert result.intent == IntentType.GOODBYE, f"Failed for: {goodbye}"
+            assert result.confidence >= 0.7, f"Low confidence for: {goodbye}"
+            assert classifier.should_use_template(result), f"Template not used for: {goodbye}"
     
     def test_gratitude_patterns(self, classifier):
         """Test gratitude intent detection."""
