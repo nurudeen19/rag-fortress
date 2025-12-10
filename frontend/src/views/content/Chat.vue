@@ -107,12 +107,8 @@
         <!-- Messages -->
         <div class="max-w-6xl mx-auto space-y-6">
         <template v-for="(message, index) in messages" :key="message.id || index">
-          <!-- Skip assistant placeholder with no content (shown as loading indicator instead) -->
-          <template v-if="message.isPlaceholder && !message.content">
-            <!-- Skip rendering, loading indicator handles this -->
-          </template>
           <!-- User Message -->
-          <div v-else-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
+          <div v-if="message.role === 'user'" class="flex justify-end animate-slide-in-right">
             <div class="w-full max-w-[90%] lg:max-w-[85%]">
               <div class="bg-gradient-to-br from-secure/30 to-secure/20 border border-secure/40 rounded-2xl rounded-tr-sm px-6 py-4 shadow-lg">
                 <div class="text-fortress-50 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
@@ -125,13 +121,13 @@
             </div>
           </div>
 
-          <!-- Assistant Message -->
+          <!-- Assistant Message (includes placeholder state with loading indicator) -->
           <div v-else class="flex justify-start animate-slide-in-left">
             <div class="w-full max-w-[95%] lg:max-w-[90%]">
               <div class="flex items-start gap-3">
                 <!-- AI Avatar -->
                 <div class="flex-shrink-0 mt-1">
-                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center">
+                  <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center" :class="{ 'animate-pulse': message.isPlaceholder }">
                     <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
@@ -139,9 +135,19 @@
                 </div>
                 
                 <div class="flex-1">
-                  <!-- Main Response -->
-                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg">
-                    <div class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
+                  <!-- Main Response / Placeholder Bubble -->
+                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg transition-all duration-300">
+                    <!-- Show loading state if placeholder with no content -->
+                    <div v-if="message.isPlaceholder && !message.content" class="flex items-center gap-3">
+                      <div class="flex gap-1.5">
+                        <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0s; animation-duration: 0.6s;"></div>
+                        <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
+                        <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
+                      </div>
+                      <span class="text-fortress-300 text-sm font-medium">Analyzing Knowledge Base...</span>
+                    </div>
+                    <!-- Show actual response content -->
+                    <div v-else class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
                   </div>
                   
                   <!-- Error Message -->
@@ -165,33 +171,6 @@
             </div>
           </div>
           </template>
-        </div>
-
-        <!-- Loading Indicator -->
-        <div v-if="loading" class="max-w-6xl mx-auto">
-          <div class="flex justify-start animate-slide-in-left">
-            <div class="flex items-start gap-3">
-              <!-- AI Avatar -->
-              <div class="flex-shrink-0 mt-1">
-                <div class="w-8 h-8 rounded-full bg-gradient-to-br from-secure/30 to-secure/10 border border-secure/30 flex items-center justify-center animate-pulse">
-                  <svg class="w-4 h-4 text-secure" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-              </div>
-              
-              <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-5 py-4 shadow-lg">
-                <div class="flex items-center gap-3">
-                  <div class="flex gap-1.5">
-                    <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0s; animation-duration: 0.6s;"></div>
-                    <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
-                    <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
-                  </div>
-                  <span class="text-fortress-300 text-sm font-medium">Analyzing Knowledge Base...</span>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
         </div>
       </transition>
@@ -1059,5 +1038,10 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+/* Smooth transition for message bubble content (placeholder to response) */
+.bg-fortress-800\/60 {
+  transition: all 0.3s ease;
 }
 </style>
