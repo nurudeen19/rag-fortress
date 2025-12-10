@@ -8,10 +8,10 @@ Enterprise-grade Retrieval-Augmented Generation (RAG) platform with role-based a
 - **Multi-Tier Invitation System**: Email invitations with organization and department assignment
 - **Adaptive Retrieval**: Automatic fallback strategies (vector → hybrid → full-text → LLM-only)
 - **Multi-Provider Support**: OpenAI, Google Gemini, HuggingFace, Llama.cpp with automatic fallback
-- **5 Vector Databases**: Chroma, Qdrant, Pinecone, Weaviate, Milvus
+- **4 Vector Databases**: Chroma (dev only), Qdrant, Pinecone, Weaviate
 - **Document Management**: Upload tracking, folder-based organization, reprocessing jobs
 - **Smart Caching**: Query result caching with configurable TTL
-- **Reranking**: Cohere/HuggingFace rerankers for improved retrieval accuracy
+- **Reranking**: Cross-encoder rerankers for improved retrieval accuracy
 - **Real-time Notifications**: In-app notification system with read/unread tracking
 - **Database Migrations**: Alembic migrations with SQLite/PostgreSQL/MySQL support
 - **Comprehensive Testing**: 93+ test cases covering all configurations
@@ -42,21 +42,20 @@ npm run dev                # Start on http://localhost:5173
 ```
 
 **Default Credentials:**
-- Super Admin: `superadmin@ragfortress.local` / `SuperAdmin123!`
-- Admin: `admin@ragfortress.local` / `Admin123!`
-- Manager: `manager@ragfortress.local` / `Manager123!`
-- User: `user@ragfortress.local` / `User123!`
+- Admin: `admin@ragfortress.com` / `admin@Rag1`
 
 ## 📚 Documentation
 
 - **[Installation Guide](backend/docs/INSTALLATION.md)** - Complete setup with uv, prerequisites, and troubleshooting
-- **[Quick Start: Ingestion](backend/docs/quick-start-ingestion.md)** - Document upload workflow
-- **[Settings Architecture](backend/docs/complete-settings-architecture.md)** - Configuration deep dive
-- **[Migrations Guide](backend/docs/MIGRATIONS_GUIDE.md)** - Database migrations
-- **[Adaptive Retrieval](backend/docs/ADAPTIVE_RETRIEVAL.md)** - Fallback strategies
+- **[Document Management](backend/docs/DOCUMENT_MANAGEMENT_GUIDE.md)** - Document upload workflow
+- **[Settings Guide](backend/docs/SETTINGS_GUIDE.md)** - Configuration reference
+- **[LLM Guide](backend/docs/LLM_GUIDE.md)** - Primary, Internal, and Fallback LLM configuration
+- **[Adaptive Retrieval](backend/docs/RETRIEVAL_GUIDE.md)** - Fallback strategies and reranking
+- **[Vector Stores Guide](backend/docs/VECTOR_STORES_GUIDE.md)** - Vector databases and embeddings
+- **[Permissions Guide](backend/docs/PERMISSIONS_GUIDE.md)** - RBAC and security clearance
+- **[Rate Limiting Guide](backend/docs/RATE_LIMITING_GUIDE.md)** - API rate limiting
+- **[Jobs Guide](backend/docs/JOBS_GUIDE.md)** - Background job processing
 - **[RBAC System](docs/ROLE_BASED_ACCESS_CONTROL.md)** - Role and permission management
-- **[Email System](backend/docs/EMAIL_SYSTEM.md)** - Invitation system
-- **[Job Manager](backend/docs/JOB_MANAGER.md)** - Background job processing
 - **API Docs**: `http://localhost:8000/docs` (Swagger) or `/redoc` (ReDoc)
 
 ## 🛠️ Tech Stack
@@ -64,9 +63,9 @@ npm run dev                # Start on http://localhost:5173
 **Backend:** FastAPI, SQLAlchemy, LangChain, Alembic, Pydantic, Pytest  
 **Frontend:** Vue 3, Vite, Vue Router, Pinia, TailwindCSS, Axios  
 **Databases:** PostgreSQL, MySQL, SQLite  
-**Vector Stores:** Chroma, Qdrant, Pinecone, Weaviate, Milvus  
-**LLMs:** OpenAI (GPT-3.5/4), Google Gemini, HuggingFace, Llama.cpp  
-**Embeddings:** HuggingFace, OpenAI, Google, Cohere, Voyage AI
+**Vector Stores:** Chroma, Qdrant, Pinecone, Weaviate  
+**LLMs:** OpenAI (GPT-3.5/4/4o), Google Gemini, HuggingFace, Llama.cpp  
+**Embeddings:** HuggingFace, OpenAI, Google, Cohere
 
 ## ⚙️ Configuration
 
@@ -77,13 +76,13 @@ RAG Fortress uses environment variables for all configuration. Key settings:
 - `DATABASE_URL` - Database connection string
 - `LLM_PROVIDER` - Primary LLM (openai/google/huggingface/llamacpp)
 - `EMBEDDING_PROVIDER` - Embedding provider (huggingface/openai/google/cohere/voyage)
-- `VECTOR_DB_PROVIDER` - Vector database (chroma/qdrant/pinecone/weaviate/milvus)
+- `VECTOR_DB_PROVIDER` - Vector database (chroma/qdrant/pinecone/weaviate)
 - Provider-specific API keys (OPENAI_API_KEY, GOOGLE_API_KEY, etc.)
 
 ### Optional
 - `FALLBACK_LLM_PROVIDER` - Automatic LLM fallback
-- `INTERNAL_LLM_PROVIDER` - Separate LLM for sensitive operations
-- `RERANKER_PROVIDER` - Cohere/HuggingFace reranking
+- `INTERNAL_LLM_PROVIDER` - Separate LLM for security-sensitive operations
+- `ENABLE_RERANKER` - Cross-encoder reranking
 - `ENABLE_CACHING` - Query result caching
 - `CHUNK_SIZE` / `CHUNK_OVERLAP` - Document chunking parameters
 - `TOP_K_RESULTS` / `SIMILARITY_THRESHOLD` - Retrieval parameters
@@ -92,9 +91,9 @@ See `.env.example` files for complete configuration options.
 
 ### Supported Providers
 
-**LLMs:** OpenAI (GPT-4/5), Google Gemini, HuggingFace, Llama.cpp  
+**LLMs:** OpenAI (GPT-4/GPT-4o), Google Gemini, HuggingFace, Llama.cpp  
 **Embeddings:** HuggingFace (free), OpenAI, Google, Cohere, Voyage AI  
-**Vector DBs:** Qdrant (recommended), Pinecone, Weaviate, Milvus, Chroma (dev only)
+**Vector DBs:** Qdrant (recommended), Pinecone, Weaviate, Chroma (dev only)
 
 > **⚠️ Python 3.14 Compatibility**  
 > Chroma requires Python ≤3.13 due to pydantic v1 dependencies. Use Qdrant/Pinecone/Weaviate for Python 3.14+, or downgrade to Python 3.12. Fix pending in [chromadb PR #5555](https://github.com/chroma-core/chroma/pull/5555).
@@ -106,7 +105,6 @@ cd backend
 pytest  # Run all tests (93+ test cases)
 pytest tests/test_services/  # Specific test directory
 pytest -v  # Verbose output
-pytest --cov=app  # Coverage report
 ```
 
 ## 🚢 Deployment
@@ -114,7 +112,7 @@ pytest --cov=app  # Coverage report
 **Database Migrations:**
 ```bash
 cd backend
-alembic upgrade head  # Apply migrations
+alembic upgrade head  # or python migrate.py upgrade to Apply migrations
 alembic revision --autogenerate -m "description"  # Create new migration
 ```
 
@@ -140,6 +138,13 @@ npm run build  # Creates dist/ folder for static hosting
 ## 📄 License
 
 This project is licensed under the terms in the [LICENSE](LICENSE) file.
+
+## 👨‍💻 Author
+
+**Nurudeen Habibu**
+- GitHub: [@nurudeen19](https://github.com/nurudeen19)
+- Repository: [rag-fortress](https://github.com/nurudeen19/rag-fortress)
+- Linkedin: [Nurudeen Habibu](https://www.linkedin.com/in/nurudeen-habibu)
 
 ## 📞 Support
 
