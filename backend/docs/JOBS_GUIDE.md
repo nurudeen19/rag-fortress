@@ -101,6 +101,8 @@ Completed jobs can be cleaned up after N days
 - `EMBEDDING_GENERATION` - Generate embeddings
 - `VECTOR_STORAGE` - Store vectors
 - `CLEANUP` - Cleanup tasks
+- `PASSWORD_RESET_EMAIL` - Send password reset emails
+- `PASSWORD_CHANGED_EMAIL` - Send password changed notifications
 
 ## JobManager API
 

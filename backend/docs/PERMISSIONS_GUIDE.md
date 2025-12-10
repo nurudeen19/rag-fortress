@@ -14,7 +14,7 @@ RAG Fortress implements a comprehensive Role-Based Access Control (RBAC) system 
 | Level | Name | Access |
 |-------|------|--------|
 | 1 | GENERAL | Public information |
-| 2 | INTERNAL | Internal company documents |
+| 2 | RESTRICTED | Internal company documents |
 | 3 | CONFIDENTIAL | Sensitive business data |
 | 4 | HIGHLY_CONFIDENTIAL | Restricted information |
 

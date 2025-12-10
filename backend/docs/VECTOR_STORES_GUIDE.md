@@ -269,58 +269,29 @@ WEAVIATE_INDEX_NAME=RagFortress
 - Steeper learning curve
 - Smaller community
 
-### 5. Milvus
 
-**High-performance vector database**
-
-**Configuration:**
-```bash
-VECTOR_DB_PROVIDER=milvus
-MILVUS_HOST=localhost
-MILVUS_PORT=19530
-MILVUS_COLLECTION_NAME=rag_fortress
-```
-
-**Pros:**
-- Excellent performance
-- Scalable
-- Open-source
-- Enterprise features
-
-**Cons:**
-- Complex deployment
-- Requires more resources
-- Steeper learning curve
 
 ## Vector Store Architecture
 
-### Abstract Base Class
+### Factory Pattern
 
-All vector stores implement `VectorStoreBase`:
+The `vector_store_factory.py` provides provider-agnostic vector store creation using LangChain's native implementations:
 
 ```python
-class VectorStoreBase(ABC):
-    @abstractmethod
-    async def add_documents(self, documents: List[Document]) -> List[str]:
-        """Add documents and return IDs"""
-        
-    @abstractmethod
-    async def similarity_search(
-        self,
-        query: str,
-        k: int = 5,
-        filter: Optional[Dict] = None
-    ) -> List[Document]:
-        """Search for similar documents"""
-        
-    @abstractmethod
-    async def delete(self, ids: List[str]) -> None:
-        """Delete documents by IDs"""
-        
-    @abstractmethod
-    async def get_collection_stats(self) -> Dict:
-        """Get collection statistics"""
+def get_vector_store(
+    embeddings: Embeddings,
+    provider: Optional[str] = None,
+    collection_name: Optional[str] = None,
+    **kwargs
+) -> VectorStore:
+    """Get or create a LangChain vector store instance."""
 ```
+
+**Supported Providers:**
+- **Chroma** - `langchain_chroma.Chroma`
+- **Qdrant** - `langchain_qdrant.QdrantVectorStore`
+- **Pinecone** - `langchain_pinecone.PineconeVectorStore`
+- **Weaviate** - `langchain_weaviate.WeaviateVectorStore`
 
 ### Document Format
 
@@ -439,16 +410,16 @@ filter = {
 
 ## Provider Comparison
 
-| Feature | Chroma | Qdrant | Pinecone | Weaviate | Milvus |
-|---------|--------|--------|----------|----------|--------|
-| **Deployment** | Local | Self/Cloud | Cloud | Self/Cloud | Self/Cloud |
-| **Production** | ❌ | ✅ | ✅ | ✅ | ✅ |
-| **Cost** | Free | $ | $$$ | $ | $ |
-| **Performance** | Medium | High | High | High | Very High |
-| **Scalability** | Low | High | Very High | High | Very High |
-| **Setup Complexity** | Low | Medium | Low | High | High |
-| **Filtering** | Basic | Advanced | Advanced | Advanced | Advanced |
-| **gRPC Support** | ❌ | ✅ | ❌ | ✅ | ✅ |
+| Feature | Chroma | Qdrant | Pinecone | Weaviate |
+|---------|--------|--------|----------|----------|
+| **Deployment** | Local | Self/Cloud | Cloud | Self/Cloud |
+| **Production** | ❌ | ✅ | ✅ | ✅ |
+| **Cost** | Free | $ | $$$ | $ |
+| **Performance** | Medium | High | High | High |
+| **Scalability** | Low | High | Very High | High |
+| **Setup Complexity** | Low | Medium | Low | High |
+| **Filtering** | Basic | Advanced | Advanced | Advanced |
+| **gRPC Support** | ❌ | ✅ | ❌ | ✅ |
 
 ## Best Practices
 
@@ -464,7 +435,7 @@ filter = {
 1. **Development:** Use Chroma (easy setup)
 2. **Production (self-hosted):** Use Qdrant (performance + cost)
 3. **Production (managed):** Use Pinecone (simplicity + support)
-4. **High-scale:** Use Milvus or Pinecone (scalability)
+4. **High-scale:** Use Pinecone (scalability + managed infrastructure)
 
 ### Performance Optimization
 
