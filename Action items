@@ -1,24 +1,45 @@
-Action items TODO
+Action items improvements/fixes TODO
 
-If the top match is above a confidence threshold (example: cosine similarity > 0.75), you’re usually safe with a small k.
-If the top match is below that threshold (example: < 0.55), then it’s a weak hit, so increase k immediately.
+# Conversation Flow
+Transaction Atomicity:
 
-setup quantized model for internal llm
+Issue: In _persist_messages_to_db, the system calls add_message twice (once for user, once for assistant). Each call triggers a separate session.commit().
+Risk: If the second commit fails, you end up with a "dangling" user message with no assistant response in the DB, creating a disjointed history.
+Fix: Refactor add_message to accept an optional flush=True/False parameter or create an add_exchange method that commits both messages in a single transaction.
+Hardcoded Context Window:
 
-Test to see if no errors are reported
+Issue: get_conversation_history hardcodes last_n=6 (3 turns).
+Risk: This is arbitrary and may be too short for complex reasoning tasks or too long for models with small context windows.
+Fix: Move this value to AppSettings (e.g., CONVERSATION_HISTORY_LIMIT).
+Cache vs. DB Consistency:
+
+Issue: cache_conversation_exchange updates the Redis cache before persisting to the DB.
+Risk: If DB persistence fails, the cache will contain messages that don't exist in the database. When the cache expires, those messages disappear, confusing the user.
+Fix: Update cache only after successful DB commit, or use a write-through strategy.
+
+Atomic Transactions: Create a method save_conversation_exchange(user_msg, assistant_msg) in ConversationService that wraps both inserts in a single transaction.
+Configuration: Extract last_n=6 into app_settings.py.
+## Architectural Improvements
+Async Event Bus: Consider moving non-critical tasks (like activity_logger_service.log_activity) to a background task or event bus to further reduce response latency.
+Structured Metadata: Define a Pydantic model for the meta JSON field in the Message table to enforce schema consistency for sources and citations.
+
+Future Enhancements (Low Priority)
+Semantic Caching: Implement semantic caching for RAG queries (if query A is semantically similar to query B, return cached result of B) to save embedding costs.
+User Feedback Loop: Add endpoints to allow users to rate responses (thumbs up/down), which can be used to fine-tune the retrieval or intent classification logic.
 
 
-Future file inclusions
-external data sources api/web content
-sql data sources
-external files like s3 files etc
+
+## Overall System improvements
+
+Token Response: The verify_token function returns only a user_id. Returning a structured object (e.g., TokenPayload with scopes/roles) would reduce database lookups for basic permission checks.
+
+Document Ingestion Error Granularity: The pipeline catches generic Exception. Defining specific exceptions (e.g., ParsingError, EmbeddingError, StorageError) would allow for smarter retry logic (e.g., retry network errors, but fail permanently on parsing errors).
+
+Job management improvemnent:
+
+Execution Model: The system appears to run the job scheduler inside the API process (via StartupController). In a horizontal scaling scenario (multiple API replicas), this could lead to race conditions or duplicate job execution unless the scheduler uses distributed locking.
+Recommendation: Move the job worker to a separate process (e.g., python run_worker.py) that consumes from the DB queue. This allows the API to scale independently of the background workers.
 
 
-
-Add detailed readme for setup, and other scripts plus their configurations
-
-Phase 1 - Basic CRUD (Conversation + Message models)
-Phase 2 - Pagination + Caching
-Phase 3 - Denormalized stats + Soft deletes
-Phase 4 - Advanced features (search, categories, auto-titles)
+Import Safety: Some factories import libraries inside functions (e.g., import langchain_chroma). While this makes dependencies optional, it can hide configuration errors until runtime. A "check dependencies" startup step would be safer.
 
