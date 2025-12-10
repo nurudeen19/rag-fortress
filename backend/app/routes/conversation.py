@@ -15,7 +15,7 @@ Endpoints:
 - GET  /api/v1/conversations/{conversation_id}/context - Get LLM context
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 import json
@@ -25,6 +25,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.core import get_logger
 from app.utils.demo_mode import prevent_in_demo_mode
+from app.utils.rate_limiter import get_limiter, get_conversation_rate_limit
 from app.schemas.conversation import (
     ConversationCreateRequest,
     ConversationUpdateRequest,
@@ -52,6 +53,7 @@ from app.handlers.conversation import (
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/conversations", tags=["conversations"])
+limiter = get_limiter()
 
 
 # ============================================================================
@@ -306,13 +308,19 @@ async def get_conversation_context(
 
 
 @router.post("/{conversation_id}/respond", response_class=StreamingResponse)
+@limiter.limit(get_conversation_rate_limit())
 async def stream_conversation_response(
+    http_request: Request,
     conversation_id: str,
     request: ConversationGenerateRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
-    """Stream AI response tokens for a conversation using Server-Sent Events."""
+    """
+    Stream AI response tokens for a conversation using Server-Sent Events.
+    
+    Rate limited to prevent RAG pipeline abuse.
+    """
 
     async def event_generator():
         try:

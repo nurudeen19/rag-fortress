@@ -4,12 +4,14 @@ FastAPI Application Factory and Startup Configuration.
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from slowapi.errors import RateLimitExceeded
 
 from app.config.settings import settings
 from app.core import get_logger
 from app.core.startup import get_startup_controller
 from app.core.exceptions import register_exception_handlers
 from app.middleware import setup_middlewares
+from app.utils.rate_limiter import get_limiter, rate_limit_exceeded_handler
 
 
 logger = get_logger(__name__)
@@ -67,6 +69,12 @@ def create_app() -> FastAPI:
         version="1.0.0",
         lifespan=lifespan
     )
+    
+    # Setup rate limiting
+    limiter = get_limiter()
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
+    logger.info("Rate limiting configured")
     
     # Setup all middlewares
     setup_middlewares(app)

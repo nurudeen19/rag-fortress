@@ -60,6 +60,13 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Approval authority matrix
   - Audit trails
 
+- [Rate Limiting Guide](RATE_LIMITING_GUIDE.md) - API rate limiting
+  - Application-wide and endpoint-specific limits
+  - In-memory and Redis storage backends
+  - User-based and IP-based tracking
+  - Configuration and tuning
+  - Monitoring and troubleshooting
+
 ### System Operations
 
 #### Database

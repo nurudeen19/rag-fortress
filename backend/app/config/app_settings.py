@@ -103,6 +103,20 @@ class AppSettings(BaseSettings):
     ADMIN_PASSWORD: str = Field("admin@RAGFortress123", env="ADMIN_PASSWORD")
     ADMIN_FIRSTNAME: str = Field("Admin", env="ADMIN_FIRSTNAME")
     ADMIN_LASTNAME: str = Field("User", env="ADMIN_LASTNAME")
+    
+    # Rate Limiting Configuration
+    # General rate limiting for all endpoints (requests per minute)
+    RATE_LIMIT_ENABLED: bool = Field(True, env="RATE_LIMIT_ENABLED")
+    RATE_LIMIT_PER_MINUTE: int = Field(60, env="RATE_LIMIT_PER_MINUTE")
+    RATE_LIMIT_PER_HOUR: int = Field(1000, env="RATE_LIMIT_PER_HOUR")
+    
+    # Conversation endpoint rate limiting (stricter for RAG pipeline)
+    CONVERSATION_RATE_LIMIT_PER_MINUTE: int = Field(10, env="CONVERSATION_RATE_LIMIT_PER_MINUTE")
+    CONVERSATION_RATE_LIMIT_PER_HOUR: int = Field(100, env="CONVERSATION_RATE_LIMIT_PER_HOUR")
+    
+    # Rate limit storage backend (memory or redis)
+    RATE_LIMIT_STORAGE: str = Field("memory", env="RATE_LIMIT_STORAGE")
+    RATE_LIMIT_REDIS_URL: Optional[str] = Field(None, env="RATE_LIMIT_REDIS_URL")
 
     @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
     @classmethod
@@ -143,6 +157,18 @@ class AppSettings(BaseSettings):
                 f"LOG_LEVEL must be one of {allowed}, got '{v}'"
             )
         return v_upper
+    
+    @field_validator("RATE_LIMIT_STORAGE")
+    @classmethod
+    def validate_rate_limit_storage(cls, v: str) -> str:
+        """Validate rate limit storage backend."""
+        allowed = {"memory", "redis"}
+        v_lower = v.lower()
+        if v_lower not in allowed:
+            raise ValueError(
+                f"RATE_LIMIT_STORAGE must be one of {allowed}, got '{v}'"
+            )
+        return v_lower
 
     @field_validator("CHUNK_OVERLAP")
     @classmethod
@@ -186,3 +212,15 @@ class AppSettings(BaseSettings):
         # Intent classifier validation
         if not (0.0 <= self.INTENT_CONFIDENCE_THRESHOLD <= 1.0):
             raise ValueError("INTENT_CONFIDENCE_THRESHOLD must be between 0.0 and 1.0")
+        
+        # Rate limiting validation
+        if self.RATE_LIMIT_PER_MINUTE < 1:
+            raise ValueError("RATE_LIMIT_PER_MINUTE must be at least 1")
+        if self.RATE_LIMIT_PER_HOUR < 1:
+            raise ValueError("RATE_LIMIT_PER_HOUR must be at least 1")
+        if self.CONVERSATION_RATE_LIMIT_PER_MINUTE < 1:
+            raise ValueError("CONVERSATION_RATE_LIMIT_PER_MINUTE must be at least 1")
+        if self.CONVERSATION_RATE_LIMIT_PER_HOUR < 1:
+            raise ValueError("CONVERSATION_RATE_LIMIT_PER_HOUR must be at least 1")
+        if self.RATE_LIMIT_STORAGE == "redis" and not self.RATE_LIMIT_REDIS_URL:
+            raise ValueError("RATE_LIMIT_REDIS_URL must be set when RATE_LIMIT_STORAGE is 'redis'")
