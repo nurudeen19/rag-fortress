@@ -24,11 +24,17 @@ class OverrideRequestCreate(BaseModel):
         max_length=500,
         description="Business justification for the request"
     )
-    requested_duration_hours: int = Field(
-        ...,
+    requested_duration_hours: Optional[int] = Field(
+        None,
         ge=1,
-        le=168,
-        description="How long access is needed (hours, max 168=1 week)"
+        le=8760,  # Max 1 year (365 days)
+        description="How long access is needed in hours (for preset durations)"
+    )
+    custom_duration_days: Optional[int] = Field(
+        None,
+        ge=1,
+        le=365,
+        description="Custom duration in days for longer-term access (e.g., project duration)"
     )
     department_id: Optional[int] = Field(
         None,
@@ -47,6 +53,17 @@ class OverrideRequestCreate(BaseModel):
     def validate_override_type(cls, v):
         if v not in ["org_wide", "department"]:
             raise ValueError("override_type must be 'org_wide' or 'department'")
+        return v
+    
+    @validator("requested_duration_hours", "custom_duration_days", pre=True, always=True)
+    def validate_duration(cls, v, values):
+        """Ensure either requested_duration_hours or custom_duration_days is provided."""
+        # Get the other duration field from values
+        if "requested_duration_hours" in values and "custom_duration_days" in values:
+            has_preset = values.get("requested_duration_hours") is not None
+            has_custom = values.get("custom_duration_days") is not None
+            if not has_preset and not has_custom:
+                raise ValueError("Either requested_duration_hours or custom_duration_days must be provided")
         return v
     
     @validator("department_id")

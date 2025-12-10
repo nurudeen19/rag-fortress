@@ -22,15 +22,26 @@
 
         <!-- Current Clearance -->
         <div class="bg-fortress-800/50 border border-fortress-700 rounded-lg p-4">
-          <p class="text-xs font-medium text-fortress-400 mb-2">YOUR CURRENT CLEARANCE</p>
-          <div class="flex gap-4">
+          <p class="text-xs font-medium text-fortress-400 mb-3">YOUR CURRENT CLEARANCE</p>
+          <div class="space-y-2">
             <div>
-              <p class="text-xs text-fortress-500">Organization</p>
-              <p class="text-sm font-medium text-fortress-200">{{ currentOrgLevel }}</p>
+              <p class="text-xs text-fortress-500">Organization-Wide</p>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="px-2.5 py-1 bg-fortress-700 text-fortress-100 text-xs font-medium rounded">
+                  {{ getLevelName(currentOrgLevel) }}
+                </span>
+              </div>
             </div>
             <div v-if="currentDeptLevel">
-              <p class="text-xs text-fortress-500">Department</p>
-              <p class="text-sm font-medium text-fortress-200">{{ currentDeptLevel }}</p>
+              <p class="text-xs text-fortress-500">Department-Specific</p>
+              <div class="flex items-center gap-2 mt-1">
+                <span class="px-2.5 py-1 bg-fortress-700 text-fortress-100 text-xs font-medium rounded">
+                  {{ getLevelName(currentDeptLevel) }}
+                </span>
+              </div>
+            </div>
+            <div v-else class="text-xs text-fortress-500">
+              No department-specific clearance assigned
             </div>
           </div>
         </div>
@@ -100,20 +111,76 @@
           <label class="block text-sm font-medium text-fortress-300 mb-2">
             Access Duration <span class="text-alert">*</span>
           </label>
-          <select
-            v-model="durationHours"
-            class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:border-secure outline-none transition-colors"
-            :disabled="loading"
-          >
-            <option value="">Select duration...</option>
-            <option :value="1">1 hour</option>
-            <option :value="4">4 hours</option>
-            <option :value="8">8 hours (1 work day)</option>
-            <option :value="24">24 hours (1 day)</option>
-            <option :value="72">72 hours (3 days)</option>
-            <option :value="168">168 hours (1 week - maximum)</option>
-          </select>
-          <p class="text-xs text-fortress-400 mt-1">How long you need elevated access</p>
+          
+          <!-- Tab selection -->
+          <div class="flex gap-2 mb-3 p-1 bg-fortress-800 rounded-lg">
+            <button
+              @click="durationMode = 'preset'"
+              :class="[
+                'flex-1 px-3 py-1.5 rounded text-sm font-medium transition-colors',
+                durationMode === 'preset'
+                  ? 'bg-secure text-white'
+                  : 'bg-transparent text-fortress-400 hover:text-fortress-300'
+              ]"
+            >
+              Quick Options
+            </button>
+            <button
+              @click="durationMode = 'custom'"
+              :class="[
+                'flex-1 px-3 py-1.5 rounded text-sm font-medium transition-colors',
+                durationMode === 'custom'
+                  ? 'bg-secure text-white'
+                  : 'bg-transparent text-fortress-400 hover:text-fortress-300'
+              ]"
+            >
+              Custom Duration
+            </button>
+          </div>
+
+          <!-- Preset options -->
+          <div v-if="durationMode === 'preset'" class="space-y-2">
+            <select
+              v-model="durationHours"
+              class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 focus:border-secure outline-none transition-colors"
+              :disabled="loading"
+            >
+              <option value="">Select duration...</option>
+              <option :value="1">1 hour</option>
+              <option :value="4">4 hours</option>
+              <option :value="8">8 hours (1 work day)</option>
+              <option :value="24">24 hours (1 day)</option>
+              <option :value="72">72 hours (3 days)</option>
+              <option :value="168">168 hours (1 week)</option>
+            </select>
+            <p class="text-xs text-fortress-400 mt-1">Choose a preset duration for quick access</p>
+          </div>
+
+          <!-- Custom duration -->
+          <div v-else class="space-y-3">
+            <div>
+              <label class="text-xs text-fortress-400 mb-1 block">Number of Days</label>
+              <input
+                v-model.number="customDurationDays"
+                type="number"
+                min="1"
+                max="365"
+                placeholder="e.g., 14 for 2 weeks"
+                class="w-full px-3 py-2 bg-fortress-800 border border-fortress-700 rounded-lg text-fortress-100 placeholder-fortress-500 focus:border-secure outline-none transition-colors"
+                :disabled="loading"
+              />
+            </div>
+            <div class="bg-fortress-800/50 border border-fortress-700 rounded p-3">
+              <p class="text-xs text-fortress-400">
+                <span v-if="customDurationDays" class="text-fortress-300 font-medium">
+                  ~{{ customDurationDays }} day{{ customDurationDays !== 1 ? 's' : '' }}
+                  <span class="text-fortress-500">({{ customDurationDays * 24 }} hours)</span>
+                </span>
+                <span v-else class="text-fortress-500">Enter a custom duration</span>
+              </p>
+            </div>
+            <p class="text-xs text-fortress-400">Ideal for projects spanning weeks or months (max 365 days)</p>
+          </div>
         </div>
 
         <!-- Reason -->
@@ -215,6 +282,8 @@ const authStore = useAuthStore()
 const overrideType = ref('department')
 const requestedLevel = ref('')
 const durationHours = ref('')
+const customDurationDays = ref(null)
+const durationMode = ref('preset')
 const reason = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
@@ -223,16 +292,28 @@ const reasonError = ref('')
 
 // User info
 const currentUser = computed(() => authStore.user)
-const currentOrgLevel = computed(() => currentUser.value?.security_level || 'GENERAL')
-const currentDeptLevel = computed(() => currentUser.value?.department_security_level || null)
+const currentOrgLevel = computed(() => currentUser.value?.org_clearance_value || 1)
+const currentDeptLevel = computed(() => currentUser.value?.dept_clearance_value || null)
 const hasDepartment = computed(() => !!currentUser.value?.department_id)
+
+// Permission level mapping
+const levelMap = {
+  1: 'Level 1 - General',
+  2: 'Level 2 - Restricted',
+  3: 'Level 3 - Confidential',
+  4: 'Level 4 - Highly Confidential'
+}
+
+const getLevelName = (level) => {
+  return levelMap[level] || `Level ${level}`
+}
 
 // Available levels (1-4)
 const availableLevels = [
   { value: 1, label: 'Level 1 - General' },
-  { value: 2, label: 'Level 2 - Confidential' },
-  { value: 3, label: 'Level 3 - Highly Confidential' },
-  { value: 4, label: 'Level 4 - Top Secret' }
+  { value: 2, label: 'Level 2 - Restricted' },
+  { value: 3, label: 'Level 3 - Confidential' },
+  { value: 4, label: 'Level 4 - Highly Confidential' }
 ]
 
 // Approval message based on override type
@@ -245,10 +326,14 @@ const approvalMessage = computed(() => {
 
 // Form validation
 const isFormValid = computed(() => {
+  const hasDuration = durationMode.value === 'preset' 
+    ? durationHours.value 
+    : customDurationDays.value && customDurationDays.value > 0
+  
   return (
     overrideType.value &&
     requestedLevel.value &&
-    durationHours.value &&
+    hasDuration &&
     reason.value.length >= 20 &&
     (overrideType.value !== 'department' || hasDepartment.value)
   )
@@ -280,11 +365,17 @@ async function handleSubmit() {
     const requestData = {
       override_type: overrideType.value,
       requested_permission_level: parseInt(requestedLevel.value),
-      requested_duration_hours: parseInt(durationHours.value),
       reason: reason.value,
       department_id: overrideType.value === 'department' ? currentUser.value?.department_id : null,
       trigger_query: props.triggerQuery,
       trigger_file_id: props.triggerFileId
+    }
+    
+    // Add duration data based on mode
+    if (durationMode.value === 'preset') {
+      requestData.requested_duration_hours = parseInt(durationHours.value)
+    } else {
+      requestData.custom_duration_days = parseInt(customDurationDays.value)
     }
 
     const result = await adminStore.createOverrideRequest(requestData)

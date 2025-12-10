@@ -69,6 +69,11 @@ export const useAuthStore = defineStore('auth', () => {
         is_active: response.user.is_active,
         department_id: response.user.department_id || null,
         roles: response.user.roles || [],
+        // Clearance levels
+        security_level: response.user.security_level || null,
+        org_clearance_value: response.user.org_clearance_value || null,
+        department_security_level: response.user.department_security_level || null,
+        dept_clearance_value: response.user.dept_clearance_value || null,
       }
       
       // Persist token, expiry, and user

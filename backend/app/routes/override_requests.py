@@ -49,7 +49,7 @@ async def create_override_request(
     - override_type: "org_wide" or "department"
     - requested_permission_level: 1-4 (GENERAL to TOP_SECRET)
     - reason: Business justification
-    - requested_duration_hours: How long access is needed (max 168 hours)
+    - Either requested_duration_hours (preset) or custom_duration_days (custom)
     - department_id: Required for department requests
     
     Optional context:
@@ -64,6 +64,7 @@ async def create_override_request(
         requested_permission_level=request_data.requested_permission_level,
         reason=request_data.reason,
         requested_duration_hours=request_data.requested_duration_hours,
+        custom_duration_days=request_data.custom_duration_days,
         department_id=request_data.department_id,
         trigger_query=request_data.trigger_query,
         trigger_file_id=request_data.trigger_file_id,

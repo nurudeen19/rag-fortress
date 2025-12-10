@@ -39,7 +39,8 @@ class OverrideRequestService:
         override_type: str,
         requested_permission_level: int,
         reason: str,
-        requested_duration_hours: int,
+        requested_duration_hours: Optional[int] = None,
+        custom_duration_days: Optional[int] = None,
         department_id: Optional[int] = None,
         trigger_query: Optional[str] = None,
         trigger_file_id: Optional[int] = None,
@@ -52,7 +53,8 @@ class OverrideRequestService:
             override_type: 'org_wide' or 'department'
             requested_permission_level: Permission level (1-4)
             reason: Business justification
-            requested_duration_hours: How long access is needed
+            requested_duration_hours: Preset duration in hours (for quick selections)
+            custom_duration_days: Custom duration in days (for longer-term projects)
             department_id: Required for department requests
             trigger_query: Optional query that triggered this request
             trigger_file_id: Optional file that couldn't be accessed
@@ -68,8 +70,17 @@ class OverrideRequestService:
             if requested_permission_level not in [1, 2, 3, 4]:
                 return None, "Invalid permission level (must be 1-4)"
             
-            if requested_duration_hours <= 0 or requested_duration_hours > 168:  # Max 1 week
-                return None, "Duration must be between 1 and 168 hours (1 week)"
+            # Determine actual duration in hours
+            if requested_duration_hours and requested_duration_hours > 0:
+                total_duration_hours = requested_duration_hours
+                if total_duration_hours > 8760:  # Max 1 year
+                    return None, "Duration must not exceed 1 year (8760 hours)"
+            elif custom_duration_days and custom_duration_days > 0:
+                total_duration_hours = custom_duration_days * 24
+                if total_duration_hours > 8760:  # Max 1 year
+                    return None, "Custom duration must not exceed 365 days"
+            else:
+                return None, "Either requested_duration_hours or custom_duration_days must be provided"
             
             # Get requester's current permissions
             user_result = await self.session.execute(
@@ -94,7 +105,7 @@ class OverrideRequestService:
             
             # Create override request (PENDING status, dates will be set on approval)
             valid_from = datetime.now(timezone.utc)
-            valid_until = valid_from + timedelta(hours=requested_duration_hours)
+            valid_until = valid_from + timedelta(hours=total_duration_hours)
             
             override_request = PermissionOverride(
                 user_id=requester_id,
@@ -119,7 +130,7 @@ class OverrideRequestService:
             
             logger.info(
                 f"Override request created: id={override_request.id}, user={requester_id}, "
-                f"type={override_type}, level={requested_permission_level}"
+                f"type={override_type}, level={requested_permission_level}, duration_hours={total_duration_hours}"
             )
             
             return override_request, None

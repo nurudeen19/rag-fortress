@@ -112,21 +112,32 @@ async def handle_login(
         
         logger.info(f"User {user.username} logged in successfully")
         
+        # Build user response with clearance data
+        user_response = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "full_name": f"{user.first_name} {user.last_name}".strip(),
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "department_id": user.department_id,
+            "roles": roles,
+        }
+        
+        # Add clearance information if available
+        if clearance:
+            user_response["security_level"] = clearance.get("security_level")
+            user_response["org_clearance_value"] = clearance.get("org_clearance_value")
+            user_response["department_security_level"] = clearance.get("department_security_level")
+            user_response["dept_clearance_value"] = clearance.get("dept_clearance_value")
+        
         return {
             "success": True,
             "token": token,
             "expires_at": expires_at.isoformat(),
-            "user": {
-                "id": user.id,
-                "username": user.username,
-                "email": user.email,
-                "first_name": user.first_name,
-                "last_name": user.last_name,
-                "full_name": f"{user.first_name} {user.last_name}".strip(),
-                "is_active": user.is_active,
-                "is_verified": user.is_verified,
-                "roles": roles,
-            }
+            "user": user_response
         }
         
     except Exception as e:
