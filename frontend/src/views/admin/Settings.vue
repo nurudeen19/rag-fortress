@@ -284,30 +284,33 @@ function hasChanged(key, originalValue) {
   const edited = editedValues.value[key]
   if (edited === undefined) return false
   
+  // Handle null original values
+  const safeOriginalValue = originalValue || ''
+  
   // Convert boolean strings to actual booleans for comparison
   if (typeof edited === 'boolean') {
-    const originalBool = originalValue.toLowerCase() === 'true'
+    const originalBool = safeOriginalValue.toLowerCase() === 'true'
     return edited !== originalBool
   }
   
-  return String(edited) !== String(originalValue)
+  return String(edited) !== String(safeOriginalValue)
 }
 
 function resetValue(key, originalValue) {
   const setting = settings.value.find(s => s.key === key)
   if (setting.data_type === 'boolean') {
-    editedValues.value[key] = originalValue.toLowerCase() === 'true'
+    editedValues.value[key] = originalValue ? originalValue.toLowerCase() === 'true' : false
   } else {
-    editedValues.value[key] = originalValue
+    editedValues.value[key] = originalValue || ''
   }
 }
 
 function discardChanges() {
   settings.value.forEach(setting => {
     if (setting.data_type === 'boolean') {
-      editedValues.value[setting.key] = setting.value.toLowerCase() === 'true'
+      editedValues.value[setting.key] = setting.value ? setting.value.toLowerCase() === 'true' : false
     } else {
-      editedValues.value[setting.key] = setting.value
+      editedValues.value[setting.key] = setting.value || ''
     }
   })
   
@@ -396,9 +399,9 @@ async function loadSettings() {
     // Initialize edited values and password visibility
     settings.value.forEach(setting => {
       if (setting.data_type === 'boolean') {
-        editedValues.value[setting.key] = setting.value.toLowerCase() === 'true'
+        editedValues.value[setting.key] = setting.value ? setting.value.toLowerCase() === 'true' : false
       } else {
-        editedValues.value[setting.key] = setting.value
+        editedValues.value[setting.key] = setting.value || ''
       }
       
       // Initialize password visibility (hidden by default for sensitive settings)

@@ -8,7 +8,7 @@ class SettingResponse(BaseModel):
     """Setting response schema."""
     id: int
     key: str
-    value: str
+    value: Optional[str] = None
     data_type: str
     description: Optional[str] = None
     category: Optional[str] = None
@@ -30,13 +30,13 @@ class SettingCreateRequest(BaseModel):
 
 class SettingUpdateRequest(BaseModel):
     """Setting update request schema."""
-    value: str = Field(..., description="New setting value")
+    value: Optional[str] = Field(None, description="New setting value (can be null to clear)")
 
 
 class SettingBulkUpdateItem(BaseModel):
     """Single item in bulk update request."""
     key: str = Field(..., description="Setting key")
-    value: str = Field(..., description="New setting value")
+    value: Optional[str] = Field(None, description="New setting value (can be null to clear)")
 
 
 class SettingBulkUpdateRequest(BaseModel):

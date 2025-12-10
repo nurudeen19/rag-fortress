@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
-from app.config.settings import get_settings
+from app.config.settings import settings
 from app.core import get_logger
 
 logger = get_logger(__name__)
@@ -31,26 +31,21 @@ def get_limiter() -> Limiter:
     global _limiter
     
     if _limiter is None:
-        settings = get_settings()
-        
         # Configure storage backend
-        if settings.app.RATE_LIMIT_STORAGE == "redis" and settings.app.RATE_LIMIT_REDIS_URL:
+        if settings.RATE_LIMIT_STORAGE == "redis" and settings.RATE_LIMIT_REDIS_URL:
             # Use Redis for distributed rate limiting
-            from slowapi.util import get_remote_address
-            from slowapi import Limiter
-            
-            logger.info(f"Initializing rate limiter with Redis storage: {settings.app.RATE_LIMIT_REDIS_URL}")
+            logger.info(f"Initializing rate limiter with Redis storage: {settings.RATE_LIMIT_REDIS_URL}")
             _limiter = Limiter(
                 key_func=get_remote_address,
-                storage_uri=settings.app.RATE_LIMIT_REDIS_URL,
-                enabled=settings.app.RATE_LIMIT_ENABLED
+                storage_uri=settings.RATE_LIMIT_REDIS_URL,
+                enabled=settings.RATE_LIMIT_ENABLED
             )
         else:
             # Use in-memory storage (default)
             logger.info("Initializing rate limiter with in-memory storage")
             _limiter = Limiter(
                 key_func=get_remote_address,
-                enabled=settings.app.RATE_LIMIT_ENABLED
+                enabled=settings.RATE_LIMIT_ENABLED
             )
     
     return _limiter
@@ -114,8 +109,7 @@ def get_general_rate_limit() -> str:
     Returns:
         Rate limit string (e.g., "60/minute;1000/hour")
     """
-    settings = get_settings()
-    return f"{settings.app.RATE_LIMIT_PER_MINUTE}/minute;{settings.app.RATE_LIMIT_PER_HOUR}/hour"
+    return f"{settings.RATE_LIMIT_PER_MINUTE}/minute;{settings.RATE_LIMIT_PER_HOUR}/hour"
 
 
 def get_conversation_rate_limit() -> str:
@@ -125,8 +119,7 @@ def get_conversation_rate_limit() -> str:
     Returns:
         Rate limit string (e.g., "10/minute;100/hour")
     """
-    settings = get_settings()
-    return f"{settings.app.CONVERSATION_RATE_LIMIT_PER_MINUTE}/minute;{settings.app.CONVERSATION_RATE_LIMIT_PER_HOUR}/hour"
+    return f"{settings.CONVERSATION_RATE_LIMIT_PER_MINUTE}/minute;{settings.CONVERSATION_RATE_LIMIT_PER_HOUR}/hour"
 
 
 # Export functions for use in routes

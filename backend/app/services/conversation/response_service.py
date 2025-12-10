@@ -25,7 +25,7 @@ from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
 from app.utils.intent_classifier import get_intent_classifier, IntentType
 from app.config.prompt_settings import get_prompt_settings
 from app.config.response_templates import get_template_response
-from app.config.settings import get_settings
+from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.core import get_logger
@@ -48,11 +48,10 @@ class ConversationResponseService:
         self.prompt_settings = get_prompt_settings()
         
         # Initialize intent classifier if enabled
-        self.settings = get_settings()
         self.intent_classifier = None
-        if self.settings.app.ENABLE_INTENT_CLASSIFIER:
+        if settings.ENABLE_INTENT_CLASSIFIER:
             self.intent_classifier = get_intent_classifier(
-                confidence_threshold=self.settings.app.INTENT_CONFIDENCE_THRESHOLD
+                confidence_threshold=settings.INTENT_CONFIDENCE_THRESHOLD
             )
             logger.info("Intent classifier enabled")
     

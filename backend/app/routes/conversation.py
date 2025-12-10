@@ -26,6 +26,10 @@ from app.models.user import User
 from app.core import get_logger
 from app.utils.demo_mode import prevent_in_demo_mode
 from app.utils.rate_limiter import get_limiter, get_conversation_rate_limit
+
+# Initialize limiter and rate limit string at module level
+limiter = get_limiter()
+_conversation_rate_limit = get_conversation_rate_limit()
 from app.schemas.conversation import (
     ConversationCreateRequest,
     ConversationUpdateRequest,
@@ -308,11 +312,11 @@ async def get_conversation_context(
 
 
 @router.post("/{conversation_id}/respond", response_class=StreamingResponse)
-@limiter.limit(get_conversation_rate_limit())
+@limiter.limit(_conversation_rate_limit)
 async def stream_conversation_response(
-    http_request: Request,
+    request: Request,
     conversation_id: str,
-    request: ConversationGenerateRequest,
+    body: ConversationGenerateRequest,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
@@ -327,7 +331,7 @@ async def stream_conversation_response(
             async for chunk in handle_stream_response(
                 conversation_id=conversation_id,
                 user_id=current_user.id,
-                user_query=request.message,
+                user_query=body.message,
                 user=current_user,
                 session=session
             ):
