@@ -55,6 +55,7 @@ dependencies = [
     "uvicorn[standard]==0.38.0",
     "pydantic==2.12.4",
     "pydantic-settings==2.11.0",
+    "slowapi==0.1.9",
     
     # HTTP Client & Async Operations
     "httpx==0.28.1",

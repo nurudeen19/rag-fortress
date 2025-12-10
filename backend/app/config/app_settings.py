@@ -99,7 +99,7 @@ class AppSettings(BaseSettings):
 
     # Admin Account Configuration
     ADMIN_USERNAME: str = Field("admin", env="ADMIN_USERNAME")
-    ADMIN_EMAIL: str = Field("admin@ragfortress.local", env="ADMIN_EMAIL")
+    ADMIN_EMAIL: str = Field("admin@ragfortress.com", env="ADMIN_EMAIL")
     ADMIN_PASSWORD: str = Field("admin@RAGFortress123", env="ADMIN_PASSWORD")
     ADMIN_FIRSTNAME: str = Field("Admin", env="ADMIN_FIRSTNAME")
     ADMIN_LASTNAME: str = Field("User", env="ADMIN_LASTNAME")

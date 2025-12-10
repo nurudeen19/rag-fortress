@@ -132,6 +132,13 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("reranker_top_k", "integer", "Number of documents to return after reranking", "retrieval", True, False),
             ("reranker_score_threshold", "float", "Minimum reranker quality score (0.0-1.0)", "retrieval", True, False),
             
+            # Intent Classifier Settings
+            ("enable_intent_classifier", "boolean", "Enable intent classification for smart query routing", "retrieval", True, False),
+            ("intent_confidence_threshold", "float", "Confidence threshold (0.0-1.0) for using template responses", "retrieval", True, False),
+            
+            # Rate Limiting Settings
+            ("rate_limit_enabled", "boolean", "Enable rate limiting to protect endpoints from abuse", "security", True, False),           
+            
             # Qdrant-specific
             ("qdrant_host", "string", "Qdrant server host", "vector_db", True, False),
             ("qdrant_port", "integer", "Qdrant HTTP port", "vector_db", True, False),
