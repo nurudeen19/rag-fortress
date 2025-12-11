@@ -65,13 +65,62 @@ def get_vector_store(
     
     logger.info(f"Initializing vector store: {provider}")
     
-    # === Chroma ===
-    if provider == "chroma":
+    # === FAISS (Default for Python 3.14+) ===
+    if provider == "faiss":
+        try:
+            from langchain_community.vectorstores import FAISS
+        except ImportError:
+            raise VectorStoreError(
+                "FAISS not installed. Run: pip install faiss-cpu langchain-community",
+                provider="faiss"
+            )
+        
+        import os
+        persist_directory = config.get("persist_directory")
+        index_path = os.path.join(persist_directory, config["collection_name"])
+        
+        # Try to load existing index, otherwise create empty store
+        if os.path.exists(index_path):
+            try:
+                store = FAISS.load_local(
+                    index_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True
+                )
+                logger.info(f"✓ FAISS loaded from disk: {config['collection_name']}")
+            except Exception as e:
+                logger.warning(f"Failed to load FAISS index, creating new one: {e}")
+                # Create empty FAISS store with a dummy document
+                from langchain_core.documents import Document
+                store = FAISS.from_documents(
+                    [Document(page_content="init", metadata={"init": True})],
+                    embeddings
+                )
+        else:
+            # Create new FAISS store with dummy document
+            from langchain_core.documents import Document
+            store = FAISS.from_documents(
+                [Document(page_content="init", metadata={"init": True})],
+                embeddings
+            )
+            logger.info(f"✓ FAISS initialized (new): {config['collection_name']}")
+        
+        # Store the persist path for later saving
+        store._persist_directory = persist_directory
+        store._collection_name = config["collection_name"]
+        return store
+    
+    # === Chroma (Currently Python 3.13 and below only - as of December 2025) ===
+    elif provider == "chroma":
         try:
             from langchain_chroma import Chroma
         except ImportError:
             raise VectorStoreError(
-                "langchain-chroma not installed. Run: pip install langchain-chroma",
+                "langchain-chroma not installed. "
+                "Note: As of December 2025, Chroma is NOT compatible with Python 3.14+ due to dependency conflicts. "
+                "Python 3.14 support is being worked on by the Chroma team. "
+                "For now, use FAISS for Python 3.14+ or install Chroma with pip for Python 3.11-3.13. "
+                "Run: pip install langchain-chroma",
                 provider="chroma"
             )
         
@@ -152,7 +201,7 @@ def get_vector_store(
     else:
         raise VectorStoreError(
             f"Unsupported vector store: {provider}. "
-            f"Supported: chroma, qdrant, pinecone, weaviate",
+            f"Supported: faiss, chroma (legacy), qdrant, pinecone, weaviate, milvus",
             provider=provider
         )
 
@@ -203,3 +252,47 @@ def get_retriever(
     
     logger.info(f"✓ Retriever initialized (top_k={k})")
     return _retriever_instance
+
+
+def save_vector_store(vector_store: VectorStore) -> bool:
+    """
+    Save vector store to disk (for FAISS).
+    
+    For providers like FAISS that support local persistence, this function
+    saves the current state to disk. For other providers (Chroma, Qdrant, etc.),
+    persistence is handled automatically.
+    
+    Args:
+        vector_store: The vector store instance to save
+    
+    Returns:
+        bool: True if saved successfully, False otherwise
+    
+    Example:
+        store = get_vector_store(embeddings, provider="faiss")
+        store.add_documents(documents)
+        save_vector_store(store)  # Persist to disk
+    """
+    try:
+        # Check if this is a FAISS store with persistence attributes
+        if hasattr(vector_store, '_persist_directory') and hasattr(vector_store, '_collection_name'):
+            import os
+            persist_dir = vector_store._persist_directory
+            collection_name = vector_store._collection_name
+            
+            # Ensure directory exists
+            os.makedirs(persist_dir, exist_ok=True)
+            
+            # Save to disk
+            index_path = os.path.join(persist_dir, collection_name)
+            vector_store.save_local(index_path)
+            
+            logger.info(f"✓ FAISS index saved to: {index_path}")
+            return True
+        else:
+            # Other providers handle persistence automatically
+            logger.debug(f"Vector store type {type(vector_store).__name__} does not require manual saving")
+            return False
+    except Exception as e:
+        logger.error(f"Failed to save vector store: {e}")
+        return False

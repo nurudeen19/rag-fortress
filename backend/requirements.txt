@@ -74,10 +74,17 @@ cohere>=5.5.8
 # ============================================================================
 # LangChain - Vector Databases
 # ============================================================================
-# Chroma
+# FAISS (Default for Python 3.14+ - local vector store)
+faiss-cpu>=1.9.0
+langchain-community>=0.4.1
+
+# Chroma (Currently NOT compatible with Python 3.14+ as of December 2025)
+# Note: Chroma is only supported with Python 3.11-3.13 using pip installation
+# Python 3.14 support is being worked on - check https://github.com/chroma-core/chroma/issues/5996
+# Until Chroma is updated, use FAISS, Qdrant, or other providers for Python 3.14+
 langchain-chroma>=1.0.0
 
-# Qdrant
+# Qdrant (Recommended for production)
 langchain-qdrant>=1.1.0
 qdrant-client>=1.10.0
 

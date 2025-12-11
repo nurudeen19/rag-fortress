@@ -137,6 +137,10 @@ class DocumentStorageService:
             try:
                 self.vector_store.add_documents(batch)
                 
+                # Persist to disk if using FAISS or other local providers
+                from app.core.vector_store_factory import save_vector_store
+                save_vector_store(self.vector_store)
+                
                 # Mark files in this batch as successful
                 for chunk in batch:
                     file_id = chunk.metadata.get("file_id")

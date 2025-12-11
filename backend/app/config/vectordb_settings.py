@@ -12,9 +12,11 @@ class VectorDBSettings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
     
     # Provider selection
-    VECTOR_DB_PROVIDER: str = Field("chroma", env="VECTOR_DB_PROVIDER")
+    # Default: faiss (Python 3.14+ compatible, local storage)
+    # Chroma: Currently Python 3.11-3.13 only (as of Dec 2025, Python 3.14 support in progress)
+    VECTOR_DB_PROVIDER: str = Field("faiss", env="VECTOR_DB_PROVIDER")
     
-    # Common Vector Store Configuration
+    # Common Vector Store Configuration (used by FAISS, Chroma, etc.)
     VECTOR_STORE_COLLECTION_NAME: str = Field("rag_documents", env="VECTOR_STORE_COLLECTION_NAME")
     VECTOR_STORE_PERSIST_DIRECTORY: str = Field("./data/vector_store", env="VECTOR_STORE_PERSIST_DIRECTORY")
     
@@ -49,17 +51,17 @@ class VectorDBSettings(BaseSettings):
         vector_db = self.VECTOR_DB_PROVIDER.lower()
         
         # Validate provider is supported
-        supported_dbs = {"chroma", "qdrant", "pinecone", "weaviate", "milvus"}
+        supported_dbs = {"faiss", "chroma", "qdrant", "pinecone", "weaviate", "milvus"}
         if vector_db not in supported_dbs:
             raise ValueError(
                 f"Unsupported VECTOR_DB_PROVIDER: {vector_db}. "
                 f"Supported: {', '.join(supported_dbs)}"
             )
         
-        # Production validation: Don't allow Chroma in production
-        if environment == "production" and vector_db == "chroma":
+        # Production validation: Don't allow Chroma or FAISS in production
+        if environment == "production" and vector_db in ["chroma", "faiss"]:
             raise ValueError(
-                "Chroma is not recommended for production. "
+                f"{vector_db.upper()} is not recommended for production. "
                 "Please use Qdrant, Pinecone, Weaviate, or Milvus instead."
             )
         
@@ -78,7 +80,14 @@ class VectorDBSettings(BaseSettings):
         """Get vector database configuration for the selected provider."""
         provider = self.VECTOR_DB_PROVIDER.lower()
         
-        if provider == "qdrant":
+        if provider == "faiss":
+            return {
+                "provider": "faiss",
+                "persist_directory": self.VECTOR_STORE_PERSIST_DIRECTORY,
+                "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
+            }
+        
+        elif provider == "qdrant":
             config = {
                 "provider": "qdrant",
                 "collection_name": self.QDRANT_COLLECTION_NAME,

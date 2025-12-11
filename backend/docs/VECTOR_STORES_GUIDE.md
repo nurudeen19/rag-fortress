@@ -14,11 +14,13 @@ EMBEDDING_PROVIDER=huggingface
 HF_EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 HF_EMBEDDING_DEVICE=cpu
 
-# Vector Database - Chroma (local storage)
-VECTOR_DB_PROVIDER=chroma
-CHROMA_PERSIST_DIRECTORY=./data/vector_store
-CHROMA_COLLECTION_NAME=rag_fortress
+# Vector Database - FAISS (local storage, Python 3.14+ compatible)
+VECTOR_DB_PROVIDER=faiss
+VECTOR_STORE_PERSIST_DIRECTORY=./data/vector_store
+VECTOR_STORE_COLLECTION_NAME=rag_fortress
 ```
+
+**Note:** For Python 3.11-3.13 users who prefer Chroma, see the [Legacy Installation](#legacy-chroma-python-311-313-only) section below.
 
 ### Production Setup
 
@@ -169,29 +171,100 @@ VOYAGE_EMBEDDING_MODEL=voyage-2
 
 ## Vector Databases
 
-### 1. Chroma (Development Only)
+### 1. FAISS (Recommended for Development)
 
-**⚠️ NOT RECOMMENDED FOR PRODUCTION**
+**✅ DEFAULT FOR PYTHON 3.14+**
+
+**Best for:** Development, testing, local deployments, Python 3.14+ compatibility
 
 **Configuration:**
 ```bash
+VECTOR_DB_PROVIDER=faiss
+VECTOR_STORE_PERSIST_DIRECTORY=./data/vector_store
+VECTOR_STORE_COLLECTION_NAME=rag_fortress
+```
+
+**Features:**
+- Facebook AI Similarity Search
+- Fast and efficient similarity search
+- Local file-based persistence
+- No external dependencies
+- Python 3.14+ compatible
+- Production-grade algorithms (though not distributed)
+
+**Pros:**
+- Zero setup - works out of the box
+- No external services required
+- Fast local search
+- Proven algorithms from Facebook AI Research
+- Compatible with latest Python versions (3.14+)
+- Automatic save/load from disk
+
+**Cons:**
+- Not suitable for distributed deployments
+- Limited to single-machine scale
+- Basic filtering capabilities
+- Not recommended for production at scale
+- No built-in replication or clustering
+
+**When to Use:**
+- Development and testing
+- Small to medium datasets (< 100k documents)
+- Single-server deployments
+- Quick prototypes
+- Python 3.14+ environments
+
+### 2. Chroma (Currently Python 3.11-3.13 Only)
+
+**⚠️ NOT YET COMPATIBLE WITH PYTHON 3.14+ (as of December 2025)**
+
+**Important:** Chroma is **currently not compatible with Python 3.14 and higher** due to dependency conflicts with pydantic-core and related packages. 
+
+**Current Status (December 2025):**
+- ✅ **Python 3.11-3.13**: Fully supported via pip installation
+- ❌ **Python 3.14+**: Not yet compatible
+- 🔄 **Active Development**: The Chroma team is working on Python 3.14 support
+- 📌 **Track Progress**: Check [Chroma GitHub Issues](https://github.com/chroma-core/chroma/issues/5996) for updates
+
+**What This Means:**
+- **For Python 3.14+ users:** Use FAISS (default) or migrate to Qdrant/Pinecone until Chroma is updated
+- **For Python 3.11-3.13 users:** Chroma is still supported via pip installation (see [Legacy Installation Guide](INSTALLATION_LEGACY.md))
+- **Future:** Once Chroma releases Python 3.14 support, it can be used again with all Python versions
+
+**Configuration (Python 3.11-3.13 only):**
+```bash
 VECTOR_DB_PROVIDER=chroma
-CHROMA_PERSIST_DIRECTORY=./data/vector_store
-CHROMA_COLLECTION_NAME=rag_fortress
+VECTOR_STORE_PERSIST_DIRECTORY=./data/vector_store
+VECTOR_STORE_COLLECTION_NAME=rag_fortress
+```
+
+**Installation (requires pip, not uv):**
+```bash
+pip install langchain-chroma chromadb
 ```
 
 **Pros:**
-- Easy setup
+- Easy setup (on compatible Python versions)
 - No external dependencies
 - Good for development/testing
 
 **Cons:**
+- **❌ NOT compatible with Python 3.14+**
 - Performance limitations
 - No distributed deployment
 - Not production-ready
 - Blocked in production environment
+- Limited to Python 3.11-3.13
 
-### 2. Qdrant (Recommended)
+**Migration Path (For Python 3.14+ Users):**
+If you're using Chroma and upgrading to Python 3.14:
+1. Export your existing documents from Chroma
+2. Switch to FAISS (development) or Qdrant (production)
+3. Re-import documents
+4. Update your `.env`: `VECTOR_DB_PROVIDER=faiss`
+5. **Future**: Once Chroma releases Python 3.14 support, you can migrate back to Chroma if desired
+
+### 3. Qdrant (Recommended for Production)
 
 **✅ PRODUCTION RECOMMENDED**
 
@@ -223,7 +296,7 @@ QDRANT_COLLECTION_NAME=rag_fortress
 - Requires setup for self-hosted
 - Less mature than Pinecone
 
-### 3. Pinecone
+### 4. Pinecone
 
 **Fully managed cloud vector database**
 
@@ -246,7 +319,7 @@ PINECONE_INDEX_NAME=rag-fortress
 - Cloud-only
 - Vendor lock-in
 
-### 4. Weaviate
+### 5. Weaviate
 
 **Open-source vector search engine**
 
@@ -288,7 +361,8 @@ def get_vector_store(
 ```
 
 **Supported Providers:**
-- **Chroma** - `langchain_chroma.Chroma`
+- **FAISS** - `langchain_community.vectorstores.FAISS` (default for Python 3.14+)
+- **Chroma** - `langchain_chroma.Chroma` (legacy, Python 3.11-3.13 only)
 - **Qdrant** - `langchain_qdrant.QdrantVectorStore`
 - **Pinecone** - `langchain_pinecone.PineconeVectorStore`
 - **Weaviate** - `langchain_weaviate.WeaviateVectorStore`
@@ -410,16 +484,18 @@ filter = {
 
 ## Provider Comparison
 
-| Feature | Chroma | Qdrant | Pinecone | Weaviate |
-|---------|--------|--------|----------|----------|
-| **Deployment** | Local | Self/Cloud | Cloud | Self/Cloud |
-| **Production** | ❌ | ✅ | ✅ | ✅ |
-| **Cost** | Free | $ | $$$ | $ |
-| **Performance** | Medium | High | High | High |
-| **Scalability** | Low | High | Very High | High |
-| **Setup Complexity** | Low | Medium | Low | High |
-| **Filtering** | Basic | Advanced | Advanced | Advanced |
-| **gRPC Support** | ❌ | ✅ | ❌ | ✅ |
+| Feature | FAISS | Chroma | Qdrant | Pinecone | Weaviate |
+|---------|-------|--------|--------|----------|----------|
+| **Python 3.14+** | ✅ | ❌ | ✅ | ✅ | ✅ |
+| **Deployment** | Local | Local | Self/Cloud | Cloud | Self/Cloud |
+| **Production** | ⚠️ | ❌ | ✅ | ✅ | ✅ |
+| **Cost** | Free | Free | $ | $$$ | $ |
+| **Performance** | High | Medium | High | High | High |
+| **Scalability** | Low | Low | High | Very High | High |
+| **Setup Complexity** | Low | Low | Medium | Low | High |
+| **Filtering** | Basic | Basic | Advanced | Advanced | Advanced |
+| **Persistence** | File | File | DB | Cloud | DB |
+| **gRPC Support** | ❌ | ❌ | ✅ | ❌ | ✅ |
 
 ## Best Practices
 
@@ -432,10 +508,11 @@ filter = {
 
 ### Vector Database Selection
 
-1. **Development:** Use Chroma (easy setup)
-2. **Production (self-hosted):** Use Qdrant (performance + cost)
-3. **Production (managed):** Use Pinecone (simplicity + support)
-4. **High-scale:** Use Pinecone (scalability + managed infrastructure)
+1. **Development:** Use FAISS (easy setup, Python 3.14+ compatible)
+2. **Development (Legacy Python 3.11-3.13):** Use Chroma (requires pip installation)
+3. **Production (self-hosted):** Use Qdrant (performance + cost)
+4. **Production (managed):** Use Pinecone (simplicity + support)
+5. **High-scale:** Use Pinecone (scalability + managed infrastructure)
 
 ### Performance Optimization
 
@@ -556,3 +633,93 @@ await new_store.add_documents(documents)
 - [Settings Guide](SETTINGS_GUIDE.md) - Configuration details
 - [Document Management](DOCUMENT_MANAGEMENT_GUIDE.md) - Document ingestion
 - [Retrieval Guide](RETRIEVAL_GUIDE.md) - Search and retrieval
+
+---
+
+## Legacy: Chroma (Python 3.11-3.13 Only)
+
+For complete installation instructions, see the [Legacy Installation Guide](INSTALLATION_LEGACY.md).
+
+### Python Version Compatibility
+
+**Chroma is NOT compatible with Python 3.14+** due to dependency conflicts with chromadb's dependencies (notably pydantic-core and related packages that haven't been updated for Python 3.14).
+
+### For Python 3.11-3.13 Users Only
+
+If you're using Python 3.11, 3.12, or 3.13 and want to use Chroma instead of FAISS, see the complete [Legacy Installation Guide](INSTALLATION_LEGACY.md).
+
+#### Quick Configuration
+
+```bash
+cd backend
+
+# Create virtual environment with Python 3.11-3.13
+python3.13 -m venv venv  # or python3.11, python3.12
+
+# Activate virtual environment
+# Windows PowerShell:
+.\venv\Scripts\Activate.ps1
+
+# macOS/Linux:
+source venv/bin/activate
+
+# Install using pip with requirements.txt (includes Chroma)
+pip install -r requirements.txt
+```
+
+#### Configuration
+
+```bash
+# In your .env file
+VECTOR_DB_PROVIDER=chroma
+VECTOR_STORE_PERSIST_DIRECTORY=./data/vector_store
+VECTOR_STORE_COLLECTION_NAME=rag_fortress
+```
+
+#### Migration from FAISS to Chroma
+
+If you've been using FAISS and want to migrate to Chroma (on Python 3.11-3.13):
+
+```python
+# 1. Export documents from FAISS
+from app.core.vector_store_factory import get_vector_store
+from app.core.embedding_factory import get_embedding_provider
+
+embeddings = get_embedding_provider()
+
+# Get FAISS store
+faiss_store = get_vector_store(embeddings, provider="faiss")
+# Export all documents (implement based on your document structure)
+
+# 2. Switch provider in .env
+# VECTOR_DB_PROVIDER=chroma
+
+# 3. Import to Chroma
+chroma_store = get_vector_store(embeddings, provider="chroma")
+# Add documents to Chroma
+```
+
+### Why This Limitation Exists?
+
+As of December 2025, the `chromadb` package and its dependencies have not yet been updated to support Python 3.14's changes to the C-API and internal module structures. The main affected packages are:
+- `pydantic-core` (C-extensions not yet compatible)
+- `hnswlib` (requires C-API updates)
+- Other C-extension dependencies
+
+**Current GitHub Issues:**
+- [Issue #5996: Chroma import fails on python 3.14.2](https://github.com/chroma-core/chroma/issues/5996)
+- [Issue #5983: Installation Fails on macOS M2 with Python 3.14](https://github.com/chroma-core/chroma/issues/5983)
+
+**Expected Resolution:**
+The Chroma team is aware of these issues and working on updates. Once their dependencies are updated for Python 3.14 compatibility, Chroma will work with Python 3.14+. Check the issues above for the latest status.
+
+### Recommended Alternatives
+
+For Python 3.14+ users:
+1. **FAISS** - Default, local, fast, compatible (recommended for development)
+2. **Qdrant** - Production-grade, self-hosted or cloud (recommended for production)
+3. **Pinecone** - Fully managed, enterprise-grade
+4. **Weaviate** - Open-source, feature-rich
+5. **Milvus** - Scalable, cloud-native
+
+All of these alternatives are fully compatible with Python 3.14+ and provide better performance and features than Chroma for production use cases.

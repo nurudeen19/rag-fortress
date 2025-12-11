@@ -176,6 +176,16 @@ Use the `--verify` flag to check whether the setup completed successfully after 
 
 ---
 
+## Alternative Installation Methods
+
+### Legacy Installation (pip + Chroma)
+
+If you're using **Python 3.11-3.13** and want to use Chroma vector database instead of FAISS, or prefer traditional pip installation, see the [Legacy Installation Guide](INSTALLATION_LEGACY.md).
+
+**Note:** As of December 2025, Chroma is not yet compatible with Python 3.14+. The legacy installation is only for Python 3.11-3.13 users. Python 3.14 support is being worked on by the Chroma team.
+
+---
+
 ## Next Steps
 
 - Read [README.md](../README.md) for full project overview

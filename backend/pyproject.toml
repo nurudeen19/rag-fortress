@@ -94,7 +94,13 @@ dependencies = [
     "langchain-cohere==0.5.0",
 
     # LangChain - Vector Databases
-    # "langchain-chroma==1.0.0",
+    # Note: As of December 2025, langchain-chroma is NOT compatible with Python 3.14+
+    # Active PRs/issues exist for Python 3.14 support - check https://github.com/chroma-core/chroma/issues
+    # FAISS is used as the default for Python 3.14+ compatibility until Chroma is updated
+    # For Python 3.11-3.13 installations with Chroma, see INSTALLATION.md legacy section
+    # "langchain-chroma==1.0.0",  # Currently incompatible with Python 3.14+ - Use pip + requirements.txt for Python < 3.14
+    "langchain-community==0.4.1",  # Required for FAISS integration
+    "faiss-cpu==1.9.0",  # FAISS vector store (Python 3.14+ compatible)
     "langchain-qdrant==1.1.0",
     "qdrant-client==1.16.1",
     "langchain-pinecone==0.2.13",
