@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 
 
 class OverrideRequestCreate(BaseModel):
@@ -56,26 +56,20 @@ class OverrideRequestCreate(BaseModel):
             raise ValueError("override_type must be 'org_wide' or 'department'")
         return v
     
-    @field_validator("requested_duration_hours", "custom_duration_days", mode='before')
-    @classmethod
-    def validate_duration(cls, v, info):
+    @model_validator(mode='after')
+    def validate_duration_and_department(self):
         """Ensure either requested_duration_hours or custom_duration_days is provided."""
-        # Get the other duration field from values
-        data = info.data
-        if "requested_duration_hours" in data and "custom_duration_days" in data:
-            has_preset = data.get("requested_duration_hours") is not None
-            has_custom = data.get("custom_duration_days") is not None
-            if not has_preset and not has_custom:
-                raise ValueError("Either requested_duration_hours or custom_duration_days must be provided")
-        return v
-    
-    @field_validator("department_id")
-    @classmethod
-    def validate_department_for_dept_override(cls, v, info):
-        if "override_type" in info.data and info.data["override_type"] == "department":
-            if not v:
-                raise ValueError("department_id is required for department-level requests")
-        return v
+        has_preset = self.requested_duration_hours is not None
+        has_custom = self.custom_duration_days is not None
+        
+        if not has_preset and not has_custom:
+            raise ValueError("Either requested_duration_hours or custom_duration_days must be provided")
+        
+        # Validate department requirement
+        if self.override_type == "department" and not self.department_id:
+            raise ValueError("department_id is required for department-level requests")
+        
+        return self
 
 
 class OverrideApprovalRequest(BaseModel):

@@ -22,7 +22,6 @@ class EmailRequest(BaseModel):
     
     model_config = ConfigDict(
         json_schema_extra={
-
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
