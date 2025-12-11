@@ -39,6 +39,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.user import User
+    from app.models.department import Department
 
 
 class OverrideType(str, Enum):
@@ -231,6 +232,11 @@ class PermissionOverride(Base):
         "User",
         foreign_keys=[approver_id],
         uselist=False,
+    )
+    
+    department: Mapped[Optional["Department"]] = relationship(
+        "Department",
+        foreign_keys=[department_id],
     )
 
     # Composite indexes for efficient queries

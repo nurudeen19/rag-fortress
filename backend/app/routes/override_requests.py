@@ -71,6 +71,7 @@ async def create_override_request(
     )
     
     if error:
+        logger.warning(f"Override request creation failed: {error}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=error

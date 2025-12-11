@@ -270,11 +270,11 @@ class PermissionService:
             return False
 
         # Check if user has permission record
-        if not user.permission or not user.permission.is_active:
+        if not user.user_permission or not user.user_permission.is_active:
             return False
 
         # Get effective permission considering overrides
-        effective_level = user.permission.get_effective_permission()
+        effective_level = user.user_permission.get_effective_permission()
 
         # Check if permission meets file security requirement
         return effective_level >= file.security_level
@@ -301,7 +301,7 @@ class PermissionService:
         """
         # Get user and permissions
         user = await db.get(User, user_id)
-        if not user or not user.permission:
+        if not user or not user.user_permission:
             return {
                 "user_id": user_id,
                 "has_permission_record": False,
@@ -309,7 +309,7 @@ class PermissionService:
                 "active_overrides": [],
             }
 
-        permission = user.permission
+        permission = user.user_permission
         active_overrides = permission.get_active_overrides()
 
         # Build summary

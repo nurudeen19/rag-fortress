@@ -151,16 +151,16 @@ class OverrideRequestResponse(BaseModel):
             "updated_at": obj.updated_at,
         }
         
-        # Add related user info if available
+        # Add related user info if available (User has first_name, last_name, email)
         if hasattr(obj, "user") and obj.user:
-            data["user_name"] = obj.user.name
+            data["user_name"] = obj.user.full_name
             data["user_email"] = obj.user.email
         
-        # Add approver info if available
+        # Add approver info if available (Approver is a User)
         if hasattr(obj, "approver") and obj.approver:
-            data["approver_name"] = obj.approver.name
+            data["approver_name"] = obj.approver.full_name
         
-        # Add department info if available
+        # Add department info if available (Department has name)
         if hasattr(obj, "department") and obj.department:
             data["department_name"] = obj.department.name
         

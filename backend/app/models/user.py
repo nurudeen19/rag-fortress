@@ -65,7 +65,7 @@ class User(Base):
         back_populates="invited_by",
         cascade="all, delete-orphan",
     )
-    permission: Mapped[Optional["UserPermission"]] = relationship(
+    user_permission: Mapped[Optional["UserPermission"]] = relationship(
         "UserPermission",
         back_populates="user",
         uselist=False,

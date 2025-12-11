@@ -93,7 +93,7 @@ class UserPermission(Base):
     # Relationships
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="permission",
+        back_populates="user_permission",
         foreign_keys=[user_id]
     )
     

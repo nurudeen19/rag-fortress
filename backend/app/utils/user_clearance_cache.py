@@ -185,7 +185,7 @@ class UserClearanceCache:
             select(User)
             .where(User.id == user_id)
             .options(
-                selectinload(User.permission),
+                selectinload(User.user_permission),
                 selectinload(User.permission_overrides),
                 selectinload(User.department)
             )
@@ -202,8 +202,8 @@ class UserClearanceCache:
         # Get department-specific security level
         department_security_level = None
         dept_clearance_value = None
-        if user.permission and user.permission.department_level_permission:
-            dept_level = user.permission.department_level_permission
+        if user.user_permission and user.user_permission.department_level_permission:
+            dept_level = user.user_permission.department_level_permission
             if isinstance(dept_level, PermissionLevel):
                 department_security_level = dept_level.name
                 dept_clearance_value = dept_level.value
@@ -244,7 +244,7 @@ class UserClearanceCache:
         3. Organization-wide permission
         4. Default to GENERAL
         """
-        if not user.permission:
+        if not user.user_permission:
             logger.warning(f"User {user.id} has no permission record, defaulting to GENERAL")
             return PermissionLevel.GENERAL
         
@@ -255,11 +255,11 @@ class UserClearanceCache:
             return int(level)  # Already an int from database
         
         # Start with org-wide permission
-        levels = [get_level_value(user.permission.org_level_permission)]
+        levels = [get_level_value(user.user_permission.org_level_permission)]
         
         # Add department-level permission if exists
-        if user.permission.department_level_permission:
-            levels.append(get_level_value(user.permission.department_level_permission))
+        if user.user_permission.department_level_permission:
+            levels.append(get_level_value(user.user_permission.department_level_permission))
         
         # Add active overrides (highest priority)
         # Note: override_permission_level is stored as int in database

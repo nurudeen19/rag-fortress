@@ -326,9 +326,15 @@ const approvalMessage = computed(() => {
 
 // Form validation
 const isFormValid = computed(() => {
-  const hasDuration = durationMode.value === 'preset' 
-    ? durationHours.value 
-    : customDurationDays.value && customDurationDays.value > 0
+  let hasDuration = false
+  
+  if (durationMode.value === 'preset') {
+    const hours = parseInt(durationHours.value)
+    hasDuration = !isNaN(hours) && hours > 0
+  } else {
+    const days = parseInt(customDurationDays.value)
+    hasDuration = !isNaN(days) && days > 0
+  }
   
   return (
     overrideType.value &&
@@ -373,9 +379,15 @@ async function handleSubmit() {
     
     // Add duration data based on mode
     if (durationMode.value === 'preset') {
-      requestData.requested_duration_hours = parseInt(durationHours.value)
+      const hours = parseInt(durationHours.value)
+      if (!isNaN(hours) && hours > 0) {
+        requestData.requested_duration_hours = hours
+      }
     } else {
-      requestData.custom_duration_days = parseInt(customDurationDays.value)
+      const days = parseInt(customDurationDays.value)
+      if (!isNaN(days) && days > 0) {
+        requestData.custom_duration_days = days
+      }
     }
 
     const result = await adminStore.createOverrideRequest(requestData)

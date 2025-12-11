@@ -79,7 +79,7 @@ def with_full_user_context(query: Any) -> Any:
         joinedload(User.profile),
         joinedload(User.department),
         selectinload(User.roles),
-        joinedload(User.permission),
+        joinedload(User.user_permission),
         selectinload(User.permission_overrides)
     )
 

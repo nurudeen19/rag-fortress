@@ -26,6 +26,15 @@ from app.services.notification_service import NotificationService
 logger = logging.getLogger(__name__)
 
 
+def _load_override_relationships(query):
+    """Helper to load all relationships needed for OverrideRequestResponse."""
+    return query.options(
+        selectinload(PermissionOverride.user),
+        selectinload(PermissionOverride.approver),
+        selectinload(PermissionOverride.department)
+    )
+
+
 class OverrideRequestService:
     """Service for managing permission override requests and approvals."""
     
@@ -125,6 +134,9 @@ class OverrideRequestService:
             self.session.add(override_request)
             await self.session.flush()
             
+            # Reload the object to load relationships properly
+            await self.session.refresh(override_request, ["user", "approver", "department"])
+            
             # Determine and notify approver
             await self._notify_approver(override_request)
             
@@ -161,9 +173,10 @@ class OverrideRequestService:
         try:
             # Get request with relationships
             result = await self.session.execute(
-                select(PermissionOverride)
-                .options(selectinload(PermissionOverride.user))
-                .where(PermissionOverride.id == request_id)
+                _load_override_relationships(
+                    select(PermissionOverride)
+                    .where(PermissionOverride.id == request_id)
+                )
             )
             override_request = result.scalar_one_or_none()
             
@@ -230,9 +243,10 @@ class OverrideRequestService:
         try:
             # Get request
             result = await self.session.execute(
-                select(PermissionOverride)
-                .options(selectinload(PermissionOverride.user))
-                .where(PermissionOverride.id == request_id)
+                _load_override_relationships(
+                    select(PermissionOverride)
+                    .where(PermissionOverride.id == request_id)
+                )
             )
             override_request = result.scalar_one_or_none()
             
@@ -347,9 +361,8 @@ class OverrideRequestService:
             
             if is_admin:
                 # Admins see all pending requests
-                query = (
+                query = _load_override_relationships(
                     select(PermissionOverride)
-                    .options(selectinload(PermissionOverride.user))
                     .where(PermissionOverride.status == OverrideStatus.PENDING.value)
                     .order_by(PermissionOverride.created_at.desc())
                     .limit(limit)
@@ -366,9 +379,8 @@ class OverrideRequestService:
                 if not department:
                     return []  # Not a manager
                 
-                query = (
+                query = _load_override_relationships(
                     select(PermissionOverride)
-                    .options(selectinload(PermissionOverride.user))
                     .where(
                         and_(
                             PermissionOverride.status == OverrideStatus.PENDING.value,
@@ -408,9 +420,8 @@ class OverrideRequestService:
             List of requests
         """
         try:
-            query = (
+            query = _load_override_relationships(
                 select(PermissionOverride)
-                .options(selectinload(PermissionOverride.approver))
                 .where(PermissionOverride.user_id == user_id)
             )
             
@@ -453,13 +464,15 @@ class OverrideRequestService:
             
             # Find pending department requests past threshold
             result = await self.session.execute(
-                select(PermissionOverride)
-                .where(
-                    and_(
-                        PermissionOverride.status == OverrideStatus.PENDING.value,
-                        PermissionOverride.override_type == OverrideType.DEPARTMENT.value,
-                        PermissionOverride.auto_escalated.is_(False),
-                        PermissionOverride.created_at <= cutoff_time
+                _load_override_relationships(
+                    select(PermissionOverride)
+                    .where(
+                        and_(
+                            PermissionOverride.status == OverrideStatus.PENDING.value,
+                            PermissionOverride.override_type == OverrideType.DEPARTMENT.value,
+                            PermissionOverride.auto_escalated.is_(False),
+                            PermissionOverride.created_at <= cutoff_time
+                        )
                     )
                 )
             )
