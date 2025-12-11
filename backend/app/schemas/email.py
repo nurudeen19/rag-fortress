@@ -6,7 +6,7 @@ type-safe validation and clear API contracts.
 """
 
 from typing import Optional, List
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 class EmailRequest(BaseModel):
@@ -20,8 +20,9 @@ class EmailRequest(BaseModel):
     action_url: Optional[str] = Field(None, description="Optional URL for call-to-action")
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
@@ -32,6 +33,7 @@ class EmailRequest(BaseModel):
                 "action_text": "Go to Dashboard"
             }
         }
+    )
 
 
 class AccountActivationRequest(BaseModel):
@@ -41,14 +43,16 @@ class AccountActivationRequest(BaseModel):
     recipient_name: str = Field(..., description="Full name of user")
     activation_token: str = Field(..., description="Token for email verification")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "recipient_email": "newuser@example.com",
                 "recipient_name": "Jane Smith",
                 "activation_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             }
         }
+    )
 
 
 class PasswordResetRequest(BaseModel):
@@ -58,14 +62,16 @@ class PasswordResetRequest(BaseModel):
     recipient_name: str = Field(..., description="Full name of user")
     reset_token: str = Field(..., description="Token for password reset")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
                 "reset_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
             }
         }
+    )
 
 
 class InvitationRequest(BaseModel):
@@ -78,8 +84,9 @@ class InvitationRequest(BaseModel):
     invitation_token: str = Field(..., description="Token for accepting invitation")
     custom_message: Optional[str] = Field(None, description="Optional custom message from inviter")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "recipient_email": "colleague@example.com",
                 "recipient_name": "Alice Johnson",
@@ -89,6 +96,7 @@ class InvitationRequest(BaseModel):
                 "custom_message": "Please join our team to collaborate on documents!"
             }
         }
+    )
 
 
 class NotificationRequest(BaseModel):
@@ -101,8 +109,9 @@ class NotificationRequest(BaseModel):
     action_url: Optional[str] = Field(None, description="Optional URL for call-to-action")
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "recipient_email": "user@example.com",
                 "recipient_name": "John Doe",
@@ -112,6 +121,7 @@ class NotificationRequest(BaseModel):
                 "action_text": "View Document"
             }
         }
+    )
 
 
 class BulkNotificationRequest(BaseModel):
@@ -126,8 +136,9 @@ class BulkNotificationRequest(BaseModel):
     action_url: Optional[str] = Field(None, description="Optional URL for call-to-action")
     action_text: Optional[str] = Field(None, description="Optional text for call-to-action button")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "recipients": [
                     "user1@example.com",
@@ -139,6 +150,7 @@ class BulkNotificationRequest(BaseModel):
                 "action_text": "Check Status"
             }
         }
+    )
 
 
 class EmailResponse(BaseModel):
@@ -149,8 +161,9 @@ class EmailResponse(BaseModel):
     recipient: Optional[str] = Field(None, description="Recipient email address")
     timestamp: str = Field(..., description="ISO format timestamp of request")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "success": True,
                 "message": "Email sent successfully",
@@ -158,6 +171,7 @@ class EmailResponse(BaseModel):
                 "timestamp": "2024-01-15T10:30:00Z"
             }
         }
+    )
 
 
 class BulkEmailResponse(BaseModel):
@@ -170,8 +184,9 @@ class BulkEmailResponse(BaseModel):
     results: dict = Field(..., description="Mapping of email addresses to send status")
     timestamp: str = Field(..., description="ISO format timestamp of request")
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
+
             "example": {
                 "success": True,
                 "total": 2,
@@ -184,3 +199,4 @@ class BulkEmailResponse(BaseModel):
                 "timestamp": "2024-01-15T10:30:00Z"
             }
         }
+    )

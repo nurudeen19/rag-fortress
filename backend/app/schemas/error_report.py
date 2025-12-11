@@ -2,7 +2,7 @@
 Pydantic schemas for error report API endpoints.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from datetime import datetime
 from app.models.error_report import ErrorReportStatus, ErrorReportCategory
@@ -30,8 +30,7 @@ class ErrorReportResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ErrorReportListResponse(BaseModel):
@@ -40,8 +39,7 @@ class ErrorReportListResponse(BaseModel):
     reports: list[ErrorReportResponse]
     total: int
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ErrorReportDetailResponse(BaseModel):
@@ -63,8 +61,7 @@ class ErrorReportDetailResponse(BaseModel):
     updated_at: datetime
     resolved_at: Optional[datetime]
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ErrorReportAdminUpdateRequest(BaseModel):
@@ -84,5 +81,4 @@ class ErrorReportListAdminResponse(BaseModel):
     investigating_count: int
     resolved_count: int
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional, List
 from enum import Enum
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class SecurityLevelEnum(str, Enum):
@@ -63,8 +63,8 @@ class FileUploadCreate(BaseModel):
             raise ValueError(f"File too large: {v} bytes (max: {max_size})")
         return v
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "file_name": "company_policy.pdf",
                 "file_type": "pdf",
@@ -77,6 +77,7 @@ class FileUploadCreate(BaseModel):
                 "is_department_only": True,
             }
         }
+    )
 
 
 class FileUploadResponse(BaseModel):
@@ -102,11 +103,12 @@ class FileUploadResponse(BaseModel):
     
     uploader_info: Optional[dict] = None
     
-    class Config:
-        from_attributes = True
-        json_encoders = {
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
             datetime: lambda v: v.isoformat(),
         }
+    )
 
 
 class FileUploadDetailResponse(FileUploadResponse):
@@ -144,10 +146,11 @@ class FileUploadListResponse(BaseModel):
     offset: int = Field(..., description="Pagination offset")
     items: List[FileUploadResponse]
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat(),
         }
+    )
 
 
 class FileUploadListWithCountsResponse(BaseModel):
@@ -159,10 +162,11 @@ class FileUploadListWithCountsResponse(BaseModel):
     offset: int = Field(..., description="Pagination offset")
     items: List[FileUploadResponse]
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat(),
         }
+    )
 
 
 class FileUploadStatsResponse(BaseModel):
@@ -174,8 +178,8 @@ class FileUploadStatsResponse(BaseModel):
     processed: int
     failed: int
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "total_files": 150,
                 "pending_approval": 5,
@@ -184,3 +188,4 @@ class FileUploadStatsResponse(BaseModel):
                 "failed": 5,
             }
         }
+    )

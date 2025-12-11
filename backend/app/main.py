@@ -2,6 +2,7 @@
 FastAPI Application Factory and Startup Configuration.
 """
 
+import warnings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from slowapi.errors import RateLimitExceeded
@@ -13,6 +14,13 @@ from app.core.exceptions import register_exception_handlers
 from app.middleware import setup_middlewares
 from app.utils.rate_limiter import get_limiter, rate_limit_exceeded_handler
 
+# Suppress langchain_core's Pydantic V1 compatibility warning on Python 3.14+
+# This is a known issue with langchain_core that will be fixed in future versions
+warnings.filterwarnings(
+    "ignore",
+    message="Core Pydantic V1 functionality isn't compatible with Python 3.14 or greater",
+    category=UserWarning,
+)
 
 logger = get_logger(__name__)
 

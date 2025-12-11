@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class OverrideRequestCreate(BaseModel):
@@ -49,26 +49,30 @@ class OverrideRequestCreate(BaseModel):
         description="File that couldn't be accessed"
     )
     
-    @validator("override_type")
+    @field_validator("override_type")
+    @classmethod
     def validate_override_type(cls, v):
         if v not in ["org_wide", "department"]:
             raise ValueError("override_type must be 'org_wide' or 'department'")
         return v
     
-    @validator("requested_duration_hours", "custom_duration_days", pre=True, always=True)
-    def validate_duration(cls, v, values):
+    @field_validator("requested_duration_hours", "custom_duration_days", mode='before')
+    @classmethod
+    def validate_duration(cls, v, info):
         """Ensure either requested_duration_hours or custom_duration_days is provided."""
         # Get the other duration field from values
-        if "requested_duration_hours" in values and "custom_duration_days" in values:
-            has_preset = values.get("requested_duration_hours") is not None
-            has_custom = values.get("custom_duration_days") is not None
+        data = info.data
+        if "requested_duration_hours" in data and "custom_duration_days" in data:
+            has_preset = data.get("requested_duration_hours") is not None
+            has_custom = data.get("custom_duration_days") is not None
             if not has_preset and not has_custom:
                 raise ValueError("Either requested_duration_hours or custom_duration_days must be provided")
         return v
     
-    @validator("department_id")
-    def validate_department_for_dept_override(cls, v, values):
-        if "override_type" in values and values["override_type"] == "department":
+    @field_validator("department_id")
+    @classmethod
+    def validate_department_for_dept_override(cls, v, info):
+        if "override_type" in info.data and info.data["override_type"] == "department":
             if not v:
                 raise ValueError("department_id is required for department-level requests")
         return v
@@ -125,9 +129,7 @@ class OverrideRequestResponse(BaseModel):
     approver_name: Optional[str] = None
     department_name: Optional[str] = None
     
-    class Config:
-        orm_mode = True
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
     
     @classmethod
     def from_orm(cls, obj):

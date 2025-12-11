@@ -2,7 +2,7 @@
 Common response schemas shared across all endpoints.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Any
 
 
@@ -12,11 +12,12 @@ class MessageResponse(BaseModel):
     message: str
     data: Optional[Any] = None
 
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "status": "ok",
                 "message": "Operation completed successfully",
                 "data": None
             }
         }
+    )

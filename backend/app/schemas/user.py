@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Optional, List
 from enum import Enum
 
-from pydantic import BaseModel, Field, validator, EmailStr
+from pydantic import BaseModel, Field, field_validator, EmailStr, ConfigDict
 
 
 class LoginRequest(BaseModel):
@@ -25,10 +25,11 @@ class LoginResponse(BaseModel):
     expires_at: str = Field(..., description="Token expiration timestamp (ISO 8601)")
     user: dict = Field(..., description="Full user data including roles")
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat() if v else None,
         }
+    )
 
 
 class RoleResponse(BaseModel):
@@ -47,9 +48,10 @@ class PasswordChangeRequest(BaseModel):
     new_password: str = Field(..., min_length=8)
     confirm_password: str = Field(..., min_length=8)
     
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
-        if 'new_password' in values and v != values['new_password']:
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
+        if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError('Passwords do not match')
         return v
 
@@ -73,9 +75,10 @@ class PasswordResetConfirmSchema(BaseModel):
     new_password: str = Field(..., min_length=8, description="New password")
     confirm_password: str = Field(..., min_length=8, description="Password confirmation")
     
-    @validator('confirm_password')
-    def passwords_match(cls, v, values):
-        if 'new_password' in values and v != values['new_password']:
+    @field_validator('confirm_password')
+    @classmethod
+    def passwords_match(cls, v, info):
+        if 'new_password' in info.data and v != info.data['new_password']:
             raise ValueError('Passwords do not match')
         return v
 
@@ -134,10 +137,11 @@ class UserResponse(BaseModel):
     about: Optional[str] = None
     avatar_url: Optional[str] = None
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             datetime: lambda v: v.isoformat() if v else None,
         }
+    )
 
 
 class UserDetailResponse(UserResponse):
@@ -250,7 +254,8 @@ class SignupWithInviteRequest(BaseModel):
     password: str = Field(..., min_length=8, description="Password")
     invite_token: str = Field(..., description="Invitation token from email link")
     
-    @validator('password')
+    @field_validator('password')
+    @classmethod
     def password_strong(cls, v):
         """Validate password strength."""
         has_upper = any(c.isupper() for c in v)

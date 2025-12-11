@@ -4,7 +4,7 @@ Activity Log Pydantic schemas for request/response validation.
 
 from typing import Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from enum import Enum
 
 
@@ -43,8 +43,7 @@ class ActivityLogResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ActivityLogsListResponse(BaseModel):
@@ -57,8 +56,7 @@ class ActivityLogsListResponse(BaseModel):
     offset: int = Field(..., description="Current pagination offset")
     has_more: bool = Field(..., description="Whether more results are available")
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IncidentTypeInfo(BaseModel):
