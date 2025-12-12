@@ -66,15 +66,15 @@
               class="w-full px-4 py-2 bg-fortress-900 border border-fortress-700 rounded-lg text-fortress-100 focus:border-secure focus:outline-none focus:ring-1 focus:ring-secure transition-colors"
             >
               <option value="">Select a category...</option>
-              <option value="LLM_ERROR">LLM Error - Issues with AI responses</option>
-              <option value="RETRIEVAL_ERROR">Retrieval Error - Document search problems</option>
-              <option value="VALIDATION_ERROR">Validation Error - Input validation failures</option>
-              <option value="PERFORMANCE">Performance - Slow response or timeout</option>
-              <option value="UI_UX">UI/UX - Interface or usability issues</option>
-              <option value="PERMISSIONS">Permissions - Access control problems</option>
-              <option value="DATA_ACCURACY">Data Accuracy - Incorrect data or results</option>
-              <option value="SYSTEM_ERROR">System Error - General system failures</option>
-              <option value="OTHER">Other - Miscellaneous issues</option>
+              <option value="llm_error">LLM Error - Issues with AI responses</option>
+              <option value="retrieval_error">Retrieval Error - Document search problems</option>
+              <option value="validation_error">Validation Error - Input validation failures</option>
+              <option value="performance">Performance - Slow response or timeout</option>
+              <option value="ui_ux">UI/UX - Interface or usability issues</option>
+              <option value="permissions">Permissions - Access control problems</option>
+              <option value="data_accuracy">Data Accuracy - Incorrect data or results</option>
+              <option value="system_error">System Error - General system failures</option>
+              <option value="other">Other - Miscellaneous issues</option>
             </select>
           </div>
 
@@ -302,7 +302,7 @@ const removeImage = () => {
   }
 }
 
-const resetForm = () => {
+const resetForm = (preserveSuccess = false) => {
   form.value = {
     title: '',
     category: '',
@@ -311,7 +311,9 @@ const resetForm = () => {
     imagePreview: null
   }
   formError.value = null
-  showSuccess.value = false
+  if (!preserveSuccess) {
+    showSuccess.value = false
+  }
 }
 
 const submitReport = async () => {
@@ -339,14 +341,9 @@ const submitReport = async () => {
       }
     }
 
-    // Show success
+    // Show success and keep message on screen
     showSuccess.value = true
-    resetForm()
-
-    // Redirect after 3 seconds
-    setTimeout(() => {
-      router.push('/error-reports')
-    }, 3000)
+    resetForm(true)
   } catch (err) {
     formError.value = err.response?.data?.detail || 'Failed to submit error report. Please try again.'
     console.error('Error submitting report:', err)
@@ -356,7 +353,7 @@ const submitReport = async () => {
 }
 
 const viewReports = () => {
-  router.push('/error-reports')
+  router.push({ name: 'error-reports' })
 }
 </script>
 

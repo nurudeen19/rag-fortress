@@ -27,6 +27,7 @@ class ErrorReportResponse(BaseModel):
     category: ErrorReportCategory
     status: ErrorReportStatus
     image_filename: Optional[str]
+    image_url: Optional[str]
     created_at: datetime
     updated_at: datetime
     
@@ -54,6 +55,7 @@ class ErrorReportDetailResponse(BaseModel):
     status: ErrorReportStatus
     conversation_id: Optional[str]
     image_filename: Optional[str]
+    image_url: Optional[str]
     user_agent: Optional[str]
     admin_notes: Optional[str]
     assigned_to: Optional[int]

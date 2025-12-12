@@ -1,6 +1,6 @@
 """Service layer for Notification CRUD operations."""
 
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 
 from app.models.notification import Notification
 from app.core import get_logger
+from app.core.cache import get_cache
+from app.config.cache_settings import cache_settings
 
 logger = get_logger(__name__)
 
@@ -34,7 +36,21 @@ class NotificationService:
         self.session.add(notif)
         await self.session.flush()  # obtain id early
         logger.info(f"Created notification {notif.id} for user {user_id}")
+        await self._invalidate_notification_cache(user_id)
         return notif
+
+    async def _invalidate_notification_cache(self, user_id: int) -> None:
+        """Invalidate cache entries impacted by notification changes."""
+        try:
+            if not cache_settings.CACHE_ENABLED:
+                return
+            cache = get_cache()
+            await cache.delete(f"notif:unread_count:{user_id}")
+            await cache.delete(f"dashboard:user:metrics:{user_id}")
+            await cache.delete("dashboard:admin:metrics")
+        except Exception:
+            # Cache might not be initialized (tests or disabled), don't block flow
+            logger.debug("Notification cache invalidation skipped (cache unavailable)")
 
     async def list_for_user(
         self,
@@ -100,6 +116,70 @@ class NotificationService:
             .where(Role.id == admin_role.id)
         )
         return admin_users_result.scalars().all()
+
+    async def notify_admins_new_error_report(
+        self,
+        report: Any,
+        reporter_name: Optional[str] = None,
+    ) -> None:
+        """Notify all admins when a new error report is submitted."""
+        admins = await self._get_admin_users()
+        if not admins:
+            return
+
+        from app.models.user import User
+        # Resolve reporter name/email for context
+        resolved_reporter = reporter_name
+        if not resolved_reporter and getattr(report, "user_id", None):
+            reporter = await self.session.get(User, report.user_id)
+            if reporter:
+                resolved_reporter = reporter.full_name or reporter.email or f"User {report.user_id}"
+        resolved_reporter = resolved_reporter or f"User {getattr(report, 'user_id', 'unknown')}"
+
+        category = getattr(report, "category", None)
+        category_value = category.value if hasattr(category, "value") else str(category)
+        message = (
+            f"New error report submitted: '{getattr(report, 'title', 'Untitled')}' "
+            f"(category: {category_value}) by {resolved_reporter}."
+        )
+
+        for admin in admins:
+            await self.create(
+                user_id=admin.id,
+                message=message,
+                notification_type="error_report_new",
+            )
+
+    async def notify_error_report_status_changed(
+        self,
+        report: Any,
+        acting_admin: Optional["User"] = None,
+    ) -> None:
+        """Notify the reporter when their error report status is updated."""
+        from app.models.user import User
+
+        # Resolve reporter
+        reporter = await self.session.get(User, getattr(report, "user_id", 0))
+        if not reporter:
+            return
+
+        status = getattr(report, "status", "updated")
+        admin_name = None
+        if acting_admin:
+            admin_name = acting_admin.full_name or acting_admin.email
+
+        message = (
+            f"Your error report '{getattr(report, 'title', 'Untitled')}' "
+            f"was updated to status: {status}."
+        )
+        if admin_name:
+            message += f" Updated by: {admin_name}."
+
+        await self.create(
+            user_id=reporter.id,
+            message=message,
+            notification_type="error_report_status",
+        )
     
     # Permission override request notifications
     

@@ -5,6 +5,8 @@ FastAPI Application Factory and Startup Configuration.
 import warnings
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from slowapi.errors import RateLimitExceeded
 
 from app.config.settings import settings
@@ -121,6 +123,15 @@ def create_app() -> FastAPI:
     app.include_router(override_requests_router)
     app.include_router(error_reports_router)
     app.include_router(error_reports_admin_router)
+
+    # Static file serving for error report attachments
+    error_report_dir = Path(settings.DATA_DIR) / "error_reports"
+    error_report_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/static/error-reports",
+        StaticFiles(directory=error_report_dir),
+        name="error_report_images",
+    )
     
     # Health check endpoint
     @app.get("/health")

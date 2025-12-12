@@ -17,7 +17,7 @@ export const userErrorReporting = {
    * @param {Object} payload - Error report data
    * @param {string} payload.title - Brief error description
    * @param {string} payload.description - Detailed error description
-   * @param {string} payload.category - Error category (LLM_ERROR, RETRIEVAL_ERROR, etc.)
+   * @param {string} payload.category - Error category (llm_error, retrieval_error, etc.)
    * @param {number|null} payload.conversation_id - Optional conversation ID
    * @returns {Promise<Object>} Created error report
    */
@@ -104,46 +104,47 @@ export const adminErrorReporting = {
 /**
  * Error report status and category constants
  */
+// Backend enums are lowercase snake_case; keep constants here as single source of truth
 export const ERROR_REPORT_STATUS = {
-  OPEN: 'OPEN',
-  INVESTIGATING: 'INVESTIGATING',
-  ACKNOWLEDGED: 'ACKNOWLEDGED',
-  RESOLVED: 'RESOLVED',
-  DUPLICATE: 'DUPLICATE',
-  NOT_REPRODUCIBLE: 'NOT_REPRODUCIBLE',
-  WONT_FIX: 'WONT_FIX'
+  OPEN: 'open',
+  INVESTIGATING: 'investigating',
+  ACKNOWLEDGED: 'acknowledged',
+  RESOLVED: 'resolved',
+  DUPLICATE: 'duplicate',
+  NOT_REPRODUCIBLE: 'not_reproducible',
+  WONT_FIX: 'wont_fix'
 }
 
 export const ERROR_REPORT_CATEGORY = {
-  LLM_ERROR: 'LLM_ERROR',
-  RETRIEVAL_ERROR: 'RETRIEVAL_ERROR',
-  VALIDATION_ERROR: 'VALIDATION_ERROR',
-  PERFORMANCE: 'PERFORMANCE',
-  UI_UX: 'UI_UX',
-  PERMISSIONS: 'PERMISSIONS',
-  DATA_ACCURACY: 'DATA_ACCURACY',
-  SYSTEM_ERROR: 'SYSTEM_ERROR',
-  OTHER: 'OTHER'
+  LLM_ERROR: 'llm_error',
+  RETRIEVAL_ERROR: 'retrieval_error',
+  VALIDATION_ERROR: 'validation_error',
+  PERFORMANCE: 'performance',
+  UI_UX: 'ui_ux',
+  PERMISSIONS: 'permissions',
+  DATA_ACCURACY: 'data_accuracy',
+  SYSTEM_ERROR: 'system_error',
+  OTHER: 'other'
 }
 
 export const STATUS_DISPLAY = {
-  OPEN: { label: 'Open', color: 'blue', icon: 'alert' },
-  INVESTIGATING: { label: 'Investigating', color: 'yellow', icon: 'search' },
-  ACKNOWLEDGED: { label: 'Acknowledged', color: 'purple', icon: 'check' },
-  RESOLVED: { label: 'Resolved', color: 'green', icon: 'checkmark' },
-  DUPLICATE: { label: 'Duplicate', color: 'gray', icon: 'copy' },
-  NOT_REPRODUCIBLE: { label: 'Not Reproducible', color: 'gray', icon: 'x' },
-  WONT_FIX: { label: 'Won\'t Fix', color: 'gray', icon: 'ban' }
+  [ERROR_REPORT_STATUS.OPEN]: { label: 'Open', color: 'blue', icon: 'alert' },
+  [ERROR_REPORT_STATUS.INVESTIGATING]: { label: 'Investigating', color: 'yellow', icon: 'search' },
+  [ERROR_REPORT_STATUS.ACKNOWLEDGED]: { label: 'Acknowledged', color: 'purple', icon: 'check' },
+  [ERROR_REPORT_STATUS.RESOLVED]: { label: 'Resolved', color: 'green', icon: 'checkmark' },
+  [ERROR_REPORT_STATUS.DUPLICATE]: { label: 'Duplicate', color: 'gray', icon: 'copy' },
+  [ERROR_REPORT_STATUS.NOT_REPRODUCIBLE]: { label: 'Not Reproducible', color: 'gray', icon: 'x' },
+  [ERROR_REPORT_STATUS.WONT_FIX]: { label: "Won't Fix", color: 'gray', icon: 'ban' }
 }
 
 export const CATEGORY_DISPLAY = {
-  LLM_ERROR: { label: 'LLM Error', icon: 'brain', color: 'red' },
-  RETRIEVAL_ERROR: { label: 'Retrieval Error', icon: 'search', color: 'red' },
-  VALIDATION_ERROR: { label: 'Validation Error', icon: 'alert', color: 'orange' },
-  PERFORMANCE: { label: 'Performance', icon: 'zap', color: 'yellow' },
-  UI_UX: { label: 'UI/UX', icon: 'layout', color: 'blue' },
-  PERMISSIONS: { label: 'Permissions', icon: 'lock', color: 'purple' },
-  DATA_ACCURACY: { label: 'Data Accuracy', icon: 'database', color: 'orange' },
-  SYSTEM_ERROR: { label: 'System Error', icon: 'alert-triangle', color: 'red' },
-  OTHER: { label: 'Other', icon: 'help-circle', color: 'gray' }
+  [ERROR_REPORT_CATEGORY.LLM_ERROR]: { label: 'LLM Error', icon: 'brain', color: 'red' },
+  [ERROR_REPORT_CATEGORY.RETRIEVAL_ERROR]: { label: 'Retrieval Error', icon: 'search', color: 'red' },
+  [ERROR_REPORT_CATEGORY.VALIDATION_ERROR]: { label: 'Validation Error', icon: 'alert', color: 'orange' },
+  [ERROR_REPORT_CATEGORY.PERFORMANCE]: { label: 'Performance', icon: 'zap', color: 'yellow' },
+  [ERROR_REPORT_CATEGORY.UI_UX]: { label: 'UI/UX', icon: 'layout', color: 'blue' },
+  [ERROR_REPORT_CATEGORY.PERMISSIONS]: { label: 'Permissions', icon: 'lock', color: 'purple' },
+  [ERROR_REPORT_CATEGORY.DATA_ACCURACY]: { label: 'Data Accuracy', icon: 'database', color: 'orange' },
+  [ERROR_REPORT_CATEGORY.SYSTEM_ERROR]: { label: 'System Error', icon: 'alert-triangle', color: 'red' },
+  [ERROR_REPORT_CATEGORY.OTHER]: { label: 'Other', icon: 'help-circle', color: 'gray' }
 }

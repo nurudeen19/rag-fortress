@@ -77,6 +77,7 @@ async def create_error_report(
             user_agent=user_agent,
             request_context=request_context,
             session=session,
+            reporter=current_user,
         )
         
         if not success:
@@ -201,10 +202,14 @@ async def update_error_report_admin(
             report_id=report_id,
             update_request=update_request,
             session=session,
+            acting_admin=current_user,
         )
         
-        if not success:
-            raise HTTPException(status_code=400, detail=response.get("message", "Failed to update report"))
+        if not success or response is None:
+            detail_msg = "Failed to update report"
+            if isinstance(response, dict):
+                detail_msg = response.get("message", detail_msg)
+            raise HTTPException(status_code=400, detail=detail_msg)
         
         return response
     except HTTPException:

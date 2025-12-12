@@ -9,9 +9,9 @@ Handles:
 """
 
 import logging
-import os
+import json
 from datetime import datetime, timezone
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Union
 from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
@@ -41,7 +41,7 @@ class ErrorReportService:
         user_id: int,
         request: ErrorReportCreateRequest,
         user_agent: Optional[str] = None,
-        request_context: Optional[str] = None,
+        request_context: Optional[Union[str, dict]] = None,
     ) -> Tuple[bool, ErrorReportResponse | dict]:
         """
         Create a new error report from user submission.
@@ -56,6 +56,14 @@ class ErrorReportService:
             Tuple of (success: bool, response: ErrorReportResponse | error_dict)
         """
         try:
+            serialized_context = None
+            if request_context is not None:
+                if isinstance(request_context, str):
+                    serialized_context = request_context
+                else:
+                    # Persist JSON-friendly context for debugging/triage
+                    serialized_context = json.dumps(request_context)
+
             error_report = ErrorReport(
                 user_id=user_id,
                 conversation_id=request.conversation_id,
@@ -64,12 +72,13 @@ class ErrorReportService:
                 category=request.category,
                 status=ErrorReportStatus.OPEN,
                 user_agent=user_agent,
-                request_context=request_context,
+                request_context=serialized_context,
             )
             
             self.session.add(error_report)
             await self.session.flush()
             await self.session.refresh(error_report)
+            await self.session.commit()
             
             logger.info(f"Created error report {error_report.id} from user {user_id}")
             
@@ -87,6 +96,7 @@ class ErrorReportService:
         report_id: int,
         filename: str,
         image_url: Optional[str] = None,
+        user_id: Optional[int] = None,
     ) -> bool:
         """
         Attach image to error report.
@@ -107,11 +117,18 @@ class ErrorReportService:
             if not report:
                 logger.warning(f"Error report {report_id} not found for image attachment")
                 return False
+
+            if user_id and report.user_id != user_id:
+                logger.warning(
+                    f"User {user_id} attempted to attach image to report {report_id} they do not own"
+                )
+                return False
             
             report.image_filename = filename
             report.image_url = image_url
             
             logger.info(f"Attached image {filename} to error report {report_id}")
+            await self.session.commit()
             return True
         
         except Exception as e:
@@ -231,6 +248,7 @@ class ErrorReportService:
                     status=r.status,
                     conversation_id=r.conversation_id,
                     image_filename=r.image_filename,
+                    image_url=r.image_url,
                     user_agent=r.user_agent,
                     admin_notes=r.admin_notes,
                     assigned_to=r.assigned_to,
@@ -303,6 +321,7 @@ class ErrorReportService:
             
             await self.session.flush()
             await self.session.refresh(report)
+            await self.session.commit()
             
             logger.info(f"Updated error report {report_id}")
             
@@ -316,6 +335,7 @@ class ErrorReportService:
                 status=report.status,
                 conversation_id=report.conversation_id,
                 image_filename=report.image_filename,
+                image_url=report.image_url,
                 user_agent=report.user_agent,
                 admin_notes=report.admin_notes,
                 assigned_to=report.assigned_to,

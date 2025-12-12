@@ -14,15 +14,15 @@
       </div>
       <div class="card p-4 bg-blue-500/10 border-blue-500/30">
         <p class="text-blue-400 text-sm font-medium mb-1">Open</p>
-        <p class="text-2xl font-bold text-blue-300">{{ dashboardMetrics.OPEN || 0 }}</p>
+        <p class="text-2xl font-bold text-blue-300">{{ dashboardMetrics.open || 0 }}</p>
       </div>
       <div class="card p-4 bg-yellow-500/10 border-yellow-500/30">
         <p class="text-yellow-400 text-sm font-medium mb-1">Investigating</p>
-        <p class="text-2xl font-bold text-yellow-300">{{ dashboardMetrics.INVESTIGATING || 0 }}</p>
+        <p class="text-2xl font-bold text-yellow-300">{{ dashboardMetrics.investigating || 0 }}</p>
       </div>
       <div class="card p-4 bg-green-500/10 border-green-500/30">
         <p class="text-green-400 text-sm font-medium mb-1">Resolved</p>
-        <p class="text-2xl font-bold text-green-300">{{ dashboardMetrics.RESOLVED || 0 }}</p>
+        <p class="text-2xl font-bold text-green-300">{{ dashboardMetrics.resolved || 0 }}</p>
       </div>
     </div>
 
@@ -38,13 +38,13 @@
             class="w-full px-3 py-2 bg-fortress-900 border border-fortress-700 rounded-lg text-fortress-100 text-sm focus:border-secure focus:outline-none transition-colors"
           >
             <option value="">All Statuses</option>
-            <option value="OPEN">Open</option>
-            <option value="INVESTIGATING">Investigating</option>
-            <option value="ACKNOWLEDGED">Acknowledged</option>
-            <option value="RESOLVED">Resolved</option>
-            <option value="DUPLICATE">Duplicate</option>
-            <option value="NOT_REPRODUCIBLE">Not Reproducible</option>
-            <option value="WONT_FIX">Won't Fix</option>
+            <option value="open">Open</option>
+            <option value="investigating">Investigating</option>
+            <option value="acknowledged">Acknowledged</option>
+            <option value="resolved">Resolved</option>
+            <option value="duplicate">Duplicate</option>
+            <option value="not_reproducible">Not Reproducible</option>
+            <option value="wont_fix">Won't Fix</option>
           </select>
         </div>
 
@@ -57,15 +57,15 @@
             class="w-full px-3 py-2 bg-fortress-900 border border-fortress-700 rounded-lg text-fortress-100 text-sm focus:border-secure focus:outline-none transition-colors"
           >
             <option value="">All Categories</option>
-            <option value="LLM_ERROR">LLM Error</option>
-            <option value="RETRIEVAL_ERROR">Retrieval Error</option>
-            <option value="VALIDATION_ERROR">Validation Error</option>
-            <option value="PERFORMANCE">Performance</option>
-            <option value="UI_UX">UI/UX</option>
-            <option value="PERMISSIONS">Permissions</option>
-            <option value="DATA_ACCURACY">Data Accuracy</option>
-            <option value="SYSTEM_ERROR">System Error</option>
-            <option value="OTHER">Other</option>
+            <option value="llm_error">LLM Error</option>
+            <option value="retrieval_error">Retrieval Error</option>
+            <option value="validation_error">Validation Error</option>
+            <option value="performance">Performance</option>
+            <option value="ui_ux">UI/UX</option>
+            <option value="permissions">Permissions</option>
+            <option value="data_accuracy">Data Accuracy</option>
+            <option value="system_error">System Error</option>
+            <option value="other">Other</option>
           </select>
         </div>
 
@@ -154,13 +154,13 @@
                     :class="getStatusBadgeClass(report.status)"
                     class="px-2 py-1 rounded text-xs font-medium border-0 focus:outline-none focus:ring-2 focus:ring-secure cursor-pointer transition-colors"
                   >
-                    <option value="OPEN">Open</option>
-                    <option value="INVESTIGATING">Investigating</option>
-                    <option value="ACKNOWLEDGED">Acknowledged</option>
-                    <option value="RESOLVED">Resolved</option>
-                    <option value="DUPLICATE">Duplicate</option>
-                    <option value="NOT_REPRODUCIBLE">Not Reproducible</option>
-                    <option value="WONT_FIX">Won't Fix</option>
+                    <option value="open">Open</option>
+                    <option value="investigating">Investigating</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="resolved">Resolved</option>
+                    <option value="duplicate">Duplicate</option>
+                    <option value="not_reproducible">Not Reproducible</option>
+                    <option value="wont_fix">Won't Fix</option>
                   </select>
                 </div>
               </td>
@@ -245,7 +245,7 @@
             <div>
               <p class="text-fortress-400 text-sm font-medium mb-1">Status</p>
               <span :class="getStatusBadgeClass(selectedReport.status)" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
-                {{ selectedReport.status }}
+                {{ getStatusLabel(selectedReport.status) }}
               </span>
             </div>
           </div>
@@ -271,7 +271,7 @@
           <div v-if="selectedReport.image_url" class="border-t border-fortress-700 pt-6">
             <p class="text-fortress-400 text-sm font-medium mb-3">Attached Image</p>
             <img 
-              :src="selectedReport.image_url" 
+              :src="getImageSrc(selectedReport.image_url)" 
               :alt="selectedReport.title"
               class="max-w-full max-h-96 rounded-lg border border-fortress-700"
             />
@@ -322,7 +322,10 @@
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { adminErrorReporting, CATEGORY_DISPLAY } from '@/services/errorReporting'
+import { adminErrorReporting, CATEGORY_DISPLAY, STATUS_DISPLAY } from '@/services/errorReporting'
+
+const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+const assetBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase
 
 // State
 const loading = ref(false)
@@ -359,11 +362,13 @@ const loadReports = async () => {
       offset: pagination.value.offset
     })
     
-    reports.value = response.items || []
+    reports.value = response.reports || response.items || []
     totalReports.value = response.total || 0
     dashboardMetrics.value = {
-      total: response.total,
-      ...response.status_counts
+      total: response.total || 0,
+      open: response.open_count || 0,
+      investigating: response.investigating_count || 0,
+      resolved: response.resolved_count || 0
     }
   } catch (err) {
     error.value = 'Failed to load error reports'
@@ -442,15 +447,23 @@ const getCategoryBadgeClass = (category) => {
 
 const getStatusBadgeClass = (status) => {
   const statusColorMap = {
-    OPEN: 'bg-blue-500/20 text-blue-300',
-    INVESTIGATING: 'bg-yellow-500/20 text-yellow-300',
-    ACKNOWLEDGED: 'bg-purple-500/20 text-purple-300',
-    RESOLVED: 'bg-green-500/20 text-green-300',
-    DUPLICATE: 'bg-gray-500/20 text-gray-300',
-    NOT_REPRODUCIBLE: 'bg-gray-500/20 text-gray-300',
-    WONT_FIX: 'bg-gray-500/20 text-gray-300'
+    open: 'bg-blue-500/20 text-blue-300',
+    investigating: 'bg-yellow-500/20 text-yellow-300',
+    acknowledged: 'bg-purple-500/20 text-purple-300',
+    resolved: 'bg-green-500/20 text-green-300',
+    duplicate: 'bg-gray-500/20 text-gray-300',
+    not_reproducible: 'bg-gray-500/20 text-gray-300',
+    wont_fix: 'bg-gray-500/20 text-gray-300'
   }
   return statusColorMap[status] || 'bg-gray-500/20 text-gray-300'
+}
+
+const getStatusLabel = (status) => STATUS_DISPLAY[status]?.label || status
+
+const getImageSrc = (url) => {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return `${assetBase}${url}`
 }
 
 const formatDate = (dateString) => {
