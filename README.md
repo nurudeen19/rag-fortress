@@ -27,10 +27,17 @@ See **[Installation Guide](backend/INSTALLATION.md)** for complete setup instruc
 ```bash
 cd backend
 uv sync                    # Install dependencies
-.venv\Scripts\Activate     # Activate environment (Windows) or source .venv/bin/activate (macOS/Linux)
 cp .env.example .env       # Configure your API keys and database
-python setup.py            # Initialize database with migrations and seeders
-python run.py              # Start server on http://localhost:8000
+
+# Option 1: Using uv run (recommended - no activation needed)
+uv run python setup.py     # Initialize database with migrations and seeders
+uv run python run.py       # Start server on http://localhost:8000
+
+# Option 2: Activate environment first
+.venv\Scripts\Activate     # Windows
+source .venv/bin/activate  # macOS/Linux
+python setup.py
+python run.py
 ```
 
 **Frontend:**

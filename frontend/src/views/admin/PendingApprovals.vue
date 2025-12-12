@@ -3,8 +3,28 @@
     <div class="max-w-7xl mx-auto p-6">
       <!-- Header -->
       <div class="mb-6">
-        <h1 class="text-2xl font-bold text-fortress-100 mb-2">Pending Override Requests</h1>
-        <p class="text-fortress-400">Review and approve temporary clearance elevation requests</p>
+        <h1 class="text-2xl font-bold text-fortress-100 mb-2">Permission Override Requests</h1>
+        <p class="text-fortress-400">Review and manage temporary clearance elevation requests</p>
+      </div>
+
+      <!-- Status Filter Tabs -->
+      <div class="mb-6 flex flex-wrap gap-2 border-b border-fortress-700 pb-4">
+        <button
+          v-for="status in statuses"
+          :key="status.value"
+          @click="selectedStatus = status.value"
+          :class="[
+            'px-4 py-2 rounded-lg font-medium transition-colors',
+            selectedStatus === status.value
+              ? 'bg-secure text-white'
+              : 'bg-fortress-800 text-fortress-400 hover:text-fortress-100 hover:bg-fortress-700'
+          ]"
+        >
+          {{ status.label }}
+          <span v-if="getStatusCount(status.value)" class="ml-2 text-xs font-bold">
+            ({{ getStatusCount(status.value) }})
+          </span>
+        </button>
       </div>
 
       <!-- Loading State -->
@@ -14,12 +34,12 @@
       </div>
 
       <!-- Empty State -->
-      <div v-else-if="requests.length === 0" class="bg-fortress-900 rounded-lg border border-fortress-700 p-12 text-center">
+      <div v-else-if="filteredRequests.length === 0" class="bg-fortress-900 rounded-lg border border-fortress-700 p-12 text-center">
         <svg class="w-16 h-16 text-fortress-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        <p class="text-fortress-300 font-medium mb-1">No Pending Requests</p>
-        <p class="text-fortress-500 text-sm">All override requests have been processed</p>
+        <p class="text-fortress-300 font-medium mb-1">No {{ selectedStatus }} Requests</p>
+        <p class="text-fortress-500 text-sm">No override requests found with this status</p>
       </div>
 
       <!-- Requests List -->
@@ -71,7 +91,9 @@
                 </div>
                 <div>
                   <p class="text-xs text-fortress-500 mb-1">Duration</p>
-                  <p class="text-sm font-medium text-fortress-200">{{ formatDuration(request.valid_from, request.valid_until) }}</p>
+                  <p class="text-sm font-medium text-fortress-200">
+                    {{ request.requested_duration_hours ? request.requested_duration_hours + ' hours' : formatDuration(request.valid_from, request.valid_until) }}
+                  </p>
                 </div>
                 <div>
                   <p class="text-xs text-fortress-500 mb-1">Requested</p>
@@ -102,7 +124,7 @@
             </div>
 
             <!-- Actions -->
-            <div class="flex-shrink-0 flex flex-col gap-2">
+            <div v-if="request.status === 'pending'" class="flex-shrink-0 flex flex-col gap-2">
               <button
                 @click="showApproveModal(request)"
                 class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
@@ -117,6 +139,16 @@
               >
                 Deny
               </button>
+            </div>
+            
+            <!-- Status Badge for non-pending -->
+            <div v-else class="flex-shrink-0">
+              <span :class="[
+                'px-3 py-1 rounded-lg text-sm font-medium',
+                getStatusBadgeClass(request.status)
+              ]">
+                {{ getStatusLabel(request.status) }}
+              </span>
             </div>
           </div>
         </div>
@@ -218,7 +250,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useAdminStore } from '../../stores/admin'
 
 const adminStore = useAdminStore()
@@ -226,6 +258,50 @@ const adminStore = useAdminStore()
 const requests = ref([])
 const loading = ref(false)
 const processing = ref(false)
+const selectedStatus = ref('pending')
+
+// Status options
+const statuses = [
+  { label: 'Pending', value: 'pending' },
+  { label: 'Approved', value: 'approved' },
+  { label: 'Denied', value: 'denied' },
+  { label: 'Expired', value: 'expired' },
+  { label: 'Revoked', value: 'revoked' }
+]
+
+// Filter requests by selected status
+const filteredRequests = computed(() => {
+  return requests.value.filter(r => r.status === selectedStatus.value)
+})
+
+// Count requests by status
+const getStatusCount = (status) => {
+  return requests.value.filter(r => r.status === status).length
+}
+
+// Get status badge styling
+const getStatusBadgeClass = (status) => {
+  const classes = {
+    pending: 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30',
+    approved: 'bg-green-500/20 text-green-300 border border-green-500/30',
+    denied: 'bg-red-500/20 text-red-300 border border-red-500/30',
+    expired: 'bg-gray-500/20 text-gray-300 border border-gray-500/30',
+    revoked: 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+  }
+  return classes[status] || classes.pending
+}
+
+// Get status label
+const getStatusLabel = (status) => {
+  const labels = {
+    pending: 'Pending Review',
+    approved: 'Approved',
+    denied: 'Denied',
+    expired: 'Expired',
+    revoked: 'Revoked'
+  }
+  return labels[status] || status
+}
 
 // Modal state
 const approveModalRequest = ref(null)
@@ -238,10 +314,15 @@ onMounted(async () => {
   await loadRequests()
 })
 
+// Reload when status filter changes
+watch(selectedStatus, async () => {
+  await loadRequests()
+})
+
 async function loadRequests() {
   loading.value = true
   try {
-    const result = await adminStore.fetchPendingOverrideRequests()
+    const result = await adminStore.fetchAllOverrideRequests(selectedStatus.value)
     if (result.success) {
       requests.value = result.requests
     }

@@ -9,8 +9,33 @@
         </p>
       </div>
 
+      <!-- Admin Info Message -->
+      <div v-if="authStore.isAdmin" class="card p-8 border border-blue-500/30 bg-blue-500/10 mb-6">
+        <div class="flex items-start gap-4">
+          <svg class="w-8 h-8 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <div>
+            <h3 class="text-xl font-semibold text-blue-300 mb-2">Administrator Access</h3>
+            <p class="text-fortress-200 mb-3">
+              As an administrator, you review and resolve error reports submitted by users. 
+              You cannot submit error reports yourself.
+            </p>
+            <p class="text-fortress-300 text-sm">
+              To view and manage error reports from users, please visit the Admin Dashboard.
+            </p>
+            <button
+              @click="router.push('/admin')"
+              class="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+            >
+              Go to Admin Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Form Card -->
-      <div class="card p-8 border border-fortress-700 mb-6">
+      <div v-else class="card p-8 border border-fortress-700 mb-6">
         <form @submit.prevent="submitReport" class="space-y-6">
           <!-- Title Input -->
           <div>
@@ -206,9 +231,11 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { userErrorReporting } from '@/services/errorReporting'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // State
 const form = ref({

@@ -277,6 +277,23 @@ export const useAdminStore = defineStore('admin', () => {
     }
   }
 
+  async function fetchAllOverrideRequests(status = 'pending', limit = 100, offset = 0) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await api.get('/v1/override-requests/pending', {
+        params: { status, limit, offset }
+      })
+      return { success: true, requests: response.requests || [], total: response.total || 0 }
+    } catch (err) {
+      error.value = err.response?.data?.detail || 'Failed to fetch override requests'
+      return { success: false, error: error.value }
+    } finally {
+      loading.value = false
+    }
+  }
+
   async function fetchMyOverrideRequests(statusFilter = null, limit = 50, offset = 0) {
     loading.value = true
     error.value = null
@@ -384,6 +401,7 @@ export const useAdminStore = defineStore('admin', () => {
     // Actions - Override Requests
     createOverrideRequest,
     fetchPendingOverrideRequests,
+    fetchAllOverrideRequests,
     fetchMyOverrideRequests,
     approveOverrideRequest,
     denyOverrideRequest,

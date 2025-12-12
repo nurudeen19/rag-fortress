@@ -126,6 +126,12 @@ const router = createRouter({
           meta: { requiresRoles: ['admin'] }
         },
         {
+          path: 'permission-override-requests',
+          name: 'permission-override-requests',
+          component: () => import('../views/admin/PendingApprovals.vue'),
+          meta: { requiresRoles: ['admin', 'manager'] }
+        },
+        {
           path: 'system-settings',
           name: 'system-settings',
           component: () => import('../views/admin/Configuration.vue'),
@@ -147,13 +153,13 @@ const router = createRouter({
           path: 'error-reports',
           name: 'error-reports',
           component: () => import('../views/system/ErrorReporting.vue'),
-          meta: { requiresRoles: ['user', 'manager', 'admin'] }
+          meta: { requiresRoles: ['user', 'manager'] }
         },
         {
           path: 'request-access',
           name: 'request-access',
           component: () => import('../views/users/RequestAccess.vue'),
-          meta: { requiresRoles: ['user', 'manager', 'admin'] }
+          meta: { requiresRoles: ['user', 'manager'] }
         },
         {
           path: 'knowledge-base',

@@ -5,8 +5,24 @@
       <p class="text-fortress-400">Request temporary elevated access to documents when you need additional clearance</p>
     </div>
 
+    <!-- Admin Info Message -->
+    <div v-if="authStore.isAdmin" class="card p-6 mb-6 border-l-4 border-blue-500">
+      <div class="flex items-start gap-3">
+        <svg class="w-6 h-6 text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <div>
+          <h3 class="text-lg font-semibold text-blue-300 mb-1">Administrator Access</h3>
+          <p class="text-fortress-300 text-sm">
+            As an administrator, you have full system access and cannot submit permission requests. 
+            Your role is to review and approve requests from other users.
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- New Request Button Card -->
-    <div class="card p-6 mb-6">
+    <div v-else class="card p-6 mb-6">
       <div class="flex items-center justify-between">
         <div>
           <h2 class="text-lg font-semibold text-fortress-100 mb-1">New Access Request</h2>
@@ -90,8 +106,10 @@
               </div>
               <p class="text-sm text-fortress-400 mb-2">{{ request.reason }}</p>
               <div class="flex items-center gap-4 text-xs text-fortress-500">
-                <span>Level: {{ getPermissionLevelName(request.requested_permission_level) }}</span>
-                <span>Duration: {{ request.requested_duration_hours }}h</span>
+                <span>Level: {{ getPermissionLevelName(request.override_permission_level) }}</span>
+                <span>
+                  Duration: {{ request.requested_duration_hours ?? formatDuration(request.valid_from, request.valid_until) }}h
+                </span>
                 <span>{{ formatDate(request.created_at) }}</span>
               </div>
             </div>
@@ -122,10 +140,12 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAdminStore } from '@/stores/admin'
+import { useAuthStore } from '@/stores/auth'
 import RequestAccessModal from '@/components/admin/RequestAccessModal.vue'
 
 const router = useRouter()
 const adminStore = useAdminStore()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const error = ref(null)

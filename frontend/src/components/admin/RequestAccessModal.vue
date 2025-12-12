@@ -1,11 +1,27 @@
 <template>
   <div class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div class="bg-fortress-900 rounded-lg max-w-lg w-full border border-fortress-700 max-h-[90vh] overflow-y-auto">
-      <!-- Header -->
-      <div class="p-6 border-b border-fortress-700">
-        <h2 class="text-xl font-bold text-fortress-100">Request Access</h2>
-        <p class="text-sm text-fortress-400 mt-1">Request temporary elevated clearance to access restricted content</p>
+      <!-- Admin Warning (should not reach here, but just in case) -->
+      <div v-if="authStore.isAdmin" class="p-6">
+        <div class="bg-alert/10 border border-alert/30 rounded-lg p-4">
+          <p class="text-sm text-alert font-medium">Administrators cannot submit permission requests.</p>
+          <p class="text-xs text-alert/80 mt-2">You have full system access and review requests from others.</p>
+        </div>
+        <button
+          @click="emit('close')"
+          class="mt-4 w-full px-4 py-2 bg-fortress-800 text-fortress-300 rounded-lg hover:bg-fortress-700 transition-colors"
+        >
+          Close
+        </button>
       </div>
+      
+      <!-- Normal Form (for non-admins) -->
+      <template v-else>
+        <!-- Header -->
+        <div class="p-6 border-b border-fortress-700">
+          <h2 class="text-xl font-bold text-fortress-100">Request Access</h2>
+          <p class="text-sm text-fortress-400 mt-1">Request temporary elevated clearance to access restricted content</p>
+        </div>
 
       <!-- Content -->
       <div class="p-6 space-y-4">
@@ -245,6 +261,7 @@
           {{ loading ? 'Submitting...' : 'Submit Request' }}
         </button>
       </div>
+      </template>
     </div>
   </div>
 </template>

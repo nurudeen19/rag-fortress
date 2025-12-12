@@ -153,33 +153,47 @@ export function useRoleAccess() {
       )
     }
 
-    // User management features - available to all users
-    nav.push(
-      {
-        name: 'Request Access',
-        path: '/request-access',
-        routeName: 'request-access',
+    // User features - NOT available to admins (admins review these, not submit them)
+    if (!isAdmin.value) {
+      nav.push(
+        {
+          name: 'Request Access',
+          path: '/request-access',
+          routeName: 'request-access',
+          icon: 'key',
+          roles: ['user', 'manager'],
+          group: 'user',
+        },
+        {
+          name: 'Report Error',
+          path: '/error-reports',
+          routeName: 'error-reports',
+          icon: 'alerts',
+          roles: ['user', 'manager'],
+          group: 'user',
+        }
+      )
+    }
+
+    // Manager only navigation
+    if (!isAdmin.value && isManager.value) {
+      nav.push({
+        name: 'Override Requests',
+        path: '/permission-override-requests',
+        routeName: 'permission-override-requests',
         icon: 'key',
-        roles: ['user', 'manager', 'admin'],
-        group: 'user',
-      },
-      {
-        name: 'Report Error',
-        path: '/error-reports',
-        routeName: 'error-reports',
-        icon: 'alerts',
-        roles: ['user', 'manager', 'admin'],
-        group: 'user',
-      }
-    )
+        roles: ['manager'],
+        group: 'admin',
+      })
+    }
 
     // Admin only navigation
     if (isAdmin.value) {
       nav.push({
-        name: 'Activity Logs',
-        path: '/activity-logs',
-        routeName: 'activity-logs',
-        icon: 'logs',
+        name: 'Override Requests',
+        path: '/permission-override-requests',
+        routeName: 'permission-override-requests',
+        icon: 'key',
         roles: ['admin'],
         group: 'admin',
       })
