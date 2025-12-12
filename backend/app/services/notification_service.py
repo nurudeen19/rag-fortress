@@ -80,6 +80,26 @@ class NotificationService:
         for n in notifs:
             n.mark_read()
         return len(notifs)
+
+    async def _get_admin_users(self) -> List["User"]:
+        """Return all users with the admin role."""
+        from app.models.user import User
+        from app.models.auth import Role
+
+        admin_role_result = await self.session.execute(
+            select(Role).where(Role.name == "admin")
+        )
+        admin_role = admin_role_result.scalar_one_or_none()
+
+        if not admin_role:
+            return []
+
+        admin_users_result = await self.session.execute(
+            select(User)
+            .join(User.roles)
+            .where(Role.id == admin_role.id)
+        )
+        return admin_users_result.scalars().all()
     
     # Permission override request notifications
     
@@ -111,37 +131,29 @@ class NotificationService:
         self,
         request: "PermissionOverrideRequest",
     ) -> None:
-        """Notify all admins about new org-wide override request."""
-        from app.models.user import User
-        from app.models.auth import Role
+        """Notify all admins about a new override request (org-wide or department)."""
         from app.models.user_permission import PermissionLevel
-        
-        # Get all admins
-        admin_role_result = await self.session.execute(
-            select(Role).where(Role.name == "admin")
-        )
-        admin_role = admin_role_result.scalar_one_or_none()
-        
-        if not admin_role:
+
+        admins = await self._get_admin_users()
+        if not admins:
             return
-        
-        admin_users_result = await self.session.execute(
-            select(User)
-            .join(User.roles)
-            .where(Role.id == admin_role.id)
-        )
-        admins = admin_users_result.scalars().all()
-        
+
         level_name = PermissionLevel(request.requested_permission_level).name
         hours = request.requested_duration_hours
         duration_text = f"{hours} hours" if hours < 48 else f"{hours // 24} days"
-        
+
+        if request.override_type == "org_wide":
+            scope_text = "ORG-WIDE"
+        else:
+            dept_name = request.department.name if getattr(request, "department", None) else None
+            scope_text = f"DEPARTMENT ({dept_name})" if dept_name else "DEPARTMENT"
+
         message = (
-            f"New ORG-WIDE permission request from {request.requester.full_name}: "
+            f"New {scope_text} permission request from {request.requester.full_name}: "
             f"{level_name} access for {duration_text}. "
             f"Reason: {request.reason[:100]}..."
         )
-        
+
         for admin in admins:
             await self.create(
                 user_id=admin.id,
@@ -154,25 +166,11 @@ class NotificationService:
         request: "PermissionOverrideRequest",
     ) -> None:
         """Notify admins about escalated request."""
-        from app.models.user import User
-        from app.models.auth import Role
         from app.models.user_permission import PermissionLevel
         
-        # Get all admins
-        admin_role_result = await self.session.execute(
-            select(Role).where(Role.name == "admin")
-        )
-        admin_role = admin_role_result.scalar_one_or_none()
-        
-        if not admin_role:
+        admins = await self._get_admin_users()
+        if not admins:
             return
-        
-        admin_users_result = await self.session.execute(
-            select(User)
-            .join(User.roles)
-            .where(Role.id == admin_role.id)
-        )
-        admins = admin_users_result.scalars().all()
         
         level_name = PermissionLevel(request.requested_permission_level).name
         hours = request.requested_duration_hours
@@ -194,17 +192,16 @@ class NotificationService:
     async def notify_override_request_approved(
         self,
         request: "PermissionOverrideRequest",
-        override: "PermissionOverride",
     ) -> None:
         """Notify requester that their request was approved."""
         from app.models.user_permission import PermissionLevel
         
-        level_name = PermissionLevel(override.override_permission_level).name
-        expiry_date = override.valid_until.strftime("%Y-%m-%d %H:%M UTC")
+        level_name = PermissionLevel(request.override_permission_level).name
+        expiry_date = request.valid_until.strftime("%Y-%m-%d %H:%M UTC")
         
         message = (
             f"Your permission override request was APPROVED! "
-            f"You now have {level_name} {override.override_type} access "
+            f"You now have {level_name} {request.override_type} access "
             f"until {expiry_date}."
         )
         
@@ -212,7 +209,7 @@ class NotificationService:
             message += f" Note from approver: {request.approval_notes}"
         
         await self.create(
-            user_id=request.requester_id,
+            user_id=request.user_id,
             message=message,
             notification_type="override_request_approved",
         )
@@ -225,7 +222,7 @@ class NotificationService:
         """Notify requester that their request was denied."""
         from app.models.user_permission import PermissionLevel
         
-        level_name = PermissionLevel(request.requested_permission_level).name
+        level_name = PermissionLevel(request.override_permission_level).name
         
         message = (
             f"Your permission override request was DENIED. "
@@ -234,7 +231,7 @@ class NotificationService:
         )
         
         await self.create(
-            user_id=request.requester_id,
+            user_id=request.user_id,
             message=message,
             notification_type="override_request_denied",
         )

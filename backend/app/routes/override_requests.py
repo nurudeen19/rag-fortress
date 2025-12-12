@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import get_current_user, require_admin_or_department_manager
 from app.models.user import User
+from app.models.permission_override import OverrideStatus
 from app.services.override_request_service import OverrideRequestService
 from app.schemas.override_request import (
     OverrideRequestCreate,
@@ -89,23 +90,29 @@ async def create_override_request(
 
 @router.get("/pending", response_model=OverrideRequestListResponse)
 async def get_pending_requests(
+    status: Optional[str] = Query(None, description="Filter by status: pending, approved, denied, expired, revoked"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(require_admin_or_department_manager),
     session: AsyncSession = Depends(get_session),
 ):
     """
-    Get pending override requests that current user can approve.
+    Get override requests that current user can approve or view.
     
-    - Admins see all pending requests
-    - Department managers see requests for their department
+    - Admins see all requests (filtered by status if provided)
+    - Department managers see requests for their department (filtered by status if provided)
+    - If no status provided, defaults to 'pending'
     
     Requires admin or department_manager role.
     """
     service = OverrideRequestService(session)
     
-    requests = await service.get_pending_requests_for_approver(
+    # Default to pending if no status specified
+    status_filter = status or OverrideStatus.PENDING.value
+    
+    requests = await service.get_requests_for_approver(
         approver_id=current_user.id,
+        status=status_filter,
         limit=limit,
         offset=offset,
     )

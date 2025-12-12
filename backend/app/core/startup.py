@@ -198,6 +198,10 @@ class StartupController:
             # Schedule recurring job for auto-escalation of override requests
             await self._schedule_override_escalation_job()
             logger.info("✓ Override request escalation job scheduled")
+
+            # Schedule recurring job to expire overrides automatically
+            await self._schedule_override_expiration_job()
+            logger.info("✓ Override expiration job scheduled")
             
         except Exception as e:
             logger.warning(f"⚠ Job queue initialization skipped: {e}")
@@ -450,6 +454,37 @@ class StartupController:
             
         except Exception as e:
             logger.warning(f"⚠ Failed to schedule override escalation job: {e}")
+
+    async def _schedule_override_expiration_job(self):
+        """Schedule recurring job to deactivate expired overrides."""
+        try:
+            async def expire_overrides():
+                """Background task to mark expired overrides inactive."""
+                try:
+                    from app.core.database import get_session
+                    from app.services.override_request_service import OverrideRequestService
+
+                    async with get_session() as session:
+                        service = OverrideRequestService(session)
+                        count = await service.process_expired_overrides()
+                        await session.commit()
+
+                        if count > 0:
+                            logger.info(f"Expired {count} override(s)")
+
+                except Exception as e:
+                    logger.error(f"Error in override expiration job: {e}", exc_info=True)
+
+            # Run every 10 minutes to keep access tight
+            self.job_manager.add_recurring_job(
+                expire_overrides,
+                interval_seconds=600,
+                job_id='override_expiration',
+                max_instances=1
+            )
+
+        except Exception as e:
+            logger.warning(f"⚠ Failed to schedule override expiration job: {e}")
     
     async def shutdown(self):
         """

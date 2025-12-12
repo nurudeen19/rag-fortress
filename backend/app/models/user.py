@@ -97,12 +97,19 @@ class User(Base):
     def get_active_overrides(self) -> list["PermissionOverride"]:
         """Get all active, non-expired overrides for this user."""
         now = datetime.now(timezone.utc)
+
+        def _as_aware(dt: datetime) -> datetime:
+            # Ensure datetime comparisons are always timezone-aware (UTC)
+            if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt
+
         active = []
         
         for override in self.permission_overrides:
             if (
                 override.is_active
-                and override.valid_from <= now <= override.valid_until
+                and _as_aware(override.valid_from) <= now <= _as_aware(override.valid_until)
             ):
                 active.append(override)
         

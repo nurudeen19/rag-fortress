@@ -134,6 +134,14 @@ class PermissionOverride(Base):
         nullable=False,
     )
 
+    # Duration stored as hours - calculated from user request
+    # Valid period is calculated on approval, not creation
+    requested_duration_hours: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=24,
+    )
+
     valid_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

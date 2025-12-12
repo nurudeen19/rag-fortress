@@ -10,7 +10,7 @@ Manages caching of user security clearance information including:
 Cache is automatically synchronized with access token expiry.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from datetime import timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -196,21 +196,11 @@ class UserClearanceCache:
             logger.warning(f"User not found: user_id={user_id}")
             return None
         
-        # Get effective security level (includes overrides)
-        security_level = self._get_effective_security_level(user)
-        
-        # Get department-specific security level
-        department_security_level = None
-        dept_clearance_value = None
-        if user.user_permission and user.user_permission.department_level_permission:
-            dept_level = user.user_permission.department_level_permission
-            if isinstance(dept_level, PermissionLevel):
-                department_security_level = dept_level.name
-                dept_clearance_value = dept_level.value
-            else:
-                dept_level_enum = PermissionLevel(dept_level)
-                department_security_level = dept_level_enum.name
-                dept_clearance_value = dept_level_enum.value
+        # Get effective security levels (org + department, includes overrides)
+        security_level, dept_level = self._get_effective_security_level(user)
+
+        department_security_level = dept_level.name if dept_level else None
+        dept_clearance_value = dept_level.value if dept_level else None
         
         # Check if user is admin or department manager
         is_admin = user.has_role("admin")
@@ -234,48 +224,57 @@ class UserClearanceCache:
             "dept_clearance_value": dept_clearance_value
         }
     
-    def _get_effective_security_level(self, user: User) -> PermissionLevel:
-        """
-        Get effective security level including overrides.
-        
-        Priority:
-        1. Active overrides (highest override level)
-        2. Department-level permission
-        3. Organization-wide permission
-        4. Default to GENERAL
-        """
+    def _get_effective_security_level(
+        self, user: User
+    ) -> Tuple[PermissionLevel, Optional[PermissionLevel]]:
+        """Get effective org and department clearance levels with overrides."""
         if not user.user_permission:
-            logger.warning(f"User {user.id} has no permission record, defaulting to GENERAL")
-            return PermissionLevel.GENERAL
-        
-        # Helper to get int value from either int or enum
+            logger.warning(
+                f"User {user.id} has no permission record, defaulting to GENERAL"
+            )
+            return PermissionLevel.GENERAL, None
+
         def get_level_value(level) -> int:
             if isinstance(level, PermissionLevel):
                 return level.value
-            return int(level)  # Already an int from database
-        
-        # Start with org-wide permission
-        levels = [get_level_value(user.user_permission.org_level_permission)]
-        
-        # Add department-level permission if exists
+            return int(level)
+
+        org_level_value = get_level_value(user.user_permission.org_level_permission)
+
+        dept_level_value: Optional[int] = None
         if user.user_permission.department_level_permission:
-            levels.append(get_level_value(user.user_permission.department_level_permission))
-        
-        # Add active overrides (highest priority)
-        # Note: override_permission_level is stored as int in database
+            dept_level_value = get_level_value(
+                user.user_permission.department_level_permission
+            )
+
         active_overrides = user.get_active_overrides()
         for override in active_overrides:
-            levels.append(get_level_value(override.override_permission_level))
-            logger.debug(
-                f"User {user.id} has active override: "
-                f"level={override.override_permission_level}, "
-                f"type={override.override_type}, "
-                f"reason={override.reason}"
-            )
-        
-        # Return highest level as enum
-        max_level_value = max(levels)
-        return PermissionLevel(max_level_value)
+            override_level = get_level_value(override.override_permission_level)
+            if override.override_type == "org_wide":
+                org_level_value = max(org_level_value, override_level)
+                logger.debug(
+                    f"User {user.id} has active org-wide override: "
+                    f"level={override.override_permission_level}, "
+                    f"reason={override.reason}"
+                )
+            elif (
+                override.override_type == "department"
+                and user.department_id
+                and override.department_id == user.department_id
+            ):
+                base_dept = dept_level_value or org_level_value
+                dept_level_value = max(base_dept, override_level)
+                logger.debug(
+                    f"User {user.id} has active department override for dept "
+                    f"{user.department_id}: level={override.override_permission_level}, "
+                    f"reason={override.reason}"
+                )
+
+        org_level = PermissionLevel(org_level_value)
+        dept_level = (
+            PermissionLevel(dept_level_value) if dept_level_value is not None else None
+        )
+        return org_level, dept_level
     
     def _get_cache_key(self, user_id: int) -> str:
         """Generate consistent cache key."""

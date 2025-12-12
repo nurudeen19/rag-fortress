@@ -102,6 +102,7 @@ class OverrideRequestResponse(BaseModel):
     department_id: Optional[int]
     override_permission_level: int
     reason: str
+    requested_duration_hours: int
     valid_from: datetime
     valid_until: datetime
     created_by_id: int
@@ -135,6 +136,7 @@ class OverrideRequestResponse(BaseModel):
             "department_id": obj.department_id,
             "override_permission_level": obj.override_permission_level,
             "reason": obj.reason,
+            "requested_duration_hours": obj.requested_duration_hours,
             "valid_from": obj.valid_from,
             "valid_until": obj.valid_until,
             "created_by_id": obj.created_by_id,

@@ -91,16 +91,23 @@ class OverrideRequestService:
             else:
                 return None, "Either requested_duration_hours or custom_duration_days must be provided"
             
-            # Get requester's current permissions
+            # Get requester's current permissions and roles
             user_result = await self.session.execute(
                 select(User)
-                .options(selectinload(User.user_permission))
+                .options(
+                    selectinload(User.user_permission),
+                    selectinload(User.roles)
+                )
                 .where(User.id == requester_id)
             )
             user = user_result.scalar_one_or_none()
             
             if not user:
                 return None, "User not found"
+            
+            # Admins cannot submit override requests - they approve them
+            if user.has_role("admin"):
+                return None, "Administrators cannot submit permission requests. Admins have full access and approve requests from others."
             
             # Check if they already have this level or higher
             if override_type == OverrideType.ORG_WIDE.value:
@@ -113,17 +120,15 @@ class OverrideRequestService:
                     return None, f"You already have {PermissionLevel(current_level).name} department clearance"
             
             # Create override request (PENDING status, dates will be set on approval)
-            valid_from = datetime.now(timezone.utc)
-            valid_until = valid_from + timedelta(hours=total_duration_hours)
-            
             override_request = PermissionOverride(
                 user_id=requester_id,
                 override_type=override_type,
                 department_id=department_id,
                 override_permission_level=requested_permission_level,
                 reason=reason,
-                valid_from=valid_from,  # Placeholder, will be updated on approval
-                valid_until=valid_until,  # Placeholder
+                requested_duration_hours=total_duration_hours,
+                valid_from=datetime.now(timezone.utc),  # Placeholder, will be set on approval
+                valid_until=datetime.now(timezone.utc),  # Placeholder, will be set on approval
                 created_by_id=requester_id,  # Requester creates the request
                 status=OverrideStatus.PENDING.value,
                 is_active=False,  # Not active until approved
@@ -193,10 +198,9 @@ class OverrideRequestService:
             if not can_approve:
                 return None, error_msg
             
-            # Calculate new valid dates (start now, duration from original request)
-            original_duration = override_request.valid_until - override_request.valid_from
+            # Calculate valid dates based on requested duration (now on approval)
             valid_from = datetime.now(timezone.utc)
-            valid_until = valid_from + original_duration
+            valid_until = valid_from + timedelta(hours=override_request.requested_duration_hours)
             
             # Update the override
             override_request.status = OverrideStatus.APPROVED.value
@@ -400,6 +404,83 @@ class OverrideRequestService:
             logger.error(f"Error fetching pending requests: {e}", exc_info=True)
             return []
     
+    async def get_requests_for_approver(
+        self,
+        approver_id: int,
+        status: str = "pending",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[PermissionOverride]:
+        """
+        Get override requests that a user can approve, filtered by status.
+        
+        For admins: all requests with the specified status
+        For department managers: requests for their department with the specified status
+        
+        Args:
+            approver_id: User ID
+            status: Status filter (pending, approved, denied, expired, revoked)
+            limit: Max results
+            offset: Pagination offset
+            
+        Returns:
+            List of requests with the specified status
+        """
+        try:
+            # Get user with relationships
+            user_result = await self.session.execute(
+                select(User)
+                .options(selectinload(User.roles))
+                .where(User.id == approver_id)
+            )
+            user = user_result.scalar_one_or_none()
+            
+            if not user:
+                return []
+            
+            is_admin = user.has_role("admin")
+            
+            if is_admin:
+                # Admins see all requests with the specified status
+                query = _load_override_relationships(
+                    select(PermissionOverride)
+                    .where(PermissionOverride.status == status)
+                    .order_by(PermissionOverride.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            else:
+                # Department managers see requests for their department with the specified status
+                dept_result = await self.session.execute(
+                    select(Department)
+                    .where(Department.manager_id == approver_id)
+                )
+                department = dept_result.scalar_one_or_none()
+                
+                if not department:
+                    return []  # Not a manager
+                
+                query = _load_override_relationships(
+                    select(PermissionOverride)
+                    .where(
+                        and_(
+                            PermissionOverride.status == status,
+                            PermissionOverride.department_id == department.id,
+                            PermissionOverride.override_type == OverrideType.DEPARTMENT.value
+                        )
+                    )
+                    .order_by(PermissionOverride.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            
+            result = await self.session.execute(query)
+            return list(result.scalars().all())
+            
+        except Exception as e:
+            logger.error(f"Error fetching requests for approver: {e}", exc_info=True)
+            return []
+    
     async def get_user_requests(
         self,
         user_id: int,
@@ -495,6 +576,50 @@ class OverrideRequestService:
         except Exception as e:
             logger.error(f"Error processing auto-escalations: {e}", exc_info=True)
             return 0
+
+    async def process_expired_overrides(self) -> int:
+        """
+        Deactivate overrides that are past their valid_until window.
+        Sets is_active=False and status=EXPIRED when applicable.
+        """
+        try:
+            now = datetime.now(timezone.utc)
+            result = await self.session.execute(
+                select(PermissionOverride)
+                .where(
+                    and_(
+                        PermissionOverride.is_active.is_(True),
+                        PermissionOverride.status == OverrideStatus.APPROVED.value,
+                        PermissionOverride.valid_until < now,
+                    )
+                )
+            )
+            overrides = list(result.scalars().all())
+
+            # Prepare cache invalidation for affected users
+            user_ids = {ov.user_id for ov in overrides}
+            cache = None
+
+            expired_count = 0
+            for override in overrides:
+                override.is_active = False
+                override.status = OverrideStatus.EXPIRED.value
+                expired_count += 1
+
+            if expired_count > 0:
+                logger.info(f"Marked {expired_count} override(s) as expired")
+
+                # Lazy import to avoid circulars
+                from app.utils.user_clearance_cache import get_user_clearance_cache
+                cache = cache or get_user_clearance_cache(self.session)
+                for user_id in user_ids:
+                    await cache.invalidate(user_id)
+
+            return expired_count
+
+        except Exception as e:
+            logger.error(f"Error processing expired overrides: {e}", exc_info=True)
+            return 0
     
     # Helper methods
     
@@ -514,9 +639,13 @@ class OverrideRequestService:
         if not user:
             return False, "Approver not found"
         
+        # Prevent self-approval - users cannot approve their own requests
+        if override_request.user_id == approver_id:
+            return False, "You cannot approve your own permission request"
+        
         is_admin = user.has_role("admin")
         
-        # Admins can approve anything
+        # Admins can approve anything (except their own, already checked)
         if is_admin:
             return True, None
         
@@ -538,6 +667,7 @@ class OverrideRequestService:
             department = dept_result.scalar_one_or_none()
             
             if department:
+                # Manager can approve requests from subordinates in their department
                 return True, None
         
         return False, "You do not have authority to approve this request"
@@ -548,18 +678,28 @@ class OverrideRequestService:
             if override_request.override_type == OverrideType.ORG_WIDE.value:
                 # Notify all admins
                 await self.notification_service.notify_admins_new_override_request(override_request)
-            else:
-                # Notify department manager
-                if override_request.department_id:
-                    dept_result = await self.session.execute(
-                        select(Department).where(Department.id == override_request.department_id)
+                return
+
+            # Department-level: prefer the department manager, else fall back to admins
+            if override_request.department_id:
+                dept_result = await self.session.execute(
+                    select(Department).where(Department.id == override_request.department_id)
+                )
+                dept = dept_result.scalar_one_or_none()
+                
+                if dept and dept.manager_id and dept.manager_id != override_request.user_id:
+                    await self.notification_service.notify_override_request_submitted(
+                        override_request, dept.manager_id
                     )
-                    dept = dept_result.scalar_one_or_none()
-                    
-                    if dept and dept.manager_id:
-                        await self.notification_service.notify_override_request_submitted(
-                            override_request, dept.manager_id
-                        )
+                    return
+                
+                logger.info(
+                    "Falling back to admin notification for department request: "
+                    f"request_id={override_request.id}, dept_id={override_request.department_id}"
+                )
+
+            # If no department or no eligible manager, notify admins
+            await self.notification_service.notify_admins_new_override_request(override_request)
         except Exception as e:
             logger.error(f"Error notifying approver: {e}", exc_info=True)
     

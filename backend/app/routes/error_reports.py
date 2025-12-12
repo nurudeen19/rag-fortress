@@ -56,6 +56,13 @@ async def create_error_report(
 ) -> ErrorReportResponse:
     """Create a new error report."""
     try:
+        # Admins cannot submit error reports - they review them
+        if current_user.has_role("admin"):
+            raise HTTPException(
+                status_code=403,
+                detail="Administrators cannot submit error reports. Admins review and resolve reports from users."
+            )
+        
         # Get request context
         user_agent = request_obj.headers.get("user-agent", "") if request_obj else ""
         request_context = {
