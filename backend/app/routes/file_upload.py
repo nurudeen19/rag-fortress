@@ -45,7 +45,7 @@ router = APIRouter(prefix="/api/v1/files", tags=["files"])
 
 
 @router.post("/upload", response_model=FileUploadResponse, status_code=201)
-@prevent_in_demo_mode("Upload file")
+ # @prevent_in_demo_mode("Upload file")
 async def upload_file(
     file: UploadFile = File(...),
     file_purpose: Optional[str] = Query(None),
@@ -330,7 +330,7 @@ async def list_pending_approval(
 
 
 @router.post("/{file_id}/approve", response_model=SuccessResponse)
-@prevent_in_demo_mode("Approve file")
+ # @prevent_in_demo_mode("Approve file")
 async def approve_file(
     file_id: int,
     admin: User = Depends(require_role("admin")),
@@ -356,7 +356,7 @@ async def approve_file(
 
 
 @router.post("/{file_id}/reject", response_model=SuccessResponse)
-@prevent_in_demo_mode("Reject file")
+ # @prevent_in_demo_mode("Reject file")
 async def reject_file(
     file_id: int,
     reason: str = Form(..., min_length=1),
@@ -417,7 +417,7 @@ async def delete_file(
 
 
 @router.post("/{file_id}/ingest", response_model=SuccessResponse, status_code=202)
-@prevent_in_demo_mode("Manually ingest file")
+ # @prevent_in_demo_mode("Manually ingest file")
 async def manual_ingest_file(
     file_id: int,
     admin: User = Depends(require_role("admin")),

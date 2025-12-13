@@ -77,7 +77,7 @@ async def list_departments(
 
 
 @router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
-@prevent_in_demo_mode("Create department")
+ #@prevent_in_demo_mode("Create department")
 async def create_department(
     request: DepartmentCreateRequest,
     current_user: User = Depends(get_current_user),
@@ -207,7 +207,7 @@ async def delete_department(
 
 
 @router.post("/{department_id}/manager", response_model=DepartmentResponse)
-@prevent_in_demo_mode("Set department manager")
+ # @prevent_in_demo_mode("Set department manager")
 async def set_manager(
     department_id: int,
     request: SetManagerRequest,
@@ -277,7 +277,7 @@ async def remove_manager(
 
 
 @router.post("/{department_id}/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-@prevent_in_demo_mode("Assign user to department")
+ # @prevent_in_demo_mode("Assign user to department")
 async def assign_user_to_department(
     department_id: int,
     user_id: int,
