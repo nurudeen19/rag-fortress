@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/v1/admin/jobs", tags=["admin:jobs"])
 
 @router.get("/status")
 async def get_job_status(
-    current_user = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -29,7 +29,6 @@ async def get_job_status(
     
     Returns counts of jobs by status.
     """
-    # TODO: Add admin role check
     
     
     
@@ -129,14 +128,13 @@ async def get_job_detail(
 
 
 @router.post("/retry-pending")
-async def retry_pending_jobs(current_user = Depends(get_current_user)):
+async def retry_pending_jobs(admin: User = Depends(require_role("admin"))):
     """
     Manually trigger retry of all pending jobs.
     
     This reschedules all PENDING jobs to run immediately.
     Useful for manual recovery after infrastructure issues.
     """
-    # TODO: Add admin role check
     
     try:
         startup_controller = get_startup_controller()
@@ -163,14 +161,13 @@ async def retry_pending_jobs(current_user = Depends(get_current_user)):
 
 
 @router.delete("/failed")
-async def clear_failed_jobs(current_user = Depends(get_current_user)):
+async def clear_failed_jobs(admin: User = Depends(require_role("admin"))):
     """
     Delete all failed jobs from the queue.
     
     This removes jobs that have exceeded max retries.
     Use with caution as this action cannot be undone.
     """
-    # TODO: Add admin role check
     
     session_factory = get_async_session_factory()
     async with session_factory() as session:

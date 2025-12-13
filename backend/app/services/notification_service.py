@@ -7,6 +7,8 @@ from sqlalchemy.orm import selectinload
 from datetime import datetime, timezone
 
 from app.models.notification import Notification
+from app.models.user import User
+from app.models.permission_override import PermissionOverride
 from app.core import get_logger
 from app.core.cache import get_cache
 from app.config.cache_settings import cache_settings
@@ -97,9 +99,8 @@ class NotificationService:
             n.mark_read()
         return len(notifs)
 
-    async def _get_admin_users(self) -> List["User"]:
+    async def _get_admin_users(self) -> List[User]:
         """Return all users with the admin role."""
-        from app.models.user import User
         from app.models.auth import Role
 
         admin_role_result = await self.session.execute(
@@ -127,7 +128,6 @@ class NotificationService:
         if not admins:
             return
 
-        from app.models.user import User
         # Resolve reporter name/email for context
         resolved_reporter = reporter_name
         if not resolved_reporter and getattr(report, "user_id", None):
@@ -153,11 +153,9 @@ class NotificationService:
     async def notify_error_report_status_changed(
         self,
         report: Any,
-        acting_admin: Optional["User"] = None,
+        acting_admin: Optional[User] = None,
     ) -> None:
         """Notify the reporter when their error report status is updated."""
-        from app.models.user import User
-
         # Resolve reporter
         reporter = await self.session.get(User, getattr(report, "user_id", 0))
         if not reporter:
@@ -185,7 +183,7 @@ class NotificationService:
     
     async def notify_override_request_submitted(
         self,
-        request: "PermissionOverrideRequest",
+        request: PermissionOverride,
         approver_id: int,
     ) -> None:
         """Notify approver about new override request."""
@@ -209,7 +207,7 @@ class NotificationService:
     
     async def notify_admins_new_override_request(
         self,
-        request: "PermissionOverrideRequest",
+        request: PermissionOverride,
     ) -> None:
         """Notify all admins about a new override request (org-wide or department)."""
         from app.models.user_permission import PermissionLevel
@@ -243,7 +241,7 @@ class NotificationService:
     
     async def notify_admins_override_escalation(
         self,
-        request: "PermissionOverrideRequest",
+        request: PermissionOverride,
     ) -> None:
         """Notify admins about escalated request."""
         from app.models.user_permission import PermissionLevel
@@ -271,7 +269,7 @@ class NotificationService:
     
     async def notify_override_request_approved(
         self,
-        request: "PermissionOverrideRequest",
+        request: PermissionOverride,
     ) -> None:
         """Notify requester that their request was approved."""
         from app.models.user_permission import PermissionLevel
@@ -296,7 +294,7 @@ class NotificationService:
     
     async def notify_override_request_denied(
         self,
-        request: "PermissionOverrideRequest",
+        request: PermissionOverride,
         denial_reason: str,
     ) -> None:
         """Notify requester that their request was denied."""

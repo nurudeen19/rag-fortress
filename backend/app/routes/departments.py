@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.core.security import get_current_user
+from app.core.security import get_current_user, require_role
 from app.models.user import User
 from app.core import get_logger
 from app.utils.demo_mode import prevent_in_demo_mode
@@ -52,11 +52,10 @@ async def list_departments(
     active_only: bool = Query(True, description="Only return active departments"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """List all departments (admin only)."""
-    # TODO: Add permission check
     result = await handle_list_departments(
         active_only=active_only,
         skip=skip,
@@ -80,11 +79,10 @@ async def list_departments(
  #@prevent_in_demo_mode("Create department")
 async def create_department(
     request: DepartmentCreateRequest,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Create a new department (admin only)."""
-    # TODO: Add permission check
     result = await handle_create_department(
         name=request.name,
         code=request.code,
@@ -116,11 +114,10 @@ async def create_department(
 @router.get("/{department_id}", response_model=DepartmentResponse)
 async def get_department(
     department_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Get department by ID (admin only)."""
-    # TODO: Add permission check
     result = await handle_get_department(
         department_id=department_id,
         session=session
@@ -151,11 +148,10 @@ async def get_department(
 async def update_department(
     department_id: int,
     request: DepartmentUpdateRequest,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Update department (admin only)."""
-    # TODO: Add permission check
     result = await handle_update_department(
         department_id=department_id,
         name=request.name,
@@ -189,11 +185,10 @@ async def update_department(
 @prevent_in_demo_mode("Delete department")
 async def delete_department(
     department_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Delete department (admin only)."""
-    # TODO: Add permission check
     result = await handle_delete_department(
         department_id=department_id,
         session=session
@@ -211,11 +206,10 @@ async def delete_department(
 async def set_manager(
     department_id: int,
     request: SetManagerRequest,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Set manager for department (admin only)."""
-    # TODO: Add permission check
     result = await handle_set_manager(
         department_id=department_id,
         manager_id=request.manager_id,
@@ -246,11 +240,10 @@ async def set_manager(
 @prevent_in_demo_mode("Remove department manager")
 async def remove_manager(
     department_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Remove manager from department (admin only)."""
-    # TODO: Add permission check
     result = await handle_remove_manager(
         department_id=department_id,
         session=session
@@ -281,11 +274,10 @@ async def remove_manager(
 async def assign_user_to_department(
     department_id: int,
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Assign user to department (admin only)."""
-    # TODO: Add permission check
     result = await handle_assign_user(
         user_id=user_id,
         department_id=department_id,
@@ -304,11 +296,10 @@ async def assign_user_to_department(
 async def remove_user_from_department(
     department_id: int,
     user_id: int,
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Remove user from department (admin only)."""
-    # TODO: Add permission check
     result = await handle_remove_user(
         user_id=user_id,
         session=session
@@ -326,11 +317,10 @@ async def get_department_users(
     department_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
-    current_user: User = Depends(get_current_user),
+    admin: User = Depends(require_role("admin")),
     session: AsyncSession = Depends(get_session)
 ):
     """Get all users in a department (admin only)."""
-    # TODO: Add permission check
     result = await handle_get_department_users(
         department_id=department_id,
         skip=skip,

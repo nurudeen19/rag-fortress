@@ -163,8 +163,8 @@ const errorTitle = ref('Login Failed')
 const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true'
 const demoCredentialsVisible = import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === 'true'
 const demoCredentials = {
-  username: import.meta.env.VITE_DEMO_ADMIN_USERNAME || 'admin',
-  password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'admin@RAGFortress123'
+  username: import.meta.env.VITE_DEMO_ADMIN_USERNAME || '',
+  password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || ''
 }
 const showDemoCredentialsPanel = demoModeEnabled && demoCredentialsVisible
 
