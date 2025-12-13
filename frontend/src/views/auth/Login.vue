@@ -99,6 +99,40 @@
         </div>
       </div>
 
+      <!-- Demo Credentials (only in demo mode with permission) -->
+      <div v-if="showDemoCredentialsPanel" class="mt-6 rounded-2xl border border-secure/40 bg-gradient-to-br from-secure/10 via-fortress-900 to-fortress-950/90 p-6 shadow-xl backdrop-blur">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p class="text-xs tracking-[0.2em] uppercase text-secure/80">Demo Mode</p>
+            <p class="text-lg font-semibold text-fortress-100">Use the admin credentials below</p>
+          </div>
+          <span class="text-xs font-medium text-fortress-300">Preview access</span>
+        </div>
+        <div class="space-y-2 text-sm text-fortress-300">
+          <div class="flex items-center justify-between bg-fortress-900/70 px-3 py-2 rounded-lg text-fortress-200">
+            <span class="text-xs uppercase tracking-[0.2em] text-fortress-500">Username</span>
+            <span class="font-mono text-fortress-100">{{ demoCredentials.username }}</span>
+          </div>
+          <div class="flex items-center justify-between bg-fortress-900/70 px-3 py-2 rounded-lg text-fortress-200">
+            <span class="text-xs uppercase tracking-[0.2em] text-fortress-500">Password</span>
+            <span class="font-mono text-fortress-100">{{ demoCredentials.password }}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="mt-4 w-full btn-secondary flex items-center justify-center gap-2"
+          @click="fillDemoCredentials"
+        >
+          <svg class="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v14m7-7H5" />
+          </svg>
+          <span>Use credentials</span>
+        </button>
+        <p class="mt-3 text-xs text-fortress-400">
+          These credentials match the administrator account configured for demos. Use them to explore the experience without needing your own account.
+        </p>
+      </div>
+
       <!-- Footer -->
       <p class="mt-8 text-center text-xs text-fortress-500">
         © 2025 RAG Fortress. Secure by design.
@@ -125,6 +159,19 @@ const loading = ref(false)
 const error = ref(null)
 const errorType = ref(null)
 const errorTitle = ref('Login Failed')
+
+const demoModeEnabled = import.meta.env.VITE_DEMO_MODE === 'true'
+const demoCredentialsVisible = import.meta.env.VITE_SHOW_DEMO_CREDENTIALS === 'true'
+const demoCredentials = {
+  username: import.meta.env.VITE_DEMO_ADMIN_USERNAME || 'admin',
+  password: import.meta.env.VITE_DEMO_ADMIN_PASSWORD || 'admin@RAGFortress123'
+}
+const showDemoCredentialsPanel = demoModeEnabled && demoCredentialsVisible
+
+const fillDemoCredentials = () => {
+  credentials.value.usernameOrEmail = demoCredentials.username
+  credentials.value.password = demoCredentials.password
+}
 
 const getErrorDetails = (errorMessage) => {
   if (!errorMessage) {
