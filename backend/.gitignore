@@ -30,6 +30,8 @@ ENV/
 env.bak/
 venv.bak/
 .venv/
+.venv_backup/
+venv_backup/
 
 # PyCharm
 .idea/
