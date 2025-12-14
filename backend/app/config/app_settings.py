@@ -117,6 +117,10 @@ class AppSettings(BaseSettings):
     # Rate limit storage backend (memory or redis)
     RATE_LIMIT_STORAGE: str = Field("memory", env="RATE_LIMIT_STORAGE")
     RATE_LIMIT_REDIS_URL: Optional[str] = Field(None, env="RATE_LIMIT_REDIS_URL")
+    
+    # Production Configuration
+    SKIP_AUTO_SETUP: bool = Field(False, env="SKIP_AUTO_SETUP")
+    UVICORN_WORKERS: int = Field(4, env="UVICORN_WORKERS")
 
     @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
     @classmethod
