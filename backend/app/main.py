@@ -27,6 +27,82 @@ warnings.filterwarnings(
 logger = get_logger(__name__)
 
 
+async def run_background_setup():
+    """
+    Run setup (migrations + seeders) and then initialize services in background.
+    This allows the server to start immediately and become ready after setup completes.
+    """
+    startup_controller = get_startup_controller()
+    startup_controller.mark_setup_running()
+    
+    try:
+        logger.info("🔧 Running background setup...")
+        
+        # Import setup functions
+        try:
+            from setup import (
+                run_migrations,
+                run_seeders,
+                verify_setup,
+                cleanup_postgres_enums
+            )
+        except ImportError as e:
+            error_msg = f"Failed to import setup functions: {e}"
+            logger.error(f"❌ {error_msg}")
+            startup_controller.mark_setup_failed(error_msg)
+            return
+        
+        # Check if setup is already complete
+        logger.info("🔍 Checking if setup is already complete...")
+        if await verify_setup():
+            logger.info("✅ Setup already complete - proceeding with initialization")
+        else:
+            logger.info("📋 Setup needed - running migrations and seeders...")
+            
+            # Clean up PostgreSQL ENUM types
+            await cleanup_postgres_enums()
+            
+            # Run migrations
+            logger.info("📊 Running database migrations...")
+            if not await run_migrations():
+                error_msg = "Database migrations failed"
+                startup_controller.mark_setup_failed(error_msg)
+                return
+            
+            # Run essential seeders
+            essential_seeders = ["admin", "departments"]
+            logger.info(f"🌱 Running essential seeders: {', '.join(essential_seeders)}")
+            if not await run_seeders(essential_seeders):
+                error_msg = "Seeding failed"
+                startup_controller.mark_setup_failed(error_msg)
+                return
+            
+            # Verify setup
+            logger.info("✅ Verifying setup...")
+            if not await verify_setup():
+                error_msg = "Setup verification failed"
+                startup_controller.mark_setup_failed(error_msg)
+                return
+            
+            logger.info("🎉 Setup completed successfully!")
+        
+        startup_controller.mark_setup_complete()
+        
+        # Now initialize all services
+        logger.info("🚀 Initializing application services...")
+        await startup_controller.initialize()
+        startup_controller.mark_ready()
+        
+    except Exception as e:
+        error_msg = f"Background setup failed: {str(e)}"
+        logger.error(f"❌ {error_msg}", exc_info=True)
+        startup_controller.mark_setup_failed(error_msg)
+    finally:
+        # Flush logs
+        for handler in logger.handlers:
+            handler.flush()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
@@ -40,16 +116,26 @@ async def lifespan(app: FastAPI):
     
     startup_controller = get_startup_controller()
     
-    try:
-        await startup_controller.initialize()
-        logger.info("Application is ready to handle requests")
-    except Exception as e:
-        logger.error(f"Startup failed: {e}", exc_info=True)
-        raise
-    finally:
-        # Flush logs after startup (success or error)
-        for handler in logger.handlers:
-            handler.flush()
+    # Check if we should run setup in background
+    if settings.ALLOW_SETUP_ON_START:
+        import asyncio
+        logger.info("🔧 ALLOW_SETUP_ON_START enabled - starting server immediately")
+        logger.info("📡 Setup will run in background, check /health/ready for status")
+        # Start setup task in background without blocking server startup
+        asyncio.create_task(run_background_setup())
+    else:
+        # Normal startup - block until initialization completes
+        try:
+            await startup_controller.initialize()
+            startup_controller.mark_ready()
+            logger.info("Application is ready to handle requests")
+        except Exception as e:
+            logger.error(f"Startup failed: {e}", exc_info=True)
+            raise
+        finally:
+            # Flush logs after startup (success or error)
+            for handler in logger.handlers:
+                handler.flush()
     
     yield
     
@@ -133,15 +219,44 @@ def create_app() -> FastAPI:
         name="error_report_images",
     )
     
-    # Health check endpoint
+    # Health check endpoints
     @app.get("/health")
     async def health_check():
-        """Health check endpoint."""
-        startup_controller = get_startup_controller()
+        """Health check endpoint - liveness probe."""
         return {
-            "status": "healthy" if startup_controller.is_ready() else "starting",
+            "status": "ok",
             "version": "1.0.0"
         }
+    
+    @app.get("/health/ready")
+    async def readiness_check():
+        """Readiness check endpoint - shows if app can handle traffic."""
+        startup_controller = get_startup_controller()
+        
+        if startup_controller.is_ready():
+            return {
+                "status": "ready",
+                "message": "Application is ready to receive traffic",
+                "version": "1.0.0"
+            }
+        elif startup_controller.is_setup_running():
+            return {
+                "status": "not_ready",
+                "message": "Setup is running in background, please try again later",
+                "version": "1.0.0"
+            }
+        elif startup_controller.get_setup_error():
+            return {
+                "status": "error",
+                "message": f"Setup failed: {startup_controller.get_setup_error()}",
+                "version": "1.0.0"
+            }
+        else:
+            return {
+                "status": "not_ready",
+                "message": "Application is starting, please try again later",
+                "version": "1.0.0"
+            }
     
     return app
 

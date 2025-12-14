@@ -42,6 +42,9 @@ class StartupController:
     
     def __init__(self):
         self.initialized = False
+        self._ready = False  # Readiness flag for traffic handling
+        self._setup_running = False  # Track if background setup is running
+        self._setup_error = None  # Store setup error if any
         self.database_manager = None
         self.async_session_factory = None
         self.job_manager = None
@@ -53,6 +56,38 @@ class StartupController:
         self.retriever = None
         self.cache_manager = None
         self.internal_llm_provider = None
+    
+    def is_ready(self) -> bool:
+        """Check if application is ready to handle traffic."""
+        return self._ready
+    
+    def is_setup_running(self) -> bool:
+        """Check if background setup is currently running."""
+        return self._setup_running
+    
+    def get_setup_error(self) -> str:
+        """Get setup error message if any."""
+        return self._setup_error
+    
+    def mark_ready(self):
+        """Mark application as ready to handle traffic."""
+        self._ready = True
+        logger.info("✓ Application marked as READY to receive traffic")
+    
+    def mark_setup_running(self):
+        """Mark setup as running in background."""
+        self._setup_running = True
+        self._setup_error = None
+    
+    def mark_setup_complete(self):
+        """Mark setup as completed."""
+        self._setup_running = False
+    
+    def mark_setup_failed(self, error: str):
+        """Mark setup as failed with error message."""
+        self._setup_running = False
+        self._setup_error = error
+        logger.error(f"✗ Setup failed: {error}")
     
     async def initialize(self):
         """
@@ -526,10 +561,6 @@ class StartupController:
         
         finally:
             self.initialized = False
-    
-    def is_ready(self) -> bool:
-        """Check if application is ready to handle requests."""
-        return self.initialized
 
 
 # Global startup controller instance
