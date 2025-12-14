@@ -120,7 +120,7 @@ class AppSettings(BaseSettings):
     
     # Production Configuration
     SKIP_AUTO_SETUP: bool = Field(False, env="SKIP_AUTO_SETUP")
-    UVICORN_WORKERS: int = Field(4, env="UVICORN_WORKERS")
+    UVICORN_WORKERS: int = Field(1, env="UVICORN_WORKERS")
 
     @field_validator("CORS_ORIGINS", "CORS_METHODS", "CORS_HEADERS", mode="before")
     @classmethod

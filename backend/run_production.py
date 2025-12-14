@@ -15,6 +15,7 @@ All standard application environment variables from .env file are supported via 
 
 import asyncio
 import sys
+import os
 import logging
 from pathlib import Path
 
@@ -127,7 +128,7 @@ def main():
         uvicorn_config = {
             "app": "app.main:app",
             "host": settings.HOST or "0.0.0.0",
-            "port": settings.PORT or 8000,
+            "port": os.environ["PORT"],
             "workers": workers,
             "log_level": settings.LOG_LEVEL.lower(),
             "access_log": True,
