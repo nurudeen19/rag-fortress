@@ -4,7 +4,12 @@ Email configuration settings.
 from typing import Optional
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from fastapi_mail import ConnectionConfig
+
+try:
+    from fastapi_mail import ConnectionConfig
+except ImportError:
+    # Allow settings to be imported even if fastapi_mail isn't installed
+    ConnectionConfig = None
 
 
 class EmailSettings(BaseSettings):
@@ -82,16 +87,19 @@ class EmailSettings(BaseSettings):
             # Email is optional - SMTP configuration is not required
             pass
 
-    def get_connection_config(self) -> ConnectionConfig:
+    def get_connection_config(self):
         """
-        Get FastMail connection configuration from email settings.
+        Creates a FastMail ConnectionConfig instance from SMTP settings.
         
         This method creates a ConnectionConfig object that can be used
-        to initialize FastMail for sending emails.
+        with FastMail for sending emails.
         
         Returns:
             ConnectionConfig instance for FastMail
         """
+        if ConnectionConfig is None:
+            raise ImportError("fastapi_mail is required for email functionality. Install it with: pip install fastapi-mail")
+        
         return ConnectionConfig(
             MAIL_USERNAME=self.SMTP_USERNAME or "",
             MAIL_PASSWORD=self.SMTP_PASSWORD or "",

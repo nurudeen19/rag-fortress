@@ -11,10 +11,6 @@ from sqlalchemy import pool
 
 from alembic import context
 import os
-from dotenv import load_dotenv
-
-# Load environment variables
-load_dotenv()
 
 # this is the Alembic Config object, which provides
 # the values of the [alembic] section of the alembic.ini

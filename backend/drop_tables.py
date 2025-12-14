@@ -2,13 +2,8 @@
 """Drop all tables in the database to start fresh."""
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, text, inspect
 from app.config.database_settings import DatabaseSettings
-
-# Explicitly load .env file
-env_path = Path(__file__).parent / '.env'
-load_dotenv(env_path)
 
 db = DatabaseSettings()
 print(f"Using database provider: {db.DATABASE_PROVIDER}")

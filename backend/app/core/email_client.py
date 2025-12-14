@@ -8,7 +8,14 @@ throughout the application lifecycle.
 import logging
 from typing import List, Optional
 
-from fastapi_mail import FastMail, MessageSchema, MessageType
+try:
+    from fastapi_mail import FastMail, MessageSchema, MessageType
+except ImportError:
+    # Allow module to be imported even if fastapi_mail isn't installed
+    FastMail = None
+    MessageSchema = None
+    MessageType = None
+
 from pydantic import EmailStr
 
 from app.config.settings import settings
@@ -26,6 +33,9 @@ class EmailClient:
     
     def __init__(self):
         """Initialize email client with connection config."""
+        if FastMail is None:
+            raise ImportError("fastapi_mail is required for email functionality. Install it with: pip install fastapi-mail")
+        
         self._config = settings.get_connection_config()
         self._mail = FastMail(self._config)
         self._initialized = False

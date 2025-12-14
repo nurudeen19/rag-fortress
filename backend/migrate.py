@@ -16,11 +16,7 @@ from pathlib import Path
 from click import command, argument, option
 from alembic.config import Config
 from alembic import command as alembic_command
-from dotenv import load_dotenv
 from app.config.database_settings import DatabaseSettings
-
-# Load environment variables
-load_dotenv()
 
 # Get the directory where this script is located
 SCRIPT_DIR = Path(__file__).parent.resolve()

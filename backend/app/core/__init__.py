@@ -1,6 +1,13 @@
 # Core module
 from .logging import setup_logging, get_logger, default_logger
-from .email_client import EmailClient, get_email_client, init_email_client
+
+try:
+    from .email_client import EmailClient, get_email_client, init_email_client
+except ImportError:
+    # Allow core module to be imported even if email dependencies aren't available
+    EmailClient = None
+    get_email_client = lambda: None
+    init_email_client = lambda *args, **kwargs: None
 from .exceptions import (
     # Base
     RAGFortressException,
