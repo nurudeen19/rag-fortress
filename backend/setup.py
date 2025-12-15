@@ -441,13 +441,6 @@ async def clear_database() -> bool:
             conn = await session.connection()
             dialect = conn.dialect.name
             
-            # Disable foreign key checks based on database provider
-            if dialect == 'mysql':
-                await session.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
-            elif dialect == 'postgresql':
-                await session.execute(text("SET session_replication_role = 'replica'"))
-            # SQLite doesn't need this, it ignores FK constraints when dropping
-            
             def get_tables(sync_session):
                 inspector = sql_inspect(db_manager.async_engine.sync_engine)
                 return inspector.get_table_names()
@@ -455,19 +448,22 @@ async def clear_database() -> bool:
             tables = await session.run_sync(get_tables)
             
             # Drop tables with appropriate syntax for each dialect
-            for table in tables:
-                if dialect == 'mysql':
-                    await session.execute(text(f"DROP TABLE IF EXISTS `{table}`"))
-                elif dialect == 'postgresql':
-                    await session.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
-                else:  # SQLite
-                    await session.execute(text(f"DROP TABLE IF EXISTS {table}"))
-            
-            # Re-enable foreign key checks
+            # Note: CASCADE handles foreign key dependencies automatically
+            # This approach works with managed databases (Neon, Supabase) that
+            # don't allow session_replication_role on pooled connections
             if dialect == 'mysql':
+                # Disable FK checks for MySQL
+                await session.execute(text("SET FOREIGN_KEY_CHECKS = 0"))
+                for table in tables:
+                    await session.execute(text(f"DROP TABLE IF EXISTS `{table}`"))
                 await session.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
             elif dialect == 'postgresql':
-                await session.execute(text("SET session_replication_role = 'origin'"))
+                # Use CASCADE to handle dependencies
+                for table in tables:
+                    await session.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
+            else:  # SQLite
+                for table in tables:
+                    await session.execute(text(f"DROP TABLE IF EXISTS {table}"))
             
             await session.commit()
         

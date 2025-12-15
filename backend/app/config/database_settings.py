@@ -268,14 +268,27 @@ class DatabaseSettings(BaseSettings):
         if self.DATABASE_URL:
             url = self.DATABASE_URL
             # Convert sync drivers to async if needed
-            if "postgresql://" in url:
+            if "postgresql://" in url and "postgresql+asyncpg" not in url:
                 url = url.replace("postgresql://", "postgresql+asyncpg://")
             elif "mysql+pymysql://" in url:
                 url = url.replace("mysql+pymysql://", "mysql+aiomysql://")
-            elif "mysql://" in url:
+            elif "mysql://" in url and "mysql+aiomysql" not in url:
                 url = url.replace("mysql://", "mysql+aiomysql://")
-            elif "sqlite:///" in url:
+            elif "sqlite:///" in url and "sqlite+aiosqlite" not in url:
                 url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+            
+            # asyncpg doesn't support sslmode parameter, convert to ssl
+            # This is PostgreSQL-specific: MySQL uses different SSL config via connect_args
+            # Critical for Neon, Supabase, and other cloud PostgreSQL providers
+            if "postgresql+asyncpg" in url and "sslmode=" in url:
+                # Convert sslmode to ssl parameter for asyncpg
+                url = url.replace("sslmode=disable", "ssl=false")
+                url = url.replace("sslmode=allow", "ssl=prefer")
+                url = url.replace("sslmode=prefer", "ssl=prefer")
+                url = url.replace("sslmode=require", "ssl=require")
+                url = url.replace("sslmode=verify-ca", "ssl=verify-ca")
+                url = url.replace("sslmode=verify-full", "ssl=verify-full")
+            
             return url
         
         config = self.get_database_config()
@@ -287,8 +300,20 @@ class DatabaseSettings(BaseSettings):
                 f"postgresql+asyncpg://{config['user']}{password}"
                 f"@{config['host']}:{config['port']}/{config['database']}"
             )
+            # asyncpg uses 'ssl' parameter instead of 'sslmode'
             if config.get("ssl_mode") and config["ssl_mode"] != "prefer":
-                url += f"?sslmode={config['ssl_mode']}"
+                ssl_mode = config["ssl_mode"]
+                # Map sslmode values to asyncpg ssl parameter
+                ssl_mapping = {
+                    "disable": "false",
+                    "allow": "prefer",
+                    "prefer": "prefer",
+                    "require": "require",
+                    "verify-ca": "verify-ca",
+                    "verify-full": "verify-full"
+                }
+                ssl_value = ssl_mapping.get(ssl_mode, "prefer")
+                url += f"?ssl={ssl_value}"
             return url
         
         elif provider == "mysql":
