@@ -18,11 +18,15 @@ class DatabaseSettings(BaseSettings):
         extra="ignore"
     )
     
-    # Database Provider Selection
+    # Complete Database URL (takes precedence over individual settings)
+    # Supports: postgresql://user:pass@host:port/db, mysql://user:pass@host:port/db, sqlite:///path
+    DATABASE_URL: Optional[str] = Field(None, env="DATABASE_URL")
+    
+    # Database Provider Selection (used only if DATABASE_URL is not provided)
     DATABASE_PROVIDER: str = Field("postgresql", env="DATABASE_PROVIDER")
     
     # Unified Database Configuration (PostgreSQL & MySQL)
-    # These fields are used by both PostgreSQL and MySQL
+    # These fields are used by both PostgreSQL and MySQL (only if DATABASE_URL is not provided)
     DB_HOST: str = Field("localhost", env="DB_HOST")
     DB_PORT: Optional[int] = Field(None, env="DB_PORT")  # Auto-set based on provider if None
     DB_USER: str = Field("rag_fortress", env="DB_USER")
@@ -148,6 +152,9 @@ class DatabaseSettings(BaseSettings):
         """
         Get synchronous database URL (internal use only).
         
+        If DATABASE_URL is provided, it will be used directly.
+        Otherwise, builds the URL from individual configuration fields.
+        
         Prefer using get_database_config() for explicit host/port/credentials.
         This is primarily used internally for engine creation.
         
@@ -159,6 +166,15 @@ class DatabaseSettings(BaseSettings):
             MySQL: mysql+pymysql://user:pass@localhost:3306/dbname
             SQLite: sqlite:///./rag_fortress.db
         """
+        if self.DATABASE_URL:
+            # Normalize the URL driver for sync operations if needed
+            url = self.DATABASE_URL
+            # Convert async drivers to sync if present
+            url = url.replace("postgresql+asyncpg://", "postgresql://")
+            url = url.replace("mysql+aiomysql://", "mysql+pymysql://")
+            url = url.replace("sqlite+aiosqlite://", "sqlite:///")
+            return url
+        
         config = self.get_database_config()
         provider = config["provider"]
         
@@ -234,6 +250,9 @@ class DatabaseSettings(BaseSettings):
         """
         Get async database URL (internal use only).
         
+        If DATABASE_URL is provided, it will be used directly (or converted to async driver).
+        Otherwise, builds the URL from individual configuration fields.
+        
         Prefer using get_database_config() for explicit host/port/credentials.
         This is primarily used internally for async engine creation.
         
@@ -245,6 +264,20 @@ class DatabaseSettings(BaseSettings):
             MySQL: mysql+aiomysql://user:pass@localhost:3306/dbname
             SQLite: sqlite+aiosqlite:///./rag_fortress.db
         """
+        # If DATABASE_URL is provided, use it and convert to async driver if needed
+        if self.DATABASE_URL:
+            url = self.DATABASE_URL
+            # Convert sync drivers to async if needed
+            if "postgresql://" in url:
+                url = url.replace("postgresql://", "postgresql+asyncpg://")
+            elif "mysql+pymysql://" in url:
+                url = url.replace("mysql+pymysql://", "mysql+aiomysql://")
+            elif "mysql://" in url:
+                url = url.replace("mysql://", "mysql+aiomysql://")
+            elif "sqlite:///" in url:
+                url = url.replace("sqlite:///", "sqlite+aiosqlite:///")
+            return url
+        
         config = self.get_database_config()
         provider = config["provider"]
         
