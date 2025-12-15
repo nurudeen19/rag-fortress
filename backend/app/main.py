@@ -132,6 +132,19 @@ def create_app() -> FastAPI:
         StaticFiles(directory=error_report_dir),
         name="error_report_images",
     )
+
+    # Root endpoint
+    @app.get("/")
+    async def root():
+        """Root endpoint - API information."""
+        return {
+            "name": "RAG Fortress API",
+            "version": "1.0.0",
+            "status": "operational",
+            "documentation": "/docs",
+            "health": "/health",
+            "api_prefix": "/api/v1"
+        }
     
     # Health check endpoint
     @app.get("/health")
