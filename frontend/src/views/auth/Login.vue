@@ -115,7 +115,7 @@
           </div>
           <div class="flex items-center justify-between bg-fortress-900/70 px-3 py-2 rounded-lg text-fortress-200">
             <span class="text-xs uppercase tracking-[0.2em] text-fortress-500">Password</span>
-            <span class="font-mono text-fortress-100">{{ demoCredentials.password }}</span>
+            <span class="font-mono text-fortress-100">{{ '•'.repeat(Math.min(demoCredentials.password.length, 20)) }}</span>
           </div>
         </div>
         <button
