@@ -81,15 +81,26 @@
     <div v-else class="flex-1 flex flex-col gap-4">
       <!-- Status Message -->
       <div v-if="statusMessage.text" 
-           class="p-4 rounded-lg text-sm flex items-start gap-3" 
+           class="p-4 rounded-lg text-sm flex items-start justify-between gap-3" 
            :class="statusMessage.type === 'success' ? 'bg-secure/20 text-secure border border-secure/30' : 'bg-error/20 text-error border border-error/30'">
-        <svg v-if="statusMessage.type === 'success'" class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-        </svg>
-        <svg v-else class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
-        </svg>
-        <span>{{ statusMessage.text }}</span>
+        <div class="flex items-start gap-3 flex-1">
+          <svg v-if="statusMessage.type === 'success'" class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+          </svg>
+          <svg v-else class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+          </svg>
+          <span class="flex-1">{{ statusMessage.text }}</span>
+        </div>
+        <button 
+          @click="statusMessage = { type: null, text: null }"
+          class="p-1 hover:bg-black/10 rounded transition-colors flex-shrink-0"
+          title="Dismiss"
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+          </svg>
+        </button>
       </div>
 
       <!-- Category Tabs -->
@@ -365,14 +376,24 @@ async function saveChanges() {
     // Reload settings to get fresh data
     await loadSettings()
     
-    // Clear message after 5 seconds
+    // Clear SUCCESS message after 5 seconds, keep ERROR messages visible
     setTimeout(() => {
-      statusMessage.value = { type: null, text: null }
+      if (statusMessage.value.type === 'success') {
+        statusMessage.value = { type: null, text: null }
+      }
     }, 5000)
     
   } catch (err) {
-    const errorMessage = err.response?.data?.detail || 'Failed to save settings'
+    console.error('Settings save error:', err)
+    console.error('Error response:', err.response)
+    
+    const errorMessage = err.response?.data?.detail || err.message || 'Failed to save settings'
     statusMessage.value = { type: 'error', text: errorMessage }
+    
+    // Don't auto-clear error messages - let user dismiss them
+    // setTimeout(() => {
+    //   statusMessage.value = { type: null, text: null }
+    // }, 10000)
   } finally {
     isSaving.value = false
   }

@@ -10,6 +10,7 @@ Handles:
 from typing import Optional, Tuple, Dict, List, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.department import Department
 from app.models.user import User
@@ -96,8 +97,11 @@ class DepartmentService:
             Tuple of (department_data, error_message)
         """
         try:
+            
             result = await self.session.execute(
-                select(Department).where(Department.id == department_id)
+                select(Department)
+                .options(selectinload(Department.manager))
+                .where(Department.id == department_id)
             )
             department = result.scalar_one_or_none()
             
@@ -129,7 +133,8 @@ class DepartmentService:
             Tuple of (departments_list, error_message)
         """
         try:
-            query = select(Department)
+            from sqlalchemy.orm import selectinload
+            query = select(Department).options(selectinload(Department.manager))
             
             if active_only:
                 query = query.where(Department.is_active.is_(True))
@@ -170,8 +175,11 @@ class DepartmentService:
             Tuple of (department_data, error_message)
         """
         try:
+            from sqlalchemy.orm import selectinload
             result = await self.session.execute(
-                select(Department).where(Department.id == department_id)
+                select(Department)
+                .options(selectinload(Department.manager))
+                .where(Department.id == department_id)
             )
             department = result.scalar_one_or_none()
             
@@ -318,8 +326,11 @@ class DepartmentService:
             Tuple of (department_data, error_message)
         """
         try:
+            from sqlalchemy.orm import selectinload
             result = await self.session.execute(
-                select(Department).where(Department.id == department_id)
+                select(Department)
+                .options(selectinload(Department.manager))
+                .where(Department.id == department_id)
             )
             department = result.scalar_one_or_none()
             

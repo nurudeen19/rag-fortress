@@ -38,7 +38,18 @@ api.interceptors.response.use(
       }
     }
     
-    console.error('API Error:', error)
+    // Log 403 Forbidden errors (demo mode, permissions, etc.)
+    if (error.response?.status === 403) {
+      console.error('403 Forbidden:', error.response.data)
+    }
+    
+    // General error logging
+    console.error('API Error:', {
+      status: error.response?.status,
+      data: error.response?.data,
+      message: error.message
+    })
+    
     return Promise.reject(error)
   }
 )
