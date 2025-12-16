@@ -31,6 +31,8 @@ User Feedback Loop: Add endpoints to allow users to rate responses (thumbs up/do
 
 ## Overall System improvements
 
+Frontend Security Audit
+
 Token Response: The verify_token function returns only a user_id. Returning a structured object (e.g., TokenPayload with scopes/roles) would reduce database lookups for basic permission checks.
 
 Document Ingestion Error Granularity: The pipeline catches generic Exception. Defining specific exceptions (e.g., ParsingError, EmbeddingError, StorageError) would allow for smarter retry logic (e.g., retry network errors, but fail permanently on parsing errors).

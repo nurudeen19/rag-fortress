@@ -331,3 +331,23 @@ class DatabaseSettings(BaseSettings):
         
         else:
             raise ValueError(f"Unsupported database provider: {provider}")
+
+    def get_provider_info(self) -> str:
+        """
+        Get safe database provider information for logging (without credentials/URLs).
+        
+        Returns:
+            str: Database provider and basic info (e.g. "PostgreSQL at localhost:5432")
+        """
+        config = self.get_database_config()
+        provider = config["provider"].upper()
+        
+        if provider == "POSTGRESQL":
+            return f"{provider} at {config['host']}:{config['port']}"
+        elif provider == "MYSQL":
+            return f"{provider} at {config['host']}:{config['port']}"
+        elif provider == "SQLITE":
+            return f"{provider} at {config['path']}"
+        else:
+            return provider
+

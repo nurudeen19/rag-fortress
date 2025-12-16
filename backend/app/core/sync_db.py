@@ -29,10 +29,7 @@ def get_sync_engine():
         # Use the private URL builder from settings which handles sync drivers
         db_url = settings._get_sync_database_url()
         
-        logger.info(
-            f"Creating sync database engine: {provider}://"
-            f"{config['host']}:{config['port']}/{config['database']}"
-        )
+        logger.info(f"Creating sync database engine ({provider})")
         
         engine_kwargs = {
             "echo": config["echo"],

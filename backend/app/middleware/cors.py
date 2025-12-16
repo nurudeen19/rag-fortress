@@ -19,12 +19,23 @@ def setup_cors(app: FastAPI) -> None:
     Args:
         app: FastAPI application instance
     """
+    # Ensure OPTIONS method is always included for CORS preflight
+    cors_methods = settings.CORS_METHODS
+    if "*" not in cors_methods and "OPTIONS" not in cors_methods:
+        cors_methods = list(cors_methods) + ["OPTIONS"]
+    
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
         allow_credentials=settings.CORS_CREDENTIALS,
-        allow_methods=settings.CORS_METHODS,
+        allow_methods=cors_methods,
         allow_headers=settings.CORS_HEADERS,
+        expose_headers=["*"],  # Allow frontend to read response headers
+        max_age=3600,  # Cache preflight for 1 hour
     )
     
-    logger.info(f"CORS configured with origins: {settings.CORS_ORIGINS}")
+    logger.info(f"CORS configured:")
+    logger.info(f"  - Origins: {settings.CORS_ORIGINS}")
+    logger.info(f"  - Methods: {cors_methods}")
+    logger.info(f"  - Headers: {settings.CORS_HEADERS}")
+    logger.info(f"  - Credentials: {settings.CORS_CREDENTIALS}")

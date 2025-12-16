@@ -127,16 +127,28 @@ class AppSettings(BaseSettings):
     def parse_list_fields(cls, v):
         """Parse list fields from JSON array, comma-separated string, or list."""
         if isinstance(v, str):
+            # Handle wildcard shorthand
+            if v.strip() == "*":
+                return ["*"]
+            
             # Try to parse as JSON array first
             if v.strip().startswith("["):
                 import json
                 try:
-                    return json.loads(v)
-                except json.JSONDecodeError:
+                    parsed = json.loads(v)
+                    # If wildcard in array, expand to explicit methods for CORS_METHODS
+                    if isinstance(parsed, list) and "*" in parsed:
+                        return ["*"]
+                    return parsed
+                except json.JSONDecodeError as e:
                     # If JSON parsing fails, fall back to comma-separated
+                    print(f"Warning: Failed to parse JSON array '{v}': {e}. Falling back to CSV parsing.")
                     pass
+            
             # Parse as comma-separated string
-            return [item.strip() for item in v.split(",") if item.strip()]
+            items = [item.strip() for item in v.split(",") if item.strip()]
+            # Remove any accidental quotes from CSV parsing
+            return [item.strip('"\'') for item in items]
         return v
 
     @field_validator("ENVIRONMENT")

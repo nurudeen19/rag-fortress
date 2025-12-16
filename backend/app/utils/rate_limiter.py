@@ -34,7 +34,7 @@ def get_limiter() -> Limiter:
         # Configure storage backend
         if settings.RATE_LIMIT_STORAGE == "redis" and settings.RATE_LIMIT_REDIS_URL:
             # Use Redis for distributed rate limiting
-            logger.info(f"Initializing rate limiter with Redis storage: {settings.RATE_LIMIT_REDIS_URL}")
+            logger.info("Initializing rate limiter with Redis storage")
             _limiter = Limiter(
                 key_func=get_remote_address,
                 storage_uri=settings.RATE_LIMIT_REDIS_URL,

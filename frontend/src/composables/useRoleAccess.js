@@ -206,6 +206,14 @@ export function useRoleAccess() {
         group: 'admin',
       })
       nav.push({
+        name: 'Activity Logs',
+        path: '/activity-logs',
+        routeName: 'activity-logs',
+        icon: 'logs',
+        roles: ['admin'],
+        group: 'admin',
+      })
+      nav.push({
         name: 'System Settings',
         path: '/system-settings',
         routeName: 'system-settings',

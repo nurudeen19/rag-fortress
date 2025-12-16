@@ -36,7 +36,7 @@ class RedisBackend:
             
             self._redis = await aioredis.from_url(self.url, **options)
             await self._redis.ping()
-            logger.info(f"Redis connected: {self.url}")
+            logger.info("✓ Redis cache connected")
         return self._redis
     
     async def get(self, key: str) -> Optional[str]:

@@ -129,7 +129,7 @@ class StartupController:
             self.database_manager = DatabaseManager(db_settings)
             
             # Create async engine
-            logger.info("Creating database engine...")
+            logger.info(f"Creating database engine for {db_settings.get_provider_info()}...")
             await self.database_manager.create_async_engine()
             
             # Create session factory
