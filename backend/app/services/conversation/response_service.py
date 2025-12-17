@@ -18,7 +18,6 @@ from langchain_core.language_models import BaseLanguageModel
 from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm_router_service import get_llm_router, LLMType
 from app.services.conversation.service import ConversationService
-from app.services import activity_logger_service
 from app.utils.user_clearance_cache import get_user_clearance_cache
 from app.utils.text_processing import preprocess_query
 from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
@@ -29,7 +28,7 @@ from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.core import get_logger
-from app.core.events import emit_activity_log
+from app.core.events import get_event_bus
 
 logger = get_logger(__name__)
 
@@ -154,18 +153,38 @@ class ConversationResponseService:
                 error_type = retrieval_result.get("error", "retrieval_error")
                 logger.warning(f"Retrieval failed: {error_type}")
                 
-                # Emit activity log event for no-retrieval events (non-blocking)
+                # Emit activity log event for retrieval failures (non-blocking)
                 if error_type in ["no_documents", "low_quality_results", "reranker_no_quality"]:
                     try:
-                        
-                        await emit_activity_log(
-                            user_id=user_id,
-                            incident_type="retrieval_no_context",
-                            severity="info",
-                            description=f"No context retrieved: {error_type}",
-                            user_query=user_query[:500],  # Truncate long queries
-                            details=retrieval_result.get("details")
-                        )
+                        bus = get_event_bus()
+                        await bus.emit("activity_log", {
+                            "user_id": user_id,
+                            "incident_type": "retrieval_no_context",
+                            "severity": "info",
+                            "description": f"No context retrieved: {error_type}",
+                            "user_query": user_query[:500],  # Truncate long queries
+                            "details": retrieval_result.get("details")
+                        })
+                    except Exception as e:
+                        logger.error(f"Failed to emit activity log event: {e}")
+                
+                # Emit activity log event for insufficient clearance (permission denied)
+                elif error_type == "insufficient_clearance":
+                    try:
+                        bus = get_event_bus()
+                        await bus.emit("activity_log", {
+                            "user_id": user_id,
+                            "incident_type": "insufficient_clearance",
+                            "severity": "warning",
+                            "description": "User attempted to access documents above their clearance level",
+                            "user_query": user_query[:500],  # Truncate long queries
+                            "access_granted": False,
+                            "details": {
+                                "error": error_type,
+                                "message": retrieval_result.get("message"),
+                                "max_security_level": retrieval_result.get("max_security_level")
+                            }
+                        })
                     except Exception as e:
                         logger.error(f"Failed to emit activity log event: {e}")
                 

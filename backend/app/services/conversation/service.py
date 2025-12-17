@@ -13,8 +13,8 @@ from app.core.cache import get_cache
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.core import get_logger
+from app.core.events import get_event_bus
 from app.services.query_validator_service import get_query_validator
-from app.services import activity_logger_service
 
 logger = get_logger(__name__)
 
@@ -287,21 +287,21 @@ class ConversationService:
                     )
                     
                     # Emit activity log event (non-blocking)
-                    from app.core.events import emit_activity_log
-                    await emit_activity_log(
-                        user_id=user_id,
-                        incident_type="malicious_query_blocked",
-                        severity="critical",
-                        description=f"Malicious query blocked: {validation['threat_type']}",
-                        details={
+                    bus = get_event_bus()
+                    await bus.emit("activity_log", {
+                        "user_id": user_id,
+                        "incident_type": "malicious_query_blocked",
+                        "severity": "critical",
+                        "description": f"Malicious query blocked: {validation['threat_type']}",
+                        "details": {
                             "threat_type": validation["threat_type"],
                             "confidence": validation["confidence"],
                             "reason": validation["reason"],
                             "conversation_id": conversation_id
                         },
-                        user_query=content,
-                        threat_type=validation["threat_type"]
-                    )
+                        "user_query": content,
+                        "threat_type": validation["threat_type"]
+                    })
                     
                     return {
                         "success": False,
