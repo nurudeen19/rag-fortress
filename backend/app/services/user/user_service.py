@@ -12,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.user_profile import UserProfile
+from app.models.user_permission import PermissionLevel
 from app.core import get_logger
 from app.services.user.password_service import PasswordService
+from app.utils.user_clearance_cache import get_user_clearance_cache
 
 
 logger = get_logger(__name__)
@@ -382,3 +384,37 @@ class UserAccountService:
         except Exception as e:
             logger.error(f"Delete user error: {e}")
             return False, "Failed to delete account"
+    
+    async def get_user_clearance_info(self, user_id: int) -> Optional[dict]:
+        """
+        Get user's clearance information (security level and department).
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            Dict with 'clearance', 'department_id', 'department_security_level' or None if not found
+        """
+        try:            
+            
+            clearance_cache = get_user_clearance_cache(self.session)
+            clearance = await clearance_cache.get_clearance(user_id)
+            
+            if not clearance:
+                logger.warning(f"User clearance not found for user_id={user_id}")
+                return None
+            
+            # Convert security level strings to PermissionLevel enums
+            dept_security_level = None
+            if clearance.get("department_security_level"):
+                dept_security_level = PermissionLevel[clearance["department_security_level"]]
+            
+            return {
+                "clearance": PermissionLevel[clearance["security_level"]],
+                "department_security_level": dept_security_level,
+                "department_id": clearance["department_id"]
+            }
+        
+        except Exception as e:
+            logger.error(f"Failed to get user clearance info: {e}")
+            return None
