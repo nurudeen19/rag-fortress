@@ -14,9 +14,10 @@ See app/seeders/ for seeding operations.
 """
 
 from app.core import get_logger
-from app.core.cache import(
+from app.core.cache import (
     initialize_cache,
-    close_cache
+    close_cache,
+    get_cache
 )
 from app.core.events import (
     get_event_bus,
