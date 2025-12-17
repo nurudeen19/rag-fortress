@@ -114,6 +114,11 @@ class AppSettings(BaseSettings):
     CONVERSATION_RATE_LIMIT_PER_MINUTE: int = Field(10, env="CONVERSATION_RATE_LIMIT_PER_MINUTE")
     CONVERSATION_RATE_LIMIT_PER_HOUR: int = Field(100, env="CONVERSATION_RATE_LIMIT_PER_HOUR")
     
+    # Conversation History Configuration
+    # Number of previous message turns (user+assistant pairs) to include in context
+    # Higher values provide more context but use more tokens
+    CONVERSATION_HISTORY_TURNS: int = Field(3, env="CONVERSATION_HISTORY_TURNS")
+    
     # Rate limit storage backend (memory or redis)
     RATE_LIMIT_STORAGE: str = Field("memory", env="RATE_LIMIT_STORAGE")
     RATE_LIMIT_REDIS_URL: Optional[str] = Field(None, env="RATE_LIMIT_REDIS_URL")

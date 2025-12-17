@@ -28,6 +28,16 @@ class ConversationService:
 
     # ==================== Helper Methods ====================
 
+    def _estimate_tokens(self, text: str) -> int:
+        """Simple token estimation based on word count.
+        
+        Uses approximation: tokens ≈ words * 1.3
+        For accurate token counts, use tiktoken or similar.
+        """
+        if not text:
+            return 0
+        return int(len(text.split()) * 1.3)
+
     def _serialize_conversation(self, conversation: Conversation) -> Dict[str, Any]:
         """Convert Conversation model to dict."""
         return {
@@ -355,7 +365,11 @@ class ConversationService:
         except Exception as exc:
             logger.warning(f"Failed to read history cache: {exc}")
 
-        context_result = await self.get_conversation_context(conversation_id, user_id, last_n=6)
+        # Use configurable history turns from settings (defaults to 3 turns = 6 messages)
+        history_turns = settings.CONVERSATION_HISTORY_TURNS
+        last_n = history_turns * 2  # Each turn has user + assistant messages
+        
+        context_result = await self.get_conversation_context(conversation_id, user_id, last_n=last_n)
         if not context_result.get("success"):
             return []
 
@@ -378,7 +392,28 @@ class ConversationService:
         persist_to_db: bool = False,
         assistant_meta: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Persist the latest exchange to cache and optionally the database."""
+        """
+        Persist the latest exchange to database first, then cache.
+        
+        Cache is updated AFTER successful DB commit to maintain consistency.
+        If DB persistence fails, cache remains untouched.
+        """
+        # If persistence to DB is requested, do it FIRST
+        if persist_to_db and user_id is not None:
+            success = await self.save_conversation_exchange(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                user_msg=user_msg,
+                assistant_msg=assistant_msg,
+                assistant_meta=assistant_meta
+            )
+            
+            # Only update cache if DB persistence succeeded
+            if not success:
+                logger.error(f"DB persistence failed for {conversation_id}, skipping cache update")
+                return
+        
+        # Update cache (either after successful DB commit or for cache-only updates)
         cache_key = f"conversation:history:{conversation_id}"
         try:
             cached_data = await self.cache.get(cache_key)
@@ -389,19 +424,14 @@ class ConversationService:
 
         history.append({"role": "user", "content": user_msg})
         history.append({"role": "assistant", "content": assistant_msg})
-        history = history[-6:]
+        
+        # Use configurable history turns from settings
+        history_turns = settings.CONVERSATION_HISTORY_TURNS
+        max_messages = history_turns * 2  # Each turn has user + assistant messages
+        history = history[-max_messages:]
 
         await self._cache_history(conversation_id, history)
         logger.info(f"Cached exchange for {conversation_id}")
-
-        if persist_to_db and user_id is not None:
-            await self._persist_messages_to_db(
-                conversation_id,
-                user_id,
-                user_msg,
-                assistant_msg,
-                assistant_meta=assistant_meta
-            )
 
     async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
         """Helper to persist conversation history to cache with a 24-hour TTL."""
@@ -415,6 +445,57 @@ class ConversationService:
         except Exception as exc:
             logger.error(f"Failed to cache history for {conversation_id}: {exc}")
 
+    async def save_conversation_exchange(
+        self,
+        conversation_id: str,
+        user_id: int,
+        user_msg: str,
+        assistant_msg: str,
+        assistant_meta: Optional[Dict[str, Any]] = None
+    ) -> bool:
+        """
+        Save both user and assistant messages in a single atomic transaction.
+        
+        This ensures either both messages are persisted or neither are,
+        preventing dangling user messages without assistant responses.
+        
+        Returns:
+            bool: True if both messages were persisted successfully, False otherwise
+        """
+        try:
+            # Create both message objects
+            user_message = Message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.USER,
+                content=user_msg,
+                token_count=self._estimate_tokens(user_msg)
+            )
+            
+            assistant_message = Message(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=MessageRole.ASSISTANT,
+                content=assistant_msg,
+                token_count=self._estimate_tokens(assistant_msg),
+                meta=assistant_meta
+            )
+            
+            # Add both to session
+            self.session.add(user_message)
+            self.session.add(assistant_message)
+            
+            # Commit in a single transaction
+            await self.session.commit()
+            
+            logger.info(f"Persisted conversation exchange for {conversation_id} in single transaction")
+            return True
+            
+        except Exception as exc:
+            logger.error(f"Failed to persist exchange for {conversation_id}: {exc}")
+            await self.session.rollback()
+            return False
+
     async def _persist_messages_to_db(
         self,
         conversation_id: str,
@@ -423,32 +504,22 @@ class ConversationService:
         assistant_msg: str,
         assistant_meta: Optional[Dict[str, Any]] = None
     ) -> None:
-        """Persist the user and assistant turns to the database."""
-        try:
-            user_result = await self.add_message(
-                conversation_id=conversation_id,
-                user_id=user_id,
-                role=MessageRole.USER,
-                content=user_msg
-            )
-            if not user_result.get("success"):
-                logger.warning(
-                    f"Failed to persist user message for {conversation_id}: {user_result.get('error')}"
-                )
-
-            assistant_result = await self.add_message(
-                conversation_id=conversation_id,
-                user_id=user_id,
-                role=MessageRole.ASSISTANT,
-                content=assistant_msg,
-                meta=assistant_meta
-            )
-            if not assistant_result.get("success"):
-                logger.warning(
-                    f"Failed to persist assistant message for {conversation_id}: {assistant_result.get('error')}"
-                )
-        except Exception as exc:
-            logger.error(f"Failed to persist exchange for {conversation_id}: {exc}")
+        """
+        DEPRECATED: Use save_conversation_exchange() instead for atomic transactions.
+        
+        This method is kept for backward compatibility but will log a warning.
+        """
+        logger.warning(
+            "Using deprecated _persist_messages_to_db. "
+            "Use save_conversation_exchange() for atomic transactions."
+        )
+        await self.save_conversation_exchange(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            user_msg=user_msg,
+            assistant_msg=assistant_msg,
+            assistant_meta=assistant_meta
+        )
 
     async def get_messages(
         self,
