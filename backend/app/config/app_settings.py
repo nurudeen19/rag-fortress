@@ -123,6 +123,11 @@ class AppSettings(BaseSettings):
     RATE_LIMIT_STORAGE: str = Field("memory", env="RATE_LIMIT_STORAGE")
     RATE_LIMIT_REDIS_URL: Optional[str] = Field(None, env="RATE_LIMIT_REDIS_URL")
     
+    # Job Configuration
+    # Enable/disable individual scheduled jobs
+    ENABLE_OVERRIDE_ESCALATION_JOB: bool = Field(True, env="ENABLE_OVERRIDE_ESCALATION_JOB")
+    ENABLE_OVERRIDE_EXPIRATION_JOB: bool = Field(True, env="ENABLE_OVERRIDE_EXPIRATION_JOB")
+    
     # Production Configuration
     SKIP_AUTO_SETUP: bool = Field(False, env="SKIP_AUTO_SETUP")
     UVICORN_WORKERS: int = Field(1, env="UVICORN_WORKERS")

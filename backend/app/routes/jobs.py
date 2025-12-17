@@ -195,3 +195,30 @@ async def clear_failed_jobs(admin: User = Depends(require_role("admin"))):
                 status_code=500,
                 detail=f"Failed to clear jobs: {str(e)}"
             )
+
+
+@router.get("/scheduler/health")
+async def get_scheduler_health(
+    admin: User = Depends(require_role("admin"))
+):
+    """
+    Get health status and statistics for the job scheduler.
+    
+    Returns information about registered and scheduled jobs,
+    including enabled/disabled status, intervals, and guardrails.
+    """
+    try:
+        from app.jobs.bootstrap import get_job_health_summary
+        
+        health_summary = get_job_health_summary()
+        
+        return {
+            "status": "ok",
+            "data": health_summary
+        }
+    
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get scheduler health: {str(e)}"
+        )

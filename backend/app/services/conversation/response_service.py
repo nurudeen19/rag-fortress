@@ -29,6 +29,7 @@ from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.core import get_logger
+from app.core.events import emit_activity_log
 
 logger = get_logger(__name__)
 
@@ -153,11 +154,11 @@ class ConversationResponseService:
                 error_type = retrieval_result.get("error", "retrieval_error")
                 logger.warning(f"Retrieval failed: {error_type}")
                 
-                # Log no-retrieval events to activity logs for analysis
+                # Emit activity log event for no-retrieval events (non-blocking)
                 if error_type in ["no_documents", "low_quality_results", "reranker_no_quality"]:
                     try:
-                        await activity_logger_service.log_activity(
-                            db=self.session,
+                        
+                        await emit_activity_log(
                             user_id=user_id,
                             incident_type="retrieval_no_context",
                             severity="info",
@@ -166,7 +167,7 @@ class ConversationResponseService:
                             details=retrieval_result.get("details")
                         )
                     except Exception as e:
-                        logger.error(f"Failed to log no-retrieval event: {e}")
+                        logger.error(f"Failed to emit activity log event: {e}")
                 
                 # Generate appropriate response based on error type
                 if stream:

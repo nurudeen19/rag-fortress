@@ -286,9 +286,9 @@ class ConversationService:
                         f"confidence={validation['confidence']:.2f}"
                     )
                     
-                    # Log malicious query attempt to database
-                    await activity_logger_service.log_activity(
-                        db=self.session,
+                    # Emit activity log event (non-blocking)
+                    from app.core.events import emit_activity_log
+                    await emit_activity_log(
                         user_id=user_id,
                         incident_type="malicious_query_blocked",
                         severity="critical",
@@ -302,7 +302,6 @@ class ConversationService:
                         user_query=content,
                         threat_type=validation["threat_type"]
                     )
-                    await self.session.commit()
                     
                     return {
                         "success": False,

@@ -14,19 +14,34 @@ See app/seeders/ for seeding operations.
 """
 
 from app.core import get_logger
+from app.core.cache import(
+    initialize_cache,
+    close_cache
+)
+from app.core.events import (
+    get_event_bus,
+    init_event_handlers,
+)
 from app.core.email_client import init_email_client
 from app.core.embedding_factory import get_embedding_provider
 from app.core.llm_factory import (
     get_internal_llm_provider,
     get_llm_provider,
-    get_fallback_llm_provider,
+    get_fallback_llm_provider
 )
 from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.core.database import DatabaseManager
-from app.config.settings import settings
-from app.config.database_settings import DatabaseSettings
+from app.core.settings_loader import load_settings_by_category
+from app.config import (
+    settings as settings_module,
+    settings,
+    cache_settings,
+    DatabaseSettings,
+    Settings
+)
 from app.jobs import get_job_manager
 from app.jobs.integration import JobQueueIntegration
+from app.jobs.bootstrap import init_jobs
 from app.services.vector_store.reranker import get_reranker_service
 
 
@@ -109,7 +124,13 @@ class StartupController:
             # ========== STEP 9: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
             
-            # ========== STEP 10: Job Queue (OPTIONAL, at end) ==========
+            # ========== STEP 10: Event Bus (OPTIONAL) ==========
+            # Initialize event handlers for background task processing
+            init_event_handlers()
+            logger.info("✓ Event bus initialized")
+            
+            # ========== STEP 11: Job Queue (OPTIONAL, at end) ==========
+            # Jobs scheduled last to ensure all dependencies are ready
             await self._initialize_job_queue()
 
             self.initialized = True
@@ -152,9 +173,6 @@ class StartupController:
         logger.info("Loading settings from database...")
         
         try:
-            from app.core.settings_loader import load_settings_by_category
-            from app.core.cache import get_cache
-            from app.config.settings import Settings
             
             # Load settings from DB grouped by category
             async with self.async_session_factory() as session:
@@ -168,7 +186,6 @@ class StartupController:
                 logger.info(f"✓ Cached {sum(len(v) for v in cached_settings.values())} settings")
             
             # Re-initialize global settings with cached values
-            from app.config import settings as settings_module
             settings_module.settings = Settings(cached_settings=cached_settings)
             logger.info("✓ Settings loaded with database values")
             
@@ -177,7 +194,7 @@ class StartupController:
             # Don't block startup - ENV variables still work
     
     async def _initialize_job_queue(self):
-        """Initialize job queue (optional - catches errors without blocking startup)."""
+        """Initialize job queue and schedule jobs via bootstrap."""
         logger.info("Initializing job queue...")
         
         try:
@@ -190,18 +207,11 @@ class StartupController:
             logger.info("✓ Job manager started")
             
             # Setup job integration (bridges persistence + scheduling)
-            # Note: Job recovery is deferred - jobs are scheduled when created,
-            # pending jobs will retry on next app restart
             self.job_integration = JobQueueIntegration(self.async_session_factory)
             logger.info("✓ Job queue initialized")
             
-            # Schedule recurring job for auto-escalation of override requests
-            await self._schedule_override_escalation_job()
-            logger.info("✓ Override request escalation job scheduled")
-
-            # Schedule recurring job to expire overrides automatically
-            await self._schedule_override_expiration_job()
-            logger.info("✓ Override expiration job scheduled")
+            # Schedule all jobs via centralized bootstrap
+            await init_jobs(self.job_manager)
             
         except Exception as e:
             logger.warning(f"⚠ Job queue initialization skipped: {e}")
@@ -402,9 +412,7 @@ class StartupController:
         """Initialize cache layer (optional - graceful fallback)."""
         logger.info("Initializing cache layer...")
         
-        try:
-            from app.core.cache import initialize_cache
-            from app.config.cache_settings import cache_settings
+        try:            
             
             use_redis = settings.CACHE_BACKEND == "redis" and settings.CACHE_ENABLED
             redis_url = cache_settings.get_redis_url() if use_redis else None
@@ -422,69 +430,7 @@ class StartupController:
             logger.warning(f"⚠ Cache initialization failed (continuing without cache): {e}")
             # Don't block startup - cache is optional
     
-    async def _schedule_override_escalation_job(self):
-        """Schedule hourly job to auto-escalate stale override requests."""
-        try:
-            async def escalate_overrides():
-                """Background task to process auto-escalations."""
-                try:
-                    from app.core.database import get_session
-                    from app.services.override_request_service import OverrideRequestService
-                    
-                    async with get_session() as session:
-                        service = OverrideRequestService(session)
-                        count = await service.process_auto_escalations(
-                            escalation_threshold_hours=24
-                        )
-                        await session.commit()
-                        
-                        if count > 0:
-                            logger.info(f"Auto-escalated {count} override request(s)")
-                
-                except Exception as e:
-                    logger.error(f"Error in override escalation job: {e}", exc_info=True)
-            
-            # Schedule to run every hour (3600 seconds)
-            self.job_manager.add_recurring_job(
-                escalate_overrides,
-                interval_seconds=3600,
-                job_id='override_request_escalation',
-                max_instances=1
-            )
-            
-        except Exception as e:
-            logger.warning(f"⚠ Failed to schedule override escalation job: {e}")
 
-    async def _schedule_override_expiration_job(self):
-        """Schedule recurring job to deactivate expired overrides."""
-        try:
-            async def expire_overrides():
-                """Background task to mark expired overrides inactive."""
-                try:
-                    from app.core.database import get_session
-                    from app.services.override_request_service import OverrideRequestService
-
-                    async with get_session() as session:
-                        service = OverrideRequestService(session)
-                        count = await service.process_expired_overrides()
-                        await session.commit()
-
-                        if count > 0:
-                            logger.info(f"Expired {count} override(s)")
-
-                except Exception as e:
-                    logger.error(f"Error in override expiration job: {e}", exc_info=True)
-
-            # Run every 10 minutes to keep access tight
-            self.job_manager.add_recurring_job(
-                expire_overrides,
-                interval_seconds=600,
-                job_id='override_expiration',
-                max_instances=1
-            )
-
-        except Exception as e:
-            logger.warning(f"⚠ Failed to schedule override expiration job: {e}")
     
     async def shutdown(self):
         """
@@ -498,6 +444,12 @@ class StartupController:
         logger.info("Starting application shutdown...")
         
         try:
+            # Wait for pending event bus tasks
+            logger.info("Waiting for pending event tasks...")
+            
+            event_bus = get_event_bus()
+            await event_bus.wait_for_pending_tasks(timeout=5.0)
+            
             # Shutdown cache
             if self.cache_manager:
                 logger.info("Closing cache connections...")
