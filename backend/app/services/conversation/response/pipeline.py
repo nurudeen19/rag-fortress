@@ -3,6 +3,7 @@ Response Pipeline
 
 Orchestrates the RAG response generation process.
 Handles retrieval, LLM routing, prompt construction, streaming, and fallback logic.
+Includes query decomposition for improved retrieval.
 """
 
 from typing import Dict, Any, AsyncGenerator, List, Optional, Tuple
@@ -22,13 +23,14 @@ logger = get_logger(__name__)
 
 
 class ResponsePipeline:
-    """Orchestrates RAG response generation pipeline."""
+    """Orchestrates RAG response generation pipeline with query decomposition."""
     
     def __init__(
         self,
         retriever: RetrieverService,
         llm_router: LLMRouter,
-        conversation_service: ConversationService
+        conversation_service: ConversationService,
+        query_decomposer=None
     ):
         """
         Initialize response pipeline.
@@ -37,11 +39,88 @@ class ResponsePipeline:
             retriever: Vector store retriever service
             llm_router: LLM router service
             conversation_service: Conversation service for history/persistence
+            query_decomposer: Optional query decomposer for query optimization
         """
         self.retriever = retriever
         self.llm_router = llm_router
         self.conversation_service = conversation_service
+        self.query_decomposer = query_decomposer
         self.prompt_settings = get_prompt_settings()
+        
+        logger.info(
+            f"ResponsePipeline initialized "
+            f"(decomposer={'enabled' if query_decomposer else 'disabled'})"
+        )
+    
+    async def process_query(
+        self,
+        user_query: str,
+        user_clearance_level: Optional[int] = None
+    ) -> Dict[str, Any]:
+        """
+        Process and potentially decompose a query.
+        
+        Args:
+            user_query: Original user query
+            user_clearance_level: User's security clearance level
+            
+        Returns:
+            Dict with processed query info:
+            - 'primary_query': Main query to use for retrieval
+            - 'all_queries': List of all decomposed queries (if applicable)
+            - 'decomposition_result': Full decomposition result (if applicable)
+            - 'strategy': Processing strategy used
+        """
+        if not self.query_decomposer or not self.query_decomposer.config.enabled:
+            # No decomposer - use original query
+            return {
+                "primary_query": user_query,
+                "all_queries": [user_query],
+                "decomposition_result": None,
+                "strategy": "no_decomposition"
+            }
+        
+        try:
+            # Attempt query decomposition
+            decomposition_result = await self.query_decomposer.decompose(
+                user_query,
+                user_clearance_level
+            )
+            
+            if decomposition_result:
+                primary = self.query_decomposer.get_primary_query(decomposition_result)
+                all_queries = self.query_decomposer.get_all_queries(decomposition_result)
+                
+                logger.info(
+                    f"Query decomposed: {len(all_queries)} queries "
+                    f"(strategy={decomposition_result.strategy})"
+                )
+                
+                return {
+                    "primary_query": primary,
+                    "all_queries": all_queries,
+                    "decomposition_result": decomposition_result,
+                    "strategy": decomposition_result.strategy
+                }
+            else:
+                # Decomposition failed - use original
+                logger.warning("Query decomposition failed, using original query")
+                return {
+                    "primary_query": user_query,
+                    "all_queries": [user_query],
+                    "decomposition_result": None,
+                    "strategy": "decomposition_failed"
+                }
+        
+        except Exception as e:
+            logger.error(f"Error in query processing: {e}", exc_info=True)
+            # Fallback to original query on error
+            return {
+                "primary_query": user_query,
+                "all_queries": [user_query],
+                "decomposition_result": None,
+                "strategy": "error_fallback"
+            }
     
     async def retrieve_context(
         self,

@@ -2,8 +2,8 @@
 Conversation Response Generation Service
 
 Clean orchestration service that delegates to specialized components:
-- IntentHandler: Template responses for simple queries
-- ResponsePipeline: RAG response generation
+- IntentHandler: Template responses for simple queries (hybrid heuristic + LLM)
+- ResponsePipeline: RAG response generation with query decomposition
 - ErrorResponseHandler: Error response formatting
 - ConversationActivityLogger: Activity logging
 """
@@ -33,6 +33,7 @@ class ConversationResponseService:
     Clean orchestrator for AI response generation.
     
     Delegates to specialized components for single-responsibility design.
+    Supports hybrid intent classification and query decomposition.
     """
     
     def __init__(self, session):
@@ -44,19 +45,57 @@ class ConversationResponseService:
         retriever = get_retriever_service()
         llm_router = get_llm_router()
         
+        # Initialize LLM-based classifier if enabled
+        llm_classifier = None
+        if settings.llm_settings.ENABLE_LLM_CLASSIFIER:
+            from app.services.llm.classifier import get_llm_intent_classifier
+            llm_classifier = get_llm_intent_classifier()
+            if llm_classifier and llm_classifier.llm:
+                logger.info("LLM intent classifier enabled")
+            else:
+                logger.warning("LLM intent classifier initialization failed")
+                llm_classifier = None
+        
+        # Initialize query decomposer if enabled
+        query_decomposer = None
+        if settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
+            from app.services.llm.decomposer import get_query_decomposer
+            query_decomposer = get_query_decomposer()
+            if query_decomposer and query_decomposer.llm:
+                logger.info("Query decomposer enabled")
+            else:
+                logger.warning("Query decomposer initialization failed")
+                query_decomposer = None
+        
         # Initialize specialized components
-        self.pipeline = ResponsePipeline(retriever, llm_router, self.conversation_service)
+        self.pipeline = ResponsePipeline(
+            retriever,
+            llm_router,
+            self.conversation_service,
+            query_decomposer
+        )
         self.error_handler = ErrorResponseHandler(self.conversation_service)
         
-        # Initialize intent classifier if enabled
+        # Initialize heuristic intent classifier if enabled
         intent_classifier = None
         if settings.ENABLE_INTENT_CLASSIFIER:
             intent_classifier = get_intent_classifier(
                 confidence_threshold=settings.INTENT_CONFIDENCE_THRESHOLD
             )
-            logger.info("Intent classifier enabled")
+            logger.info("Heuristic intent classifier enabled")
         
-        self.intent_handler = IntentHandler(intent_classifier, self.conversation_service)
+        # Initialize intent handler with both classifiers
+        self.intent_handler = IntentHandler(
+            intent_classifier,
+            self.conversation_service,
+            llm_classifier
+        )
+        
+        logger.info(
+            f"ConversationResponseService initialized "
+            f"(llm_classifier={'on' if llm_classifier else 'off'}, "
+            f"decomposer={'on' if query_decomposer else 'off'})"
+        )
     
     async def generate_response(
         self,
@@ -69,11 +108,12 @@ class ConversationResponseService:
         Generate AI response with security filtering.
         
         Flow:
-        1. Check for template intent (greetings, pleasantries)
+        1. Check for template intent (hybrid heuristic + LLM classification)
         2. Get user info (clearance, department)
-        3. Retrieve context with security filtering
-        4. Handle retrieval errors (no context, insufficient clearance)
-        5. Select appropriate LLM and generate response
+        3. Process/decompose query if enabled
+        4. Retrieve context with security filtering (using processed query)
+        5. Handle retrieval errors (no context, insufficient clearance)
+        6. Select appropriate LLM and generate response
         
         Args:
             conversation_id: Conversation ID
@@ -85,38 +125,7 @@ class ConversationResponseService:
             Dict with success status and either generator or error
         """
         try:
-            # Step 1: Intent Classification Interceptor
-            # Check if this is a simple query that doesn't need RAG pipeline
-            intent_result = self.intent_handler.should_use_template(user_query)
-            if intent_result:
-                logger.info(f"Using template response for intent: {intent_result.intent.value}")
-                
-                if stream:
-                    return {
-                        "success": True,
-                        "streaming": True,
-                        "generator": self.intent_handler.generate_template_response_streaming(
-                            intent=intent_result.intent,
-                            conversation_id=conversation_id,
-                            user_id=user_id,
-                            user_query=user_query
-                        )
-                    }
-                else:
-                    template_response = await self.intent_handler.generate_template_response(
-                        intent=intent_result.intent,
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        user_query=user_query
-                    )
-                    
-                    return {
-                        "success": True,
-                        "streaming": False,
-                        "response": template_response
-                    }
-            
-            # Step 2: Get user info from cache (clearance, department)
+            # Get user info early for clearance-based operations
             user_info = await self.user_service.get_user_clearance_info(user_id)
             if not user_info:
                 return {
@@ -126,12 +135,71 @@ class ConversationResponseService:
                 }
             
             user_clearance = user_info["clearance"]
+            user_clearance_level = user_clearance.value
             user_department_id = user_info.get("department_id")
             user_dept_clearance = user_info.get("department_security_level")
             
+            # Step 1: Intent Classification Interceptor (hybrid approach)
+            # Check if this is a simple query that doesn't need RAG pipeline
+            intent_result = await self.intent_handler.should_use_template(
+                user_query,
+                user_clearance_level
+            )
+            
+            if intent_result:
+                # Extract response or intent from result
+                if "response" in intent_result:
+                    # LLM-generated direct response
+                    response_or_intent = intent_result["response"]
+                    logger.info(f"Using LLM-generated response (confidence={intent_result['confidence']:.2f})")
+                else:
+                    # Heuristic intent - use template
+                    response_or_intent = intent_result["intent"]
+                    logger.info(f"Using template response for intent: {intent_result['intent'].value}")
+                
+                if stream:
+                    return {
+                        "success": True,
+                        "streaming": True,
+                        "generator": self.intent_handler.generate_template_response_streaming(
+                            response_or_intent=response_or_intent,
+                            conversation_id=conversation_id,
+                            user_id=user_id,
+                            user_query=user_query
+                        )
+                    }
+                else:
+                    response_text = await self.intent_handler.generate_template_response(
+                        response_or_intent=response_or_intent,
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        user_query=user_query
+                    )
+                    
+                    return {
+                        "success": True,
+                        "streaming": False,
+                        "response": response_text
+                    }
+            
+            # Step 2: Query Processing and Decomposition
+            query_info = await self.pipeline.process_query(
+                user_query,
+                user_clearance_level
+            )
+            
+            processed_query = query_info["primary_query"]
+            decomposition_strategy = query_info["strategy"]
+            
+            logger.info(
+                f"Query processed (strategy={decomposition_strategy}): "
+                f"'{user_query[:50]}...' -> '{processed_query[:50]}...'"
+            )
+            
             # Step 3: Retrieve context with user credentials
+            # Use the processed/decomposed query for retrieval
             retrieval_result = await self.pipeline.retrieve_context(
-                user_query=user_query,
+                user_query=processed_query,
                 user_clearance=user_clearance,
                 user_department_id=user_department_id,
                 user_dept_clearance=user_dept_clearance,
@@ -142,7 +210,7 @@ class ConversationResponseService:
             if not retrieval_result["success"]:
                 return await self._handle_retrieval_error(
                     retrieval_result=retrieval_result,
-                    user_query=user_query,
+                    user_query=user_query,  # Use original query for error messages
                     conversation_id=conversation_id,
                     user_id=user_id,
                     stream=stream
@@ -155,6 +223,7 @@ class ConversationResponseService:
             logger.info(f"Retrieved {len(documents)} documents")
 
             # Step 5: Route to appropriate LLM and generate response
+            # Use original query for LLM prompt (more natural for user)
             llm, llm_type = self.pipeline.select_llm(max_doc_level)
             
             if stream:
@@ -164,7 +233,7 @@ class ConversationResponseService:
                     "generator": self.pipeline.stream_rag_response(
                         llm=llm,
                         llm_type=llm_type,
-                        user_query=user_query,
+                        user_query=user_query,  # Original query for natural response
                         documents=documents,
                         conversation_id=conversation_id,
                         user_id=user_id

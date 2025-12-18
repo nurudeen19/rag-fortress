@@ -1,18 +1,5 @@
 Action items improvements/fixes TODO
 
-## RECENTLY COMPLETED (December 17, 2025)
-
-✅ **Architectural Improvements:**
-- Structured Message Metadata (Pydantic schemas for Message.meta field)
-- Async Event Bus (non-blocking activity logging, ~50x latency reduction)
-- Centralized Job Bootstrap (config-driven job management with health monitoring)
-- Job Guardrails (max_instances=1, error isolation, enabled flags)
-- Activity Logging via Events (replaced synchronous DB writes with event emissions)
-
-See: `backend/docs/ARCHITECTURAL_IMPROVEMENTS.md` for details.
-
----
-
 Future Enhancements (Low Priority)
 Semantic Caching: Implement semantic caching for RAG queries (if query A is semantically similar to query B, return cached result of B) to save embedding costs.
 User Feedback Loop: Add endpoints to allow users to rate responses (thumbs up/down), which can be used to fine-tune the retrieval or intent classification logic.
@@ -27,14 +14,10 @@ Token Response: The verify_token function returns only a user_id. Returning a st
 
 Document Ingestion Error Granularity: The pipeline catches generic Exception. Defining specific exceptions (e.g., ParsingError, EmbeddingError, StorageError) would allow for smarter retry logic (e.g., retry network errors, but fail permanently on parsing errors).
 
-## Job management improvement:
+## Job management improvemnent:
 
-✅ RESOLVED: Job scheduling centralized in bootstrap module with config-driven management
-✅ RESOLVED: max_instances=1 enforced, error isolation implemented
-✅ RESOLVED: Health endpoint added for observability
-
-Remaining consideration:
-- Execution Model: The system runs job scheduler inside API process. In horizontal scaling scenario, consider moving to separate worker process or use distributed locking.
+Execution Model: The system appears to run the job scheduler inside the API process (via StartupController). In a horizontal scaling scenario (multiple API replicas), this could lead to race conditions or duplicate job execution unless the scheduler uses distributed locking.
+Recommendation: Move the job worker to a separate process (e.g., python run_worker.py) that consumes from the DB queue. This allows the API to scale independently of the background workers.
 
 
 Import Safety: Some factories import libraries inside functions (e.g., import langchain_chroma). While this makes dependencies optional, it can hide configuration errors until runtime. A "check dependencies" startup step would be safer.

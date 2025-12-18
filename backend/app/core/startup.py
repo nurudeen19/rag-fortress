@@ -30,6 +30,7 @@ from app.core.llm_factory import (
     get_llm_provider,
     get_fallback_llm_provider
 )
+from app.services.llm.classifier_llm import get_classifier_llm
 from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.core.database import DatabaseManager
 from app.core.settings_loader import load_settings_by_category
@@ -69,6 +70,7 @@ class StartupController:
         self.retriever = None
         self.cache_manager = None
         self.internal_llm_provider = None
+        self.classifier_llm_provider = None
     
     async def initialize(self):
         """
@@ -117,7 +119,11 @@ class StartupController:
             if settings.llm_settings.USE_INTERNAL_LLM:
                 await self._initialize_internal_llm()
             
-            # ========== STEP 8: Reranker (OPTIONAL) ==========
+            # ========== STEP 8: Classifier/Decomposer LLM (optional) ==========
+            if settings.llm_settings.ENABLE_LLM_CLASSIFIER or settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
+                await self._initialize_classifier_llm()
+            
+            # ========== STEP 9: Reranker (OPTIONAL) ==========
             # Reranker initialization/validation moved to setup.py to avoid
             # performing model availability checks on every application startup.
             # The reranker service will still be lazy-loaded on first use.
@@ -327,6 +333,21 @@ class StartupController:
 
         except Exception as e:
             logger.warning(f"⚠ Internal LLM initialization skipped: {e}")
+    
+    async def _initialize_classifier_llm(self):
+        """Initialize classifier/decomposer LLM provider (optional)."""
+        logger.info("Initializing classifier/decomposer LLM provider...")
+
+        try:
+            self.classifier_llm_provider = get_classifier_llm()
+
+            if self.classifier_llm_provider:
+                logger.info("✓ Classifier/decomposer LLM provider initialized successfully")
+            else:
+                logger.info("Classifier/decomposer LLM provider is disabled or returned no instance")
+
+        except Exception as e:
+            logger.warning(f"⚠ Classifier/decomposer LLM initialization skipped: {e}")
     
     async def _initialize_reranker(self):
         """Check if reranker is enabled and model is accessible.
