@@ -1,128 +1,85 @@
 """
 Query Decomposer
 
-Simple query optimizer that restructures queries for better retrieval.
-Breaks down complex questions into searchable components.
+Uses structured output to optimize queries for semantic search.
 """
 
-import json
 from typing import Optional, List
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.core import get_logger
 from app.services.llm.classifier_llm import get_classifier_llm
 from app.schemas.llm_classifier import QueryDecompositionResult
+from app.config.settings import settings
 
 logger = get_logger(__name__)
 
 
-DECOMPOSITION_PROMPT = """You are a query optimizer for a RAG system. Your job:
-
-1. For SIMPLE queries: Restructure to be more explicit and search-friendly
-2. For COMPLEX queries: Break into separate searchable sub-queries (max 3-5)
-
-Make queries clear, specific, and optimized for semantic search.
-
-Return JSON:
-{
-    "queries": ["query1", "query2", ...]  // Max 5, ideally 3
-}
-
-Examples:
-
-Query: "What's the vacation policy?"
-{
-    "queries": ["What is the company vacation policy and how many days are provided"]
-}
-
-Query: "How do I apply for leave and what's the approval process?"
-{
-    "queries": [
-        "How do I submit a leave application",
-        "What is the leave approval process and timeline"
-    ]
-}
-
-Query: "Tell me about ML"
-{
-    "queries": ["What is machine learning and how does it work"]
-}
-
-Query: "{query}"
-
-Return JSON only:"""
-
-
 class QueryDecomposer:
-    """Simple query decomposer."""
+    """Query decomposer with structured output."""
     
     def __init__(self):
         """Initialize with pre-initialized LLM from startup."""
         self.llm = get_classifier_llm()
         if not self.llm:
             logger.warning("Decomposer LLM not available - decomposition disabled")
+            return
         
-        self.prompt = ChatPromptTemplate.from_template(DECOMPOSITION_PROMPT)
-        logger.info("QueryDecomposer initialized")
+        # Use structured output with the schema
+        try:
+            self.structured_llm = self.llm.with_structured_output(QueryDecompositionResult)
+        except Exception as e:
+            logger.warning(f"Structured output not supported, falling back to JSON mode: {e}")
+            self.structured_llm = self.llm
+        
+        # Create prompt from settings
+        self.prompt = ChatPromptTemplate.from_messages([
+            ("system", settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT),
+            ("user", settings.prompt_settings.DECOMPOSER_USER_PROMPT)
+        ])
+        
+        logger.info("QueryDecomposer initialized with structured output")
     
     async def decompose(self, query: str) -> Optional[QueryDecompositionResult]:
         """
-        Decompose/restructure a query.
+        Decompose/restructure a query using structured output.
         
+        Args:
+            query: User query to optimize
+            
         Returns:
             Decomposition result with list of optimized queries
         """
-        if not query or not query.strip():
+        if not self.llm or not query or not query.strip():
             return None
         
         try:
-            messages = self.prompt.format_messages(query=query.strip())
-            response = await self.llm.ainvoke(messages)
+            # Build and invoke chain with structured output
+            chain = self.prompt | self.structured_llm
+            result = await chain.ainvoke({"query": query.strip()})
             
-            content = response.content if hasattr(response, 'content') else str(response)
-            parsed = self._extract_json(content)
+            # If structured output returned the model directly, use it
+            if isinstance(result, QueryDecompositionResult):
+                # Limit to max 5 queries
+                if len(result.queries) > 5:
+                    result.queries = result.queries[:5]
+                
+                logger.info(f"Decomposed into {len(result.queries)} queries")
+                return result
             
-            if not parsed or "queries" not in parsed:
-                logger.warning(f"Failed to parse decomposer response: {content}")
-                return None
+            # Fallback: parse from dict if needed
+            if isinstance(result, dict):
+                decomp_result = QueryDecompositionResult(**result)
+                if len(decomp_result.queries) > 5:
+                    decomp_result.queries = decomp_result.queries[:5]
+                return decomp_result
             
-            queries = parsed["queries"][:5]  # Limit to 5
+            logger.warning(f"Unexpected decomposer response type: {type(result)}")
+            return None
             
-            result = QueryDecompositionResult(queries=queries)
-            
-            logger.info(f"Query decomposed into {len(queries)} sub-queries")
-            
-            return result
-        
         except Exception as e:
             logger.error(f"Decomposition failed: {e}", exc_info=True)
             return None
-    
-    def _extract_json(self, content: str) -> Optional[dict]:
-        """Extract JSON from LLM response."""
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError:
-            pass
-        
-        import re
-        # Try markdown code blocks
-        match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', content, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                pass
-        
-        # Try finding any JSON object
-        match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', content, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(0))
-            except json.JSONDecodeError:
-                pass
-        
-        return None
     
     def get_primary_query(self, result: QueryDecompositionResult) -> str:
         """Get the first (primary) query."""
