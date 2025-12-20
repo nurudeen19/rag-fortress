@@ -73,8 +73,12 @@ class LLMSettings(BaseSettings):
     INTERNAL_LLM_TIMEOUT: int = Field(120, env="INTERNAL_LLM_TIMEOUT")
     INTERNAL_LLM_MODE: Optional[str] = Field(None, env="INTERNAL_LLM_MODE")
 
-    # Classifier/Decomposer LLM (uses primary LLM config if not specified)
+    # Intent Classifier Configuration (LLM-based and heuristic)
     ENABLE_LLM_CLASSIFIER: bool = Field(False, env="ENABLE_LLM_CLASSIFIER")
+    ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
+    INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
+    
+    # Query Decomposer Configuration
     ENABLE_QUERY_DECOMPOSER: bool = Field(False, env="ENABLE_QUERY_DECOMPOSER")
     
     # Optional: Override primary LLM for classifier/decomposer

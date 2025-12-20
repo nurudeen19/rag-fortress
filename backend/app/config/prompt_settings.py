@@ -29,6 +29,25 @@ class PromptSettings(BaseSettings):
         env="NO_CONTEXT_RESPONSE"
     )
     
+    # Partial context prompts - for decomposed queries
+    PARTIAL_CONTEXT_CLEARANCE_PROMPT: str = Field(
+        default="""You are a knowledgeable assistant. You have access to some information, but the user lacks clearance for other parts.
+
+IMPORTANT: Based on available information, provide what you can answer. For restricted information, inform the user they need higher clearance without revealing the restricted content.
+
+Available context will be marked. Answer based only on what's available.""",
+        env="PARTIAL_CONTEXT_CLEARANCE_PROMPT"
+    )
+    
+    PARTIAL_CONTEXT_MISSING_PROMPT: str = Field(
+        default="""You are a knowledgeable assistant. You have partial information to answer the query.
+
+IMPORTANT: Answer what you can based on available information. For unavailable information, clearly state what information is missing rather than speculating.
+
+Available context will be marked. Answer only based on what's available.""",
+        env="PARTIAL_CONTEXT_MISSING_PROMPT"
+    )
+    
     # Classifier prompts - structured output for intent classification
     CLASSIFIER_SYSTEM_PROMPT: str = Field(
         default="""You are an intent classifier for a RAG system.

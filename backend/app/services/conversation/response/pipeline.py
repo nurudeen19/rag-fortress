@@ -11,12 +11,14 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from app.services.vector_store.retriever import RetrieverService
+from app.services.conversation.response.retrieval_coordinator import RetrievalCoordinator
 from app.services.llm import LLMRouter, LLMType
 from app.services.conversation.service import ConversationService
 from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
 from app.config.prompt_settings import get_prompt_settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
+from app.config.settings import settings
 from app.core import get_logger
 
 logger = get_logger(__name__)
@@ -42,6 +44,7 @@ class ResponsePipeline:
             query_decomposer: Optional query decomposer for query optimization
         """
         self.retriever = retriever
+        self.retrieval_coordinator = RetrievalCoordinator(retriever)
         self.llm_router = llm_router
         self.conversation_service = conversation_service
         self.query_decomposer = query_decomposer
@@ -62,7 +65,7 @@ class ResponsePipeline:
         
         Args:
             user_query: Original user query
-            user_clearance_level: User's security clearance level
+            user_clearance_level: User's security clearance level (not currently used)
             
         Returns:
             Dict with processed query info:
@@ -71,8 +74,9 @@ class ResponsePipeline:
             - 'decomposition_result': Full decomposition result (if applicable)
             - 'strategy': Processing strategy used
         """
-        if not self.query_decomposer or not self.query_decomposer.config.enabled:
-            # No decomposer - use original query
+        # Check if decomposer is available and enabled in settings
+        if not self.query_decomposer or not settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
+            # No decomposer or disabled - use original query
             return {
                 "primary_query": user_query,
                 "all_queries": [user_query],
@@ -82,29 +86,25 @@ class ResponsePipeline:
         
         try:
             # Attempt query decomposition
-            decomposition_result = await self.query_decomposer.decompose(
-                user_query,
-                user_clearance_level
-            )
+            decomposition_result = await self.query_decomposer.decompose(user_query)
             
-            if decomposition_result:
-                primary = self.query_decomposer.get_primary_query(decomposition_result)
-                all_queries = self.query_decomposer.get_all_queries(decomposition_result)
+            if decomposition_result and decomposition_result.queries:
+                all_queries = decomposition_result.queries
+                primary = all_queries[0]
                 
                 logger.info(
-                    f"Query decomposed: {len(all_queries)} queries "
-                    f"(strategy={decomposition_result.strategy})"
+                    f"Query decomposed: {len(all_queries)} queries"
                 )
                 
                 return {
                     "primary_query": primary,
                     "all_queries": all_queries,
                     "decomposition_result": decomposition_result,
-                    "strategy": decomposition_result.strategy
+                    "strategy": "decomposed"
                 }
             else:
-                # Decomposition failed - use original
-                logger.warning("Query decomposition failed, using original query")
+                # Decomposition failed or returned empty - use original
+                logger.warning("Query decomposition failed or returned empty, using original query")
                 return {
                     "primary_query": user_query,
                     "all_queries": [user_query],
@@ -128,33 +128,33 @@ class ResponsePipeline:
         user_clearance: PermissionLevel,
         user_department_id: Optional[int],
         user_dept_clearance: Optional[PermissionLevel],
-        user_id: int
+        user_id: int,
+        decomposed_queries: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
-        Retrieve context documents for query.
+        Retrieve context documents for query with optional multi-query decomposition.
+        
+        Delegates to RetrievalCoordinator for actual retrieval logic.
         
         Args:
-            user_query: User's question
+            user_query: User's original question (used for reranking)
             user_clearance: User's organization-level clearance
             user_department_id: User's department ID
             user_dept_clearance: User's department-level clearance
             user_id: User ID for logging
+            decomposed_queries: Optional list of decomposed queries to retrieve
             
         Returns:
             Retrieval result dict with success status, documents, and metadata
         """
-        dept_level_str = f", dept_level={user_dept_clearance.name}" if user_dept_clearance else ""
-        logger.info(f"Retrieving context for user_id={user_id}, org_level={user_clearance.name}{dept_level_str}")
-        
-        retrieval_result = await self.retriever.query(
-            query_text=user_query,
-            user_security_level=user_clearance.value,
+        return await self.retrieval_coordinator.retrieve_context(
+            user_query=user_query,
+            user_clearance=user_clearance,
             user_department_id=user_department_id,
-            user_department_security_level=user_dept_clearance.value if user_dept_clearance else None,
-            user_id=user_id
+            user_dept_clearance=user_dept_clearance,
+            user_id=user_id,
+            decomposed_queries=decomposed_queries
         )
-        
-        return retrieval_result
     
     def select_llm(self, max_doc_level: Optional[int]) -> Tuple[Any, LLMType]:
         """
@@ -185,7 +185,8 @@ class ResponsePipeline:
         user_query: str,
         documents: List[Any],
         conversation_id: str,
-        user_id: int
+        user_id: int,
+        partial_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate streaming RAG response with fallback on error.
@@ -199,6 +200,7 @@ class ResponsePipeline:
             documents: Retrieved context documents
             conversation_id: Conversation ID
             user_id: User ID
+            partial_context: Optional partial context metadata for specialized prompting
             
         Yields:
             Stream chunks with tokens, metadata, or errors
@@ -217,7 +219,8 @@ class ResponsePipeline:
                 documents=documents,
                 history=history,
                 conversation_id=conversation_id,
-                user_id=user_id
+                user_id=user_id,
+                partial_context=partial_context
             ):
                 yield item
             return
@@ -247,7 +250,8 @@ class ResponsePipeline:
                             history=history,
                             conversation_id=conversation_id,
                             user_id=user_id,
-                            is_fallback=True
+                            is_fallback=True,
+                            partial_context=partial_context
                         ):
                             yield item
                         return
@@ -272,7 +276,8 @@ class ResponsePipeline:
         user_query: str,
         documents: List[Any],
         conversation_id: str,
-        user_id: int
+        user_id: int,
+        partial_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Generate complete RAG response (non-streaming) with fallback.
@@ -284,6 +289,7 @@ class ResponsePipeline:
             documents: Retrieved context documents
             conversation_id: Conversation ID
             user_id: User ID
+            partial_context: Optional partial context metadata for specialized prompting
             
         Returns:
             Generated response text
@@ -304,7 +310,8 @@ class ResponsePipeline:
                 user_query=user_query,
                 documents=documents,
                 history=history,
-                is_fallback=False
+                is_fallback=False,
+                partial_context=partial_context
             )
         
         except Exception as e:
@@ -330,7 +337,8 @@ class ResponsePipeline:
                             user_query=user_query,
                             documents=documents,
                             history=history,
-                            is_fallback=True
+                            is_fallback=True,
+                            partial_context=partial_context
                         )
                     except Exception as fallback_err:
                         fallback_exception = fallback_err
@@ -354,7 +362,8 @@ class ResponsePipeline:
         history: List[Dict[str, str]],
         conversation_id: str,
         user_id: int,
-        is_fallback: bool = False
+        is_fallback: bool = False,
+        partial_context: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Attempt streaming response generation with given LLM.
@@ -367,13 +376,16 @@ class ResponsePipeline:
             for doc in documents
         ])
         
-        # Use configurable system prompt
-        system_prompt = self.prompt_settings.RAG_SYSTEM_PROMPT
+        # Select appropriate system prompt based on partial context
+        system_prompt = self._select_prompt(partial_context)
+        
+        # Build human message with partial context details if applicable
+        human_message = self._build_human_message(user_query, context_text, partial_context)
         
         prompt = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
             MessagesPlaceholder(variable_name="history"),
-            ("human", "Context:\n{context}\n\nQuestion: {question}")
+            ("human", human_message)
         ])
         
         # Convert history to LangChain messages
@@ -385,8 +397,6 @@ class ResponsePipeline:
         # Stream response
         full_response = ""
         async for chunk in chain.astream({
-            "context": context_text if context_text else "No relevant context found.",
-            "question": user_query,
             "history": history_messages
         }):
             content = chunk.content if hasattr(chunk, 'content') else str(chunk)
@@ -409,6 +419,8 @@ class ResponsePipeline:
         meta = {"sources": sources} if sources else {}
         if is_fallback:
             meta["used_fallback_llm"] = True
+        if partial_context:
+            meta["partial_context"] = partial_context
         
         await self.conversation_service.add_message(
             conversation_id=conversation_id,
@@ -430,7 +442,8 @@ class ResponsePipeline:
         user_query: str,
         documents: List[Any],
         history: List[Dict[str, str]],
-        is_fallback: bool = False
+        is_fallback: bool = False,
+        partial_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """Attempt response generation with given LLM."""
         # Build context
@@ -439,13 +452,16 @@ class ResponsePipeline:
             for doc in documents
         ])
         
-        # Use configurable system prompt
-        system_prompt = self.prompt_settings.RAG_SYSTEM_PROMPT
+        # Select appropriate system prompt based on partial context
+        system_prompt = self._select_prompt(partial_context)
+        
+        # Build human message with partial context details if applicable
+        human_message = self._build_human_message(user_query, context_text, partial_context)
         
         prompt = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
             MessagesPlaceholder(variable_name="history"),
-            ("human", "Context:\n{context}\n\nQuestion: {question}")
+            ("human", human_message)
         ])
         
         # Convert history
@@ -454,8 +470,6 @@ class ResponsePipeline:
         # Generate
         chain = prompt | llm
         response = await chain.ainvoke({
-            "context": context_text if context_text else "No relevant context found.",
-            "question": user_query,
             "history": history_messages
         })
         
@@ -498,4 +512,83 @@ class ResponsePipeline:
                 "security_level": metadata.get("security_level"),
             })
 
-        return sources
+        return sources    
+    def _select_prompt(self, partial_context: Optional[Dict[str, Any]]) -> str:
+        """
+        Select appropriate system prompt based on partial context type.
+        
+        Args:
+            partial_context: Partial context metadata if applicable
+            
+        Returns:
+            Appropriate system prompt string
+        """
+        if not partial_context or not partial_context.get("is_partial"):
+            return self.prompt_settings.RAG_SYSTEM_PROMPT
+        
+        # Determine type of partial context
+        context_type = partial_context.get("type", "missing")
+        
+        if context_type == "clearance":
+            # Some subqueries blocked by security clearance
+            logger.info("Using clearance-based partial context prompt")
+            return self.prompt_settings.PARTIAL_CONTEXT_CLEARANCE_PROMPT
+        else:
+            # Some subqueries had no matching documents
+            logger.info("Using missing-data partial context prompt")
+            return self.prompt_settings.PARTIAL_CONTEXT_MISSING_PROMPT
+    
+    def _build_human_message(
+        self,
+        user_query: str,
+        context_text: str,
+        partial_context: Optional[Dict[str, Any]]
+    ) -> str:
+        """
+        Build human message with context and optional partial context details.
+        
+        Args:
+            user_query: User's question
+            context_text: Retrieved context documents as text
+            partial_context: Optional partial context metadata
+            
+        Returns:
+            Formatted human message string
+        """
+        # Base message parts
+        parts = []
+        
+        # Add context
+        if context_text:
+            parts.append(f"Context:\n{context_text}")
+        else:
+            parts.append("Context:\nNo relevant context found.")
+        
+        # Add partial context details if applicable
+        if partial_context and partial_context.get("is_partial"):
+            parts.append("\n--- Query Decomposition Results ---")
+            parts.append(f"Total subqueries: {partial_context.get('total_queries', 0)}")
+            parts.append(f"Satisfied: {partial_context.get('satisfied_count', 0)}")
+            
+            satisfied = partial_context.get("satisfied_queries", [])
+            if satisfied:
+                parts.append(f"\nSubqueries with results:")
+                for q in satisfied:
+                    parts.append(f"  - {q}")
+            
+            clearance_blocked = partial_context.get("clearance_blocked_queries", [])
+            if clearance_blocked:
+                parts.append(f"\nSubqueries blocked by clearance:")
+                for q in clearance_blocked:
+                    parts.append(f"  - {q}")
+            
+            unsatisfied = partial_context.get("unsatisfied_queries", [])
+            if unsatisfied:
+                parts.append(f"\nSubqueries with no matches:")
+                for q in unsatisfied:
+                    parts.append(f"  - {q}")
+        
+        # Add question
+        parts.append(f"\nQuestion: {user_query}")
+        
+        return "\n".join(parts)

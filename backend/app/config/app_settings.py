@@ -56,10 +56,6 @@ class AppSettings(BaseSettings):
     RERANKER_TOP_K: int = Field(3, env="RERANKER_TOP_K")
     RERANKER_SCORE_THRESHOLD: float = Field(0.3, env="RERANKER_SCORE_THRESHOLD")
     
-    # Intent Classifier Configuration
-    ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
-    INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
-    
     # Security
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")

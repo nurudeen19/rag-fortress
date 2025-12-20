@@ -21,6 +21,8 @@ from app.services.conversation.response import (
     ConversationActivityLogger
 )
 from app.utils.intent_classifier import get_intent_classifier
+from app.services.llm.classifier import get_llm_intent_classifier
+from app.services.llm.decomposer import get_query_decomposer
 from app.config.settings import settings
 from app.models.message import MessageRole
 from app.core import get_logger
@@ -48,7 +50,7 @@ class ConversationResponseService:
         # Initialize LLM-based classifier if enabled
         llm_classifier = None
         if settings.llm_settings.ENABLE_LLM_CLASSIFIER:
-            from app.services.llm.classifier import get_llm_intent_classifier
+
             llm_classifier = get_llm_intent_classifier()
             if llm_classifier and llm_classifier.llm:
                 logger.info("LLM intent classifier enabled")
@@ -59,7 +61,6 @@ class ConversationResponseService:
         # Initialize query decomposer if enabled
         query_decomposer = None
         if settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
-            from app.services.llm.decomposer import get_query_decomposer
             query_decomposer = get_query_decomposer()
             if query_decomposer and query_decomposer.llm:
                 logger.info("Query decomposer enabled")
@@ -78,9 +79,9 @@ class ConversationResponseService:
         
         # Initialize heuristic intent classifier if enabled
         intent_classifier = None
-        if settings.ENABLE_INTENT_CLASSIFIER:
+        if settings.llm_settings.ENABLE_INTENT_CLASSIFIER:
             intent_classifier = get_intent_classifier(
-                confidence_threshold=settings.INTENT_CONFIDENCE_THRESHOLD
+                confidence_threshold=settings.llm_settings.INTENT_CONFIDENCE_THRESHOLD
             )
             logger.info("Heuristic intent classifier enabled")
         
@@ -189,21 +190,23 @@ class ConversationResponseService:
             )
             
             processed_query = query_info["primary_query"]
+            all_queries = query_info.get("all_queries", [user_query])
             decomposition_strategy = query_info["strategy"]
             
             logger.info(
-                f"Query processed (strategy={decomposition_strategy}): "
-                f"'{user_query[:50]}...' -> '{processed_query[:50]}...'"
+                f"Query processed (strategy={decomposition_strategy}, {len(all_queries)} queries): "
+                f"'{user_query[:50]}...'"
             )
             
             # Step 3: Retrieve context with user credentials
-            # Use the processed/decomposed query for retrieval
+            # Pass all decomposed queries for multi-query retrieval
             retrieval_result = await self.pipeline.retrieve_context(
-                user_query=processed_query,
+                user_query=user_query,  # Original query for reranking
                 user_clearance=user_clearance,
                 user_department_id=user_department_id,
                 user_dept_clearance=user_dept_clearance,
-                user_id=user_id
+                user_id=user_id,
+                decomposed_queries=all_queries  # Pass decomposed queries
             )
             
             # Step 4: Handle retrieval errors
@@ -219,8 +222,11 @@ class ConversationResponseService:
             # Extract documents and their max security level
             documents = retrieval_result["context"]
             max_doc_level = retrieval_result.get("max_security_level")
+            partial_context = retrieval_result.get("partial_context")
             
             logger.info(f"Retrieved {len(documents)} documents")
+            if partial_context:
+                logger.info(f"Partial context: {partial_context['type']}, {partial_context['satisfied_count']}/{partial_context['total_queries']} satisfied")
 
             # Step 5: Route to appropriate LLM and generate response
             # Use original query for LLM prompt (more natural for user)
@@ -236,7 +242,8 @@ class ConversationResponseService:
                         user_query=user_query,  # Original query for natural response
                         documents=documents,
                         conversation_id=conversation_id,
-                        user_id=user_id
+                        user_id=user_id,
+                        partial_context=partial_context
                     )
                 }
             else:
@@ -247,7 +254,8 @@ class ConversationResponseService:
                     user_query=user_query,
                     documents=documents,
                     conversation_id=conversation_id,
-                    user_id=user_id
+                    user_id=user_id,
+                    partial_context=partial_context
                 )
                 
                 sources = self.pipeline._build_sources_payload(documents)
