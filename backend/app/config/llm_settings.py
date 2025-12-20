@@ -85,6 +85,16 @@ class LLMSettings(BaseSettings):
     CLASSIFIER_LLM_PROVIDER: Optional[str] = Field(None, env="CLASSIFIER_LLM_PROVIDER")
     CLASSIFIER_LLM_API_KEY: Optional[str] = Field(None, env="CLASSIFIER_LLM_API_KEY")
     CLASSIFIER_LLM_MODEL: Optional[str] = Field(None, env="CLASSIFIER_LLM_MODEL")
+    
+    # HuggingFace-specific classifier fields
+    CLASSIFIER_HF_ENDPOINT_URL: Optional[str] = Field(None, env="CLASSIFIER_HF_ENDPOINT_URL")
+    CLASSIFIER_HF_TASK: str = Field("text-generation", env="CLASSIFIER_HF_TASK")
+    CLASSIFIER_HF_TIMEOUT: int = Field(120, env="CLASSIFIER_HF_TIMEOUT")
+    
+    # Llama.cpp-specific classifier fields
+    CLASSIFIER_LLAMACPP_MODE: Optional[str] = Field(None, env="CLASSIFIER_LLAMACPP_MODE")
+    CLASSIFIER_LLAMACPP_ENDPOINT_URL: Optional[str] = Field(None, env="CLASSIFIER_LLAMACPP_ENDPOINT_URL")
+    CLASSIFIER_LLAMACPP_TIMEOUT: int = Field(120, env="CLASSIFIER_LLAMACPP_TIMEOUT")
 
 
     def get_classifier_llm_config(self) -> Optional[dict]:
@@ -113,8 +123,20 @@ class LLMSettings(BaseSettings):
             elif provider == "google":
                 return self._build_google_config(config)
             elif provider == "huggingface":
+                # Add HuggingFace-specific classifier fields
+                config.update({
+                    "endpoint_url": self.CLASSIFIER_HF_ENDPOINT_URL,
+                    "task": self.CLASSIFIER_HF_TASK,
+                    "timeout": self.CLASSIFIER_HF_TIMEOUT,
+                })
                 return self._build_huggingface_config(config)
             elif provider == "llamacpp":
+                # Add llamacpp-specific classifier fields
+                config.update({
+                    "mode": self.CLASSIFIER_LLAMACPP_MODE or "api",
+                    "endpoint_url": self.CLASSIFIER_LLAMACPP_ENDPOINT_URL,
+                    "timeout": self.CLASSIFIER_LLAMACPP_TIMEOUT,
+                })
                 return self._build_llamacpp_config(config)
             else:
                 raise ValueError(f"Unsupported classifier LLM provider: {provider}")
