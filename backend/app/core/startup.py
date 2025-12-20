@@ -123,7 +123,10 @@ class StartupController:
             if settings.llm_settings.ENABLE_LLM_CLASSIFIER or settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
                 await self._initialize_classifier_llm()
             
-            # ========== STEP 9: Reranker (OPTIONAL) ==========
+            # ========== STEP 9: Validate decomposer/reranker configuration ==========
+            self._validate_decomposer_reranker_config()
+            
+            # ========== STEP 10: Reranker (OPTIONAL) ==========
             # Reranker initialization/validation moved to setup.py to avoid
             # performing model availability checks on every application startup.
             # The reranker service will still be lazy-loaded on first use.
@@ -429,6 +432,21 @@ class StartupController:
         except Exception as e:
             logger.error(f"Vector store smoke test failed: {e}", exc_info=True)
             # Do not block app startup for smoke test failures
+    
+    def _validate_decomposer_reranker_config(self):
+        """Validate decomposer and reranker configuration, warn about consequences."""
+        if not settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
+            return
+        
+        if not settings.app_settings.ENABLE_RERANKER:
+            logger.warning(
+                "⚠ CONFIGURATION WARNING: Query decomposer is enabled but reranker is disabled. "
+                "This can lead to:\n"
+                "  - Sub-optimal document ordering (not ranked against original query)\n"
+                "  - Higher token usage (more potentially irrelevant documents sent to LLM)\n"
+                "  - Lower quality responses\n"
+                "RECOMMENDATION: Enable reranker by setting ENABLE_RERANKER=true"
+            )
     
     async def _initialize_cache(self):
         """Initialize cache layer (optional - graceful fallback)."""
