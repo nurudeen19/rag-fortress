@@ -189,7 +189,13 @@ async def initialize_cache(
     use_redis: bool = True,
     redis_options: Optional[dict] = None
 ):
-    """Initialize cache with automatic fallback to in-memory."""
+    """
+    Initialize cache with automatic fallback to in-memory.
+    
+    The use_redis parameter is controlled by startup settings:
+    - True when CACHE_ENABLED=true AND CACHE_BACKEND=redis
+    - False otherwise (uses memory backend)
+    """
     global _cache_instance
     
     if _cache_instance is not None:
@@ -198,7 +204,7 @@ async def initialize_cache(
     backend = None
     
     # Try Redis if enabled
-    if use_redis and settings.CACHE_ENABLED:
+    if use_redis:
         try:
             from app.config.cache_settings import cache_settings
             url = redis_url or cache_settings.get_redis_url()

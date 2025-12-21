@@ -37,10 +37,10 @@ from app.core.settings_loader import load_settings_by_category
 from app.config import (
     settings as settings_module,
     settings,
-    cache_settings,
     DatabaseSettings,
     Settings
 )
+from app.config.cache_settings import cache_settings
 from app.jobs import get_job_manager
 from app.jobs.integration import JobQueueIntegration
 from app.jobs.bootstrap import init_jobs
@@ -449,26 +449,50 @@ class StartupController:
             )
     
     async def _initialize_cache(self):
-        """Initialize cache layer (optional - graceful fallback)."""
+        """
+        Initialize cache layer based on environment settings.        
+        - If CACHE_ENABLED=true AND CACHE_BACKEND=redis → Initialize Redis
+        - Otherwise → Use in-memory cache
+        
+        Graceful fallback: If any error occurs, always falls back to memory cache.
+        """
         logger.info("Initializing cache layer...")
         
-        try:            
+        try:
+            # Determine cache backend based entirely on .env settings
+            should_use_redis = (
+                settings.CACHE_ENABLED and 
+                settings.CACHE_BACKEND.lower() == "redis"
+            )
             
-            use_redis = settings.CACHE_BACKEND == "redis" and settings.CACHE_ENABLED
-            redis_url = cache_settings.get_redis_url() if use_redis else None
-            redis_options = cache_settings.get_redis_options() if use_redis else None
+            # Prepare Redis configuration only if needed
+            redis_url = cache_settings.get_redis_url() if should_use_redis else None
+            redis_options = cache_settings.get_redis_options() if should_use_redis else None
             
+            # Initialize cache with settings-driven configuration
+            # Note: initialize_cache() has built-in Redis → Memory fallback
             self.cache_manager = await initialize_cache(
                 redis_url=redis_url,
-                use_redis=use_redis,
+                use_redis=should_use_redis,
                 redis_options=redis_options
             )
             
-            logger.info(f"✓ Cache initialized ({settings.CACHE_BACKEND} backend)")
+            backend_type = "Redis" if should_use_redis else "Memory"
+            logger.info(f"✓ Cache initialized ({backend_type} backend, CACHE_ENABLED={settings.CACHE_ENABLED})")
         
         except Exception as e:
-            logger.warning(f"⚠ Cache initialization failed (continuing without cache): {e}")
-            # Don't block startup - cache is optional
+            logger.warning(f"⚠ Cache initialization failed: {e}. Using fallback memory cache.")
+            # Ensure we always have a cache - fallback to memory
+            try:
+                self.cache_manager = await initialize_cache(
+                    redis_url=None,
+                    use_redis=False,
+                    redis_options=None
+                )
+                logger.info("✓ Fallback memory cache initialized")
+            except Exception as fallback_error:
+                logger.error(f"✗ Critical: Even memory cache failed: {fallback_error}")
+                # This should never happen, but log it clearly if it does
     
 
     
