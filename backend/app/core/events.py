@@ -10,7 +10,7 @@ The EventBus is responsible for managing all events. Individual event handlers
 are defined in the app/events/ directory for better modularity and scalability.
 """
 
-from typing import Callable, Dict, List, Any, Optional
+from typing import Callable, Dict, List, Any, Optional, Tuple
 from collections import defaultdict
 import asyncio
 from datetime import datetime, timezone
@@ -25,6 +25,29 @@ from app.core import get_logger
 
 
 logger = get_logger(__name__)
+
+
+def _resolve_handler(handler: Callable) -> Tuple[Callable, str]:
+    """Return a coroutine callable plus a friendly name for logs."""
+
+    handler_name = getattr(handler, "__name__", handler.__class__.__name__)
+    candidate = handler
+
+    if not asyncio.iscoroutinefunction(candidate) and hasattr(handler, "__call__"):
+        candidate = handler.__call__
+
+    if not asyncio.iscoroutinefunction(candidate):
+        raise ValueError(f"Handler {handler_name} must be an async function")
+
+    return candidate, handler_name
+
+
+def _get_handler_display_name(handler: Callable) -> str:
+    """Prefer the owning class name when a bound method is logged."""
+
+    if hasattr(handler, "__self__") and handler.__self__:
+        return handler.__self__.__class__.__name__
+    return getattr(handler, "__name__", handler.__class__.__name__)
 
 
 class EventBus:
@@ -65,11 +88,10 @@ class EventBus:
             event_type: Type of event to listen for (e.g., "activity_logged")
             handler: Async callable that receives event data
         """
-        if not asyncio.iscoroutinefunction(handler):
-            raise ValueError(f"Handler {handler.__name__} must be an async function")
-        
-        self._handlers[event_type].append(handler)
-        logger.debug(f"Subscribed {handler.__name__} to '{event_type}' events")
+        normalized_handler, handler_name = _resolve_handler(handler)
+
+        self._handlers[event_type].append(normalized_handler)
+        logger.debug(f"Subscribed {handler_name} to '{event_type}' events")
     
     async def emit(self, event_type: str, data: Dict[str, Any]) -> None:
         """
@@ -123,9 +145,9 @@ class EventBus:
         try:
             await handler(data)
         except Exception as e:
-            # Log error but don't propagate (error isolation)
+            handler_name = _get_handler_display_name(handler)
             logger.error(
-                f"Error in handler {handler.__name__} for '{event_type}' event: {e}",
+                f"Error in handler {handler_name} for '{event_type}' event: {e}",
                 exc_info=True
             )
     
