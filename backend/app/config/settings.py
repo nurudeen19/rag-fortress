@@ -170,6 +170,11 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         """Namespace alias for CacheSettings consumers."""
         return self
 
+    @property
+    def prompt_settings(self) -> PromptSettings:
+        """Namespace alias for PromptSettings consumers."""
+        return self
+
     def _apply_cached_settings(self, cached_settings: dict) -> None:
         """Apply cached DB overrides while enforcing priority rules."""
         model_fields = getattr(self, "model_fields", {})
