@@ -306,6 +306,11 @@
           <p class="text-sm text-fortress-400 mt-1">This action cannot be undone</p>
         </div>
         <div class="p-6">
+          <!-- Error Message -->
+          <div v-if="deleteError" class="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p class="text-sm text-red-400">{{ deleteError }}</p>
+          </div>
+          
           <p class="text-fortress-300">
             Are you sure you want to delete <span class="font-semibold text-fortress-100">"{{ currentChatTitle }}"</span>?
             All messages in this conversation will be permanently removed.
@@ -362,6 +367,7 @@ const inputMessage = ref('')
 const loading = ref(false)
 const loadingMessages = ref(false)
 const deleting = ref(false)
+const deleteError = ref(null)
 const messagesContainer = ref(null)
 const inputField = ref(null)
 const showChatOptions = ref(false)
@@ -779,6 +785,7 @@ const submitRename = async () => {
 
 // Open delete modal
 const deleteChat = () => {
+  deleteError.value = null  // Clear any previous errors
   showDeleteModal.value = true
   showChatOptions.value = false
 }
@@ -787,7 +794,9 @@ const deleteChat = () => {
 const confirmDelete = async () => {
   if (!activeChat.value || deleting.value) return
   
+  deleteError.value = null  // Clear previous errors
   deleting.value = true
+  
   try {
     await deleteChatFromHistory(activeChat.value.id)
     // Close modal and reset state
@@ -796,8 +805,21 @@ const confirmDelete = async () => {
     // Navigation happens automatically in deleteChat()
   } catch (error) {
     console.error('Failed to delete conversation:', error)
+    
+    // Extract error message from API response
+    let errorMessage = 'Failed to delete conversation. Please try again.'
+    
+    if (error.response?.data?.detail) {
+      // Backend returned a structured error (e.g., demo mode message)
+      errorMessage = error.response.data.detail
+    } else if (error.message) {
+      // Use error message if available
+      errorMessage = error.message
+    }
+    
+    deleteError.value = errorMessage
     deleting.value = false
-    // Keep modal open on error so user can retry
+    // Keep modal open to show error
   }
 }
 

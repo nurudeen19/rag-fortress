@@ -358,7 +358,7 @@ async def handle_stream_response(
     
     except Exception as exc:
         logger.error(f"Failed to save user message: {exc}", exc_info=True)
-        yield {"type": "error", "message": f"Failed to save message: {str(exc)}"}
+        yield {"type": "error", "message": "Failed to save your message. Please try again."}
         return
     
     # Step 2: Generate AI response with streaming

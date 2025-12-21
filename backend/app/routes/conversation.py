@@ -337,9 +337,17 @@ async def stream_conversation_response(
             ):
                 payload = chunk if isinstance(chunk, dict) else {"type": "token", "content": str(chunk)}
                 yield f"data: {json.dumps(payload)}\n\n"
+            
+            # Send completion signal to allow frontend to stop loading
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            
         except Exception as exc:
-            error_payload = {"type": "error", "message": str(exc)}
+            logger.error(f"Stream error: {exc}", exc_info=True)
+            # Don't expose internal errors to frontend
+            error_payload = {"type": "error", "message": "An error occurred while processing your request. Please try again."}
             yield f"data: {json.dumps(error_payload)}\n\n"
+            # Still send done signal even on error
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     headers = {
         "Cache-Control": "no-cache",

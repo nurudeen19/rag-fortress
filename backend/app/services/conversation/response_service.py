@@ -290,7 +290,7 @@ class ConversationResponseService:
             return {
                 "success": False,
                 "error": "generation_error",
-                "message": str(e)
+                "message": "I encountered an error while generating your response. Please try again."
             }
     
     async def _handle_retrieval_error(
