@@ -210,7 +210,10 @@ export function useChatHistory() {
     const deletedChat = chats.value.find(c => c.id === chatId)
     
     try {
-      // Optimistic deletion: Remove from local state and storage immediately
+      // Send delete request to server first (non-optimistic to ensure proper error handling)
+      await api.delete(`/v1/conversations/${chatId}`)
+      
+      // Success! Remove from local state and cache
       chats.value = chats.value.filter(c => c.id !== chatId)
       setCache(chats.value)
       
@@ -223,21 +226,9 @@ export function useChatHistory() {
       if (router.currentRoute.value.params.id === chatId) {
         await router.push('/chat')
       }
-      
-      // Send delete request to server (in background)
-      await api.delete(`/v1/conversations/${chatId}`)
-      
-      // Success! The optimistic update was correct, no need to reload
     } catch (err) {
       error.value = err.message || 'Failed to delete conversation'
       console.error('Error deleting conversation:', err)
-      
-      // Rollback: Restore the deleted chat to local state if request failed
-      if (deletedChat) {
-        chats.value.unshift(deletedChat)
-        setCache(chats.value)
-      }
-      
       throw err
     }
   }

@@ -4,6 +4,13 @@ Future Enhancements (Low Priority)
 Semantic Caching: Implement semantic caching for RAG queries (if query A is semantically similar to query B, return cached result of B) to save embedding costs.
 User Feedback Loop: Add endpoints to allow users to rate responses (thumbs up/down), which can be used to fine-tune the retrieval or intent classification logic.
 
+# Next Version items
++ history encryption
++ reranker by user choice
++ hybrid search introduction
++ frontend conversation cache tightning 
++ better security handling of auth keys and all sensitive keys
+
 
 
 ## Overall System improvements
@@ -13,12 +20,4 @@ Frontend Security Audit
 Token Response: The verify_token function returns only a user_id. Returning a structured object (e.g., TokenPayload with scopes/roles) would reduce database lookups for basic permission checks.
 
 Document Ingestion Error Granularity: The pipeline catches generic Exception. Defining specific exceptions (e.g., ParsingError, EmbeddingError, StorageError) would allow for smarter retry logic (e.g., retry network errors, but fail permanently on parsing errors).
-
-## Job management improvemnent:
-
-Execution Model: The system appears to run the job scheduler inside the API process (via StartupController). In a horizontal scaling scenario (multiple API replicas), this could lead to race conditions or duplicate job execution unless the scheduler uses distributed locking.
-Recommendation: Move the job worker to a separate process (e.g., python run_worker.py) that consumes from the DB queue. This allows the API to scale independently of the background workers.
-
-
-Import Safety: Some factories import libraries inside functions (e.g., import langchain_chroma). While this makes dependencies optional, it can hide configuration errors until runtime. A "check dependencies" startup step would be safer.
 

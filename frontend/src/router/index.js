@@ -198,13 +198,16 @@ router.beforeEach((to, from, next) => {
   const requiresRoles = to.matched.find(record => record.meta.requiresRoles)?.meta?.requiresRoles
   const isPublic = to.matched.some(record => record.meta.public)
 
-  console.log(`[Router Guard] Navigating to: ${to.path}`, {
-    requiresAuth,
-    requiresRoles,
-    isPublic,
-    isAuthenticated: authStore.isAuthenticated,
-    userRoles: authStore.user?.roles?.map(r => r.name) || [],
-  })
+  // Log navigation details only in development mode
+  if (import.meta.env.DEV) {
+    console.log(`[Router Guard] Navigating to: ${to.path}`, {
+      requiresAuth,
+      requiresRoles,
+      isPublic,
+      isAuthenticated: authStore.isAuthenticated,
+      userRoles: authStore.user?.roles?.map(r => r.name) || [],
+    })
+  }
 
   // Wait for auth initialization
   if (!authStore.initialized) {
@@ -217,7 +220,9 @@ router.beforeEach((to, from, next) => {
 
   // Check if route requires authentication
   if (requiresAuth && !authStore.isAuthenticated) {
-    console.log(`[Router Guard] Not authenticated, redirecting to login`)
+    if (import.meta.env.DEV) {
+      console.log(`[Router Guard] Not authenticated, redirecting to login`)
+    }
     next({ name: 'login', query: { redirect: to.fullPath } })
     return
   }
@@ -228,7 +233,9 @@ router.beforeEach((to, from, next) => {
     const hasRequiredRole = requiresRoles.some(requiredRole => userRoles.includes(requiredRole))
 
     if (!hasRequiredRole) {
-      console.log(`[Router Guard] Insufficient role privileges. Required: ${requiresRoles}, User has: ${userRoles}`)
+      if (import.meta.env.DEV) {
+        console.log(`[Router Guard] Insufficient role privileges. Required: ${requiresRoles}, User has: ${userRoles}`)
+      }
       // Redirect to dashboard if user doesn't have required role
       next({ name: 'dashboard' })
       return
@@ -237,12 +244,16 @@ router.beforeEach((to, from, next) => {
 
   // If logged in and trying to access public route, redirect to dashboard
   if (isPublic && authStore.isAuthenticated) {
-    console.log(`[Router Guard] Logged in, redirecting from public route to dashboard`)
+    if (import.meta.env.DEV) {
+      console.log(`[Router Guard] Logged in, redirecting from public route to dashboard`)
+    }
     next({ name: 'dashboard' })
     return
   }
 
-  console.log(`[Router Guard] Access granted`)
+  if (import.meta.env.DEV) {
+    console.log(`[Router Guard] Access granted`)
+  }
   next()
 })
 

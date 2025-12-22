@@ -135,8 +135,8 @@
                 </div>
                 
                 <div class="flex-1">
-                  <!-- Main Response / Placeholder Bubble -->
-                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg transition-all duration-300">
+                  <!-- Main Response / Placeholder Bubble (hide if error exists) -->
+                  <div v-if="!message.error" class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg transition-all duration-300">
                     <!-- Show loading state if placeholder with no content -->
                     <div v-if="message.isPlaceholder && !message.content" class="flex items-center gap-3">
                       <div class="flex gap-1.5">
@@ -144,7 +144,7 @@
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
                       </div>
-                      <span class="text-fortress-300 text-sm font-medium">Analyzing Knowledge Base...</span>
+                      <span class="text-fortress-300 text-sm font-medium"></span>
                     </div>
                     <!-- Show actual response content -->
                     <div v-else class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
@@ -347,6 +347,7 @@
 import { ref, nextTick, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useAuthStore } from '../../stores/auth'
 import { useChatHistory } from '../../composables/useChatHistory'
 
@@ -386,16 +387,25 @@ const currentChatSubtitle = computed(() => {
   return activeChat.value ? '' : 'Start a conversation to unlock insights'
 })
 
-// Render markdown content
+// Render markdown content with XSS protection
 const renderMarkdown = (content) => {
   try {
-    return marked(content, {
+    const rawHtml = marked(content, {
       breaks: true,
       gfm: true
     })
+    // Sanitize HTML to prevent XSS attacks (Option 2: Balanced)
+    // Allows formatted text and safe links without tables
+    return DOMPurify.sanitize(rawHtml, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'a', 'hr'],
+      ALLOWED_ATTR: {
+        'a': ['href', 'title', 'rel']
+      },
+      KEEP_CONTENT: true
+    })
   } catch (err) {
     console.error('Markdown rendering error:', err)
-    return `<p>${content}</p>`
+    return DOMPurify.sanitize(`<p>${content}</p>`)
   }
 }
 
@@ -563,6 +573,12 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
 
   const handlePayload = async (payload) => {
     if (!payload || typeof payload !== 'object') {
+      return
+    }
+
+    if (payload.type === 'done') {
+      // Stop loading when stream completes
+      loading.value = false
       return
     }
 
