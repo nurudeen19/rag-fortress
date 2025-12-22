@@ -45,15 +45,15 @@ class AppSettings(BaseSettings):
     # RAG Configuration
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
     CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")
-    MIN_TOP_K: int = Field(3, env="MIN_TOP_K")
-    MAX_TOP_K: int = Field(10, env="MAX_TOP_K")
+    MIN_TOP_K: int = Field(5, env="MIN_TOP_K")
+    MAX_TOP_K: int = Field(15, env="MAX_TOP_K")
     RETRIEVAL_SCORE_THRESHOLD: float = Field(0.5, env="RETRIEVAL_SCORE_THRESHOLD")
     SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
     
     # Reranker Configuration
     ENABLE_RERANKER: bool = Field(True, env="ENABLE_RERANKER")
     RERANKER_MODEL: str = Field("cross-encoder/ms-marco-MiniLM-L-6-v2", env="RERANKER_MODEL")
-    RERANKER_TOP_K: int = Field(3, env="RERANKER_TOP_K")
+    RERANKER_TOP_K: int = Field(5, env="RERANKER_TOP_K")
     RERANKER_SCORE_THRESHOLD: float = Field(0.3, env="RERANKER_SCORE_THRESHOLD")
     
     # Security

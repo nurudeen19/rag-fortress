@@ -73,7 +73,7 @@ class RetrieverService:
         user_security_level: int,
         user_department_id: Optional[int] = None,
         user_department_security_level: Optional[int] = None
-    ) -> Tuple[List[Document], Optional[int]]:
+    ) -> Tuple[List[Document], Optional[int], Optional[List[str]]]:
         """
         Filter documents based on user's security clearance and department access.
         
@@ -89,10 +89,11 @@ class RetrieverService:
             user_department_security_level: User's department-specific clearance level (None if not assigned)
             
         Returns:
-            Tuple of (filtered documents, max security level accessed)
+            Tuple of (filtered documents, max security level accessed, blocked department names)
         """
         filtered_docs: List[Document] = []
         max_security_level: Optional[int] = None
+        blocked_departments: set = set()  # Track departments that blocked access
         
         for doc in documents:
             metadata = doc.metadata
@@ -115,24 +116,42 @@ class RetrieverService:
             is_department_only = metadata.get("is_department_only", False)
             doc_department_id = metadata.get("department_id")
             
+            # Enhanced logging for department filtering
+            if is_department_only:
+                logger.debug(
+                    f"Checking dept-only doc: source={metadata.get('source', 'unknown')}, "
+                    f"doc_dept_id={doc_department_id}, user_dept_id={user_department_id}, "
+                    f"doc_level={doc_level_value}, user_dept_level={user_department_security_level}"
+                )
+            
             if is_department_only:
                 # Department-only document - user must be in the same department
                 if user_department_id is None:
-                    logger.debug(f"Document blocked: department-only but user has no department")
+                    dept_name = metadata.get("department", "Unknown Department")
+                    blocked_departments.add(dept_name)
+                    logger.info(f"BLOCKED: Dept-only doc (source={metadata.get('source')}) - user has no department")
                     continue
                 if doc_department_id != user_department_id:
-                    logger.debug(
-                        f"Document blocked: dept mismatch (user={user_department_id}, doc={doc_department_id})"
+                    dept_name = metadata.get("department", "Unknown Department")
+                    blocked_departments.add(dept_name)
+                    logger.info(
+                        f"BLOCKED: Dept mismatch - doc_dept={doc_department_id}, user_dept={user_department_id} "
+                        f"(source={metadata.get('source')})"
                     )
                     continue
                 
                 # For department-only docs, use department security level
                 if user_department_security_level is None:
-                    logger.debug(f"Document blocked: department-only but user has no department security level")
+                    dept_name = metadata.get("department", "Unknown Department")
+                    blocked_departments.add(dept_name)
+                    logger.info(f"BLOCKED: Dept-only doc but user has no dept clearance (source={metadata.get('source')})")
                     continue
                 if user_department_security_level < doc_level_value:
-                    logger.debug(
-                        f"Document blocked: user_dept_level={user_department_security_level} < doc_level={doc_level_value}"
+                    dept_name = metadata.get("department", "Unknown Department")
+                    blocked_departments.add(dept_name)
+                    logger.info(
+                        f"BLOCKED: Insufficient dept clearance - user_level={user_department_security_level}, "
+                        f"doc_level={doc_level_value} (source={metadata.get('source')})"
                     )
                     continue
             else:
@@ -150,7 +169,7 @@ class RetrieverService:
             if max_security_level is None or doc_level_value > max_security_level:
                 max_security_level = doc_level_value
         
-        return filtered_docs, max_security_level
+        return filtered_docs, max_security_level, list(blocked_departments) if blocked_departments else None
     
     async def query(
         self,
@@ -210,9 +229,10 @@ class RetrieverService:
             user_id
         )
         
-        # Cache successful results (TTL 5 minutes)
-        if retrieval_result["success"]:
-            await self.cache.set(cache_key, retrieval_result, ttl=300)
+        # Note: Caching disabled - Document objects are not JSON serializable
+        # TODO: Implement custom serialization for Document objects if caching is needed
+        # if retrieval_result["success"]:
+        #     await self.cache.set(cache_key, retrieval_result, ttl=300)
         
         return retrieval_result
     
@@ -226,247 +246,118 @@ class RetrieverService:
         user_id: Optional[int]
     ) -> Dict[str, Any]:
         """
-        Perform the actual adaptive retrieval logic.
-        Called by query() after cache check.
+        Perform retrieval with proper flow: Retrieve → Rerank → Filter → Decide.
+        
+        Flow:
+        1. Retrieve candidates based on similarity scores
+        2. Rerank for relevance if enabled (on ALL candidates)
+        3. Apply security filtering to relevant results
+        4. Decide outcome:
+           - Relevant + allowed → return context
+           - Relevant + blocked → insufficient clearance with dept names
+           - Nothing relevant → no context found
         """
         try:
-            # Get configuration - uses MIN_TOP_K from app settings by default
+            # Step 1: Retrieve candidates from vector store
             min_k = top_k or self.settings.app_settings.MIN_TOP_K
             max_k = self.settings.app_settings.MAX_TOP_K
-            score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
-            
-            vector_store = self.retriever.vectorstore
-            current_k = min_k
-            
-            logger.info(f"Starting adaptive retrieval: min_k={min_k}, max_k={max_k}, threshold={score_threshold}")
-            
-            while current_k <= max_k:
-                # Retrieve documents with scores
-                try:
-                    results = vector_store.similarity_search_with_score(query_text, k=current_k)
-                except (AttributeError, NotImplementedError):
-                    logger.warning("Vector store doesn't support scores, falling back to basic retrieval")
-                    return await self._fallback_query(query_text, current_k, user_security_level, user_department_id, user_department_security_level)
-                
-                if not results:
-                    logger.warning(f"No documents retrieved with k={current_k}")
-                    return self._log_no_retrieval(
-                        query_text=query_text,
-                        user_id=user_id,
-                        reason="no_documents",
-                        details={"k": current_k}
-                    )
-                
-                # Apply security filtering
-                filtered_results = results
-                max_security_level = None
-                
-                if user_security_level is not None:
-                    docs = [doc for doc, _ in results]
-                    filtered_docs, max_security_level = self._filter_by_security(
-                        docs, user_security_level, user_department_id, user_department_security_level
-                    )
-                    
-                    if len(docs) > 0 and len(filtered_docs) == 0:
-                        return {
-                            "success": False,
-                            "error": "insufficient_clearance",
-                            "message": "You do not have sufficient clearance to access the retrieved documents.",
-                            "count": 0,
-                            "max_security_level": max_security_level,
-                        }
-                    
-                    filtered_ids = {id(doc) for doc in filtered_docs}
-                    filtered_results = [(doc, score) for doc, score in results if id(doc) in filtered_ids]
-                
-                # Analyze scores
-                scores = [score for _, score in filtered_results]
-                high_quality_results = [(doc, score) for doc, score in filtered_results if score >= score_threshold]
-                
-                logger.info(f"k={current_k}: {len(filtered_results)} docs, {len(high_quality_results)} above threshold")
-                
-                # Check if we have quality results
-                if high_quality_results:
-                    # Check for single high-quality document
-                    if len(high_quality_results) == 1 and len(filtered_results) > 1:
-                        # Only one good result, rest are poor - return just the good one
-                        logger.info(f"Single high-quality document found (score={high_quality_results[0][1]:.3f}), returning it")
-                        return {
-                            "success": True,
-                            "context": [high_quality_results[0][0]],
-                            "count": 1,
-                            "max_security_level": max_security_level,
-                        }
-                    
-                    # Multiple quality results - return them
-                    logger.info(f"Found {len(high_quality_results)} quality documents")
-                    return {
-                        "success": True,
-                        "context": [doc for doc, _ in high_quality_results],
-                        "count": len(high_quality_results),
-                        "max_security_level": max_security_level,
-                    }
-                
-                # No quality results - try reranking if enabled and on first iteration
-                if current_k == min_k and self.reranker and self.settings.app_settings.ENABLE_RERANKER:
-                    logger.info("Initial results have poor quality, attempting reranking with max_k documents")
-                    return await self._rerank_retrieval(
-                        query_text,
-                        max_k,
-                        user_security_level,
-                        user_department_id,
-                        user_department_security_level,
-                        score_threshold,
-                        user_id
-                    )
-                
-                # No quality results - try increasing k
-                if current_k < max_k:
-                    current_k = min(current_k + 2, max_k)
-                    logger.info(f"Quality below threshold, increasing k to {current_k}")
-                    continue
-                else:
-                    # Reached max_k with no quality results
-                    logger.warning(f"Reached max_k={max_k} with no documents above threshold")
-                    return self._log_no_retrieval(
-                        query_text=query_text,
-                        user_id=user_id,
-                        reason="low_quality_results",
-                        details={
-                            "max_k": max_k,
-                            "threshold": score_threshold,
-                            "documents_retrieved": len(filtered_results),
-                            "above_threshold": 0
-                        }
-                    )
-            
-            # Should not reach here
-            return {
-                "success": False,
-                "error": "retrieval_error",
-                "message": "Unexpected error during retrieval",
-                "count": 0
-            }
-        
-        except Exception as e:
-            logger.error(f"Error in adaptive query: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": "retrieval_error",
-                "message": f"Failed to retrieve documents: {str(e)}",
-                "count": 0
-            }
-    
-    async def _rerank_retrieval(
-        self,
-        query_text: str,
-        k: int,
-        user_security_level: Optional[int],
-        user_department_id: Optional[int],
-        user_department_security_level: Optional[int],
-        score_threshold: float,
-        user_id: Optional[int] = None
-    ) -> Dict[str, Any]:
-        """
-        Retrieve more documents and use reranker to find quality results.
-        
-        Args:
-            query_text: The search query
-            k: Number of documents to retrieve (typically max_k)
-            user_security_level: User's clearance level
-            user_department_id: User's department ID
-            score_threshold: Quality threshold for reranker scores
-            
-        Returns:
-            Dict with success, context, count, error, message
-        """
-        try:
             vector_store = self.retriever.vectorstore
             
-            # Retrieve max_k documents
+            logger.info(f"Retrieving candidates: max_k={max_k}")
+            
             try:
-                results = vector_store.similarity_search_with_score(query_text, k=k)
+                results = vector_store.similarity_search_with_score(query_text, k=max_k)
             except (AttributeError, NotImplementedError):
-                logger.warning("Vector store doesn't support scores during reranking")
-                return {
-                    "success": False,
-                    "error": "low_quality_results",
-                    "message": "No relevant documents found for your query.",
-                    "count": 0
-                }
+                logger.warning("Vector store doesn't support scores, falling back")
+                return await self._fallback_query(query_text, max_k, user_security_level, user_department_id, user_department_security_level)
             
             if not results:
-                return {
-                    "success": False,
-                    "error": "no_documents",
-                    "message": "No relevant documents found for your query.",
-                    "count": 0
-                }
-            
-            # Apply security filtering
-            filtered_results = results
-            max_security_level = None
-            
-            if user_security_level is not None:
-                docs = [doc for doc, _ in results]
-                filtered_docs, max_security_level = self._filter_by_security(
-                    docs, user_security_level, user_department_id, user_department_security_level
-                )
-                
-                if len(docs) > 0 and len(filtered_docs) == 0:
-                    return {
-                        "success": False,
-                        "error": "insufficient_clearance",
-                        "message": "You do not have sufficient clearance to access the retrieved documents.",
-                        "count": 0,
-                        "max_security_level": max_security_level,
-                    }
-                
-                filtered_ids = {id(doc) for doc in filtered_docs}
-                filtered_results = [(doc, score) for doc, score in results if id(doc) in filtered_ids]
-            
-            # Use reranker to improve ranking
-            docs_to_rerank = [doc for doc, _ in filtered_results]
-            reranker_top_k = self.settings.app_settings.RERANKER_TOP_K
-            reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
-            
-            logger.info(f"Reranking {len(docs_to_rerank)} documents (target: top {reranker_top_k})")
-            reranked_docs, reranked_scores = self.reranker.rerank(
-                query_text,
-                docs_to_rerank,
-                top_k=reranker_top_k
-            )
-            
-            # Filter reranked results by score threshold
-            quality_results = [
-                (doc, score) for doc, score in zip(reranked_docs, reranked_scores)
-                if score >= reranker_threshold
-            ]
-            
-            if quality_results:
-                logger.info(f"Reranker found {len(quality_results)} quality documents")
-                return {
-                    "success": True,
-                    "context": [doc for doc, _ in quality_results],
-                    "count": len(quality_results),
-                    "max_security_level": max_security_level,
-                }
-            else:
-                logger.warning("Reranker could not find quality documents above threshold")
+                logger.warning("No documents retrieved from vector store")
                 return self._log_no_retrieval(
                     query_text=query_text,
                     user_id=user_id,
-                    reason="reranker_no_quality",
-                    details={
-                        "documents_retrieved": len(docs_to_rerank),
-                        "reranker_top_k": reranker_top_k,
-                        "reranker_threshold": reranker_threshold,
-                        "above_threshold": 0
-                    }
+                    reason="no_documents",
+                    details={"k": max_k}
                 )
+            
+            logger.info(f"Retrieved {len(results)} candidates from vector store")
+            
+            # Step 2: Rerank ALL candidates to identify truly relevant documents
+            relevant_docs = []
+            reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
+            
+            if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
+                docs_to_rerank = [doc for doc, _ in results]
+                reranker_top_k = self.settings.app_settings.RERANKER_TOP_K
+                
+                logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {reranker_top_k})")
+                reranked_docs, reranked_scores = self.reranker.rerank(
+                    query_text,
+                    docs_to_rerank,
+                    top_k=reranker_top_k
+                )
+                
+                # Filter by reranker threshold to get truly relevant docs
+                for doc, score in zip(reranked_docs, reranked_scores):
+                    if score >= reranker_threshold:
+                        relevant_docs.append(doc)
+                
+                logger.info(f"Reranker identified {len(relevant_docs)} relevant documents (threshold={reranker_threshold})")
+            else:
+                # No reranker - use similarity scores
+                score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
+                for doc, score in results:
+                    if score >= score_threshold:
+                        relevant_docs.append(doc)
+                logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
+            
+            # Step 3: Apply security filtering to relevant documents
+            if not relevant_docs:
+                # No relevant documents found at all
+                logger.info("No relevant documents found (before security filtering)")
+                return self._log_no_retrieval(
+                    query_text=query_text,
+                    user_id=user_id,
+                    reason="no_relevant_documents",
+                    details={"candidates_retrieved": len(results), "relevant_after_rerank": 0}
+                )
+            
+            # Apply security filtering
+            filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
+                relevant_docs, user_security_level, user_department_id, user_department_security_level
+            )
+            
+            logger.info(f"Security filtering: {len(filtered_docs)}/{len(relevant_docs)} documents accessible")
+            
+            # Step 4: Decide outcome based on filtering results
+            if filtered_docs:
+                # SUCCESS: Have relevant documents that user can access
+                logger.info(f"Returning {len(filtered_docs)} relevant and accessible documents")
+                return {
+                    "success": True,
+                    "context": filtered_docs,
+                    "count": len(filtered_docs),
+                    "max_security_level": max_security_level,
+                }
+            else:
+                # BLOCKED: Relevant documents exist but user lacks clearance
+                error_msg = "You do not have sufficient clearance to access the relevant documents for this query."
+                if blocked_depts:
+                    dept_list = ", ".join(blocked_depts)
+                    error_msg = f"Relevant documents were found but you do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department."
+                
+                logger.info(f"All {len(relevant_docs)} relevant documents blocked by security: {blocked_depts}")
+                return {
+                    "success": False,
+                    "error": "insufficient_clearance",
+                    "message": error_msg,
+                    "count": 0,
+                    "max_security_level": max_security_level,
+                    "blocked_departments": blocked_depts
+                }
         
         except Exception as e:
-            logger.error(f"Error during reranking retrieval: {e}", exc_info=True)
+            logger.error(f"Error during retrieval: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": "retrieval_error",
@@ -488,17 +379,22 @@ class RetrieverService:
         
         max_security_level = None
         if user_security_level is not None:
-            filtered_docs, max_security_level = self._filter_by_security(
+            filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
                 docs, user_security_level, user_department_id, user_department_security_level
             )
             
             if len(docs) > 0 and len(filtered_docs) == 0:
+                error_msg = "You do not have sufficient clearance to access the retrieved documents."
+                if blocked_depts:
+                    dept_list = ",".join(blocked_depts)
+                    error_msg = f"You do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department."
+                
                 return {
                     "success": False,
                     "error": "insufficient_clearance",
-                    "message": "You do not have sufficient clearance to access the retrieved documents.",
+                    "message": error_msg,
                     "count": 0,
-                    "max_security_level": max_security_level,
+                    "blocked_departments": blocked_depts
                 }
             docs = filtered_docs
         

@@ -36,9 +36,15 @@ class ErrorResponseHandler:
             error_type: Type of retrieval error
             
         Returns:
-            Response text
+            Response text based on error type
         """
-        return self.prompt_settings.NO_CONTEXT_RESPONSE
+        if error_type == "no_clearance":
+            return self.prompt_settings.NO_CLEARANCE_RESPONSE
+        elif error_type == "insufficient_clearance":
+            return self.prompt_settings.INSUFFICIENT_CLEARANCE_RESPONSE
+        else:
+            # Default for no_context, no_documents, etc.
+            return self.prompt_settings.NO_CONTEXT_RESPONSE
     
     async def stream_no_context_response(
         self,

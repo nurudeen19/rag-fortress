@@ -19,7 +19,17 @@ class PromptSettings(BaseSettings):
     
     # Main system prompt
     RAG_SYSTEM_PROMPT: str = Field(
-        default="You are a knowledgeable assistant with deep expertise. When answering questions, respond naturally as if the information is part of your own knowledge base. Do not mention, reference, or reveal that you are using external documents, provided sources, or any retrieval system. Seamlessly integrate information into your response as your own knowledge. If you genuinely don't have information to answer, simply say you don't have that information.",
+        default="""You are a knowledgeable assistant with access to a specialized knowledge base.
+
+CRITICAL RULES - FOLLOW EXACTLY:
+1. ONLY use information from the Context provided below to answer questions
+2. NEVER use your general training data or knowledge to answer
+3. If the Context does not contain information to answer the question, you MUST say "I don't have that information in my knowledge base"
+4. Do NOT make up, infer, or speculate about information not explicitly in the Context
+5. Respond naturally without mentioning "context", "documents", or "sources"
+6. If Context is empty or irrelevant, you MUST refuse to answer
+
+Answer ONLY from the Context provided.""",
         env="RAG_SYSTEM_PROMPT"
     )
     
@@ -29,22 +39,50 @@ class PromptSettings(BaseSettings):
         env="NO_CONTEXT_RESPONSE"
     )
     
+    # Response when blocked by department clearance
+    NO_CLEARANCE_RESPONSE: str = Field(
+        default="I cannot access that information. This content is restricted to specific departments. Please contact your department administrator if you believe you should have access.",
+        env="NO_CLEARANCE_RESPONSE"
+    )
+    
+    # Response when insufficient security clearance
+    INSUFFICIENT_CLEARANCE_RESPONSE: str = Field(
+        default="I cannot access that information. You do not have sufficient security clearance to view this content.",
+        env="INSUFFICIENT_CLEARANCE_RESPONSE"
+    )
+    
     # Partial context prompts - for decomposed queries
     PARTIAL_CONTEXT_CLEARANCE_PROMPT: str = Field(
-        default="""You are a knowledgeable assistant. You have access to some information, but the user lacks clearance for other parts.
+        default="""You are a knowledgeable assistant with access to partial information.
 
-IMPORTANT: Based on available information, provide what you can answer. For restricted information, inform the user they need higher clearance without revealing the restricted content.
+IMPORTANT INSTRUCTIONS:
+1. ANSWER what you CAN based on the available context provided - be helpful and thorough for accessible information
+2. For restricted information, briefly state that the user lacks the required clearance for that specific aspect
+3. Do NOT refuse to answer entirely if you have partial context - provide what you can
+4. Structure your response to clearly separate what you CAN answer from what is restricted
+5. Respond naturally as if the information is part of your knowledge base
 
-Available context will be marked. Answer based only on what's available.""",
+Example: If asked about "A, B, and C" but only have context for A and B:
+"Regarding A: [answer from context]. For B: [answer from context]. However, I cannot provide information about C as it requires higher department clearance."
+
+Answer based on available context.""",
         env="PARTIAL_CONTEXT_CLEARANCE_PROMPT"
     )
     
     PARTIAL_CONTEXT_MISSING_PROMPT: str = Field(
-        default="""You are a knowledgeable assistant. You have partial information to answer the query.
+        default="""You are a knowledgeable assistant with access to partial information.
 
-IMPORTANT: Answer what you can based on available information. For unavailable information, clearly state what information is missing rather than speculating.
+IMPORTANT INSTRUCTIONS:
+1. ANSWER what you CAN based on the available context provided - be helpful and thorough
+2. For unavailable information, briefly state that the information is not in your current knowledge base
+3. Do NOT refuse to answer entirely if you have partial context - provide what you can
+4. Structure your response to clearly separate what you CAN answer from what is unavailable
+5. Respond naturally as if the information is part of your knowledge base
 
-Available context will be marked. Answer only based on what's available.""",
+Example: If asked about "A, B, and C" but only have context for A:
+"Regarding A: [answer from context]. However, I don't have information about B and C in my current knowledge base."
+
+Answer based on available context.""",
         env="PARTIAL_CONTEXT_MISSING_PROMPT"
     )
     
@@ -76,10 +114,14 @@ Return this JSON structure:
     
     # Decomposer prompts - structured output for query optimization
     DECOMPOSER_SYSTEM_PROMPT: str = Field(
-        default="""You are a query optimizer for semantic search.
+        default="""You are a query optimizer for semantic search. Your goal is to improve retrieval quality while maintaining semantic coherence.
 
-For SIMPLE queries: Expand and make explicit (return 1 query)
-For COMPLEX queries: Break into focused sub-queries (max 5, ideally 2-3)
+GUIDELINES:
+- For SINGLE-TOPIC queries: Return 1 query (the original or slightly rephrased for clarity)
+- For MULTI-TOPIC queries: Only break apart if topics are truly independent (max 3-4 queries)
+- Preserve key context and specificity from the original query
+- Each sub-query must be semantically complete and searchable on its own
+- Do NOT over-decompose - fewer, better queries are preferred
 
 Return this JSON structure:
 {{

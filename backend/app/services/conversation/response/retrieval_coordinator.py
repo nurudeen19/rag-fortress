@@ -84,6 +84,7 @@ class RetrievalCoordinator:
         satisfied_queries = []
         unsatisfied_queries = []
         clearance_blocked_queries = []
+        all_blocked_departments = set()  # Track all departments that blocked access
         
         # Retrieve for each subquery
         for idx, subquery in enumerate(decomposed_queries):
@@ -104,8 +105,13 @@ class RetrievalCoordinator:
             else:
                 # Determine if blocked by clearance or just no matches
                 error_type = subquery_result.get("error")
-                if error_type == "no_clearance":
+                # Match both no_clearance and insufficient_clearance as clearance blocks
+                if error_type in ("no_clearance", "insufficient_clearance"):
                     clearance_blocked_queries.append(subquery)
+                    # Track blocked departments
+                    blocked_depts = subquery_result.get("blocked_departments")
+                    if blocked_depts:
+                        all_blocked_departments.update(blocked_depts)
                 else:
                     unsatisfied_queries.append(subquery)
         
@@ -128,12 +134,18 @@ class RetrievalCoordinator:
         if not unique_documents:
             # Determine primary error type
             if clearance_blocked_queries:
+                error_msg = "No documents found matching your clearance level for any aspect of your query."
+                if all_blocked_departments:
+                    dept_list = ", ".join(sorted(all_blocked_departments))
+                    error_msg = f"You do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department."
+                
                 return {
                     "success": False,
                     "context": [],
                     "count": 0,
                     "error": "no_clearance",
-                    "message": "No documents found matching your clearance level for any aspect of your query."
+                    "message": error_msg,
+                    "blocked_departments": list(all_blocked_departments) if all_blocked_departments else None
                 }
             else:
                 return {
@@ -145,10 +157,11 @@ class RetrievalCoordinator:
                 }
         
         # Rerank combined results against original query if reranker is available
+        # AND we have multiple queries (single query already went through reranking in retriever)
         final_documents = unique_documents
         max_security_level = None
         
-        if self.retriever.reranker:
+        if self.retriever.reranker and len(decomposed_queries) > 1:
             logger.info(f"Reranking {len(unique_documents)} documents against original query")
             try:
                 reranked_docs, scores = self.retriever.reranker.rerank(
@@ -156,10 +169,22 @@ class RetrievalCoordinator:
                     documents=unique_documents
                 )
                 if reranked_docs:
-                    final_documents = reranked_docs
-                    logger.info(f"Reranked to {len(final_documents)} documents (scores: {[f'{s:.3f}' for s in scores[:3]]})")
+                    # CRITICAL: Re-apply security filtering after reranking
+                    # Reuse retriever's filtering logic for consistency
+                    filtered_reranked, _, _ = self.retriever._filter_by_security(
+                        documents=reranked_docs,
+                        user_security_level=user_clearance.value,
+                        user_department_id=user_department_id,
+                        user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
+                    )
+                    
+                    final_documents = filtered_reranked
+                    logger.info(f"After security filtering: {len(final_documents)}/{len(reranked_docs)} documents retained")
             except Exception as e:
                 logger.warning(f"Reranking failed: {e}, using unranked results")
+        else:
+            if len(decomposed_queries) == 1:
+                logger.info("Skipping coordinator reranking for single query (already reranked in retriever)")
         
         # Calculate max security level from final documents
         for doc in final_documents:
