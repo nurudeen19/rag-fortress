@@ -68,7 +68,7 @@ class QueryDecomposer:
                 if len(result.queries) > 5:
                     result.queries = result.queries[:5]
                 
-                logger.info(f"Decomposed into {len(result.queries)} queries")
+                logger.info(f"Decomposed into {len(result.queries)} queries: {result.queries}")
                 return result
             
             # Fallback: parse from dict if needed

@@ -13,10 +13,11 @@ export default defineConfig(({ command, mode }) => {
     throw new Error('VITE_API_BASE_URL environment variable is required. Please check your .env file.')
   }
   
-  // Extract origin (protocol + domain + port) from base URL for CSP
-  const getApiOrigin = () => {
+  // Get API origin for CSP (just protocol + host, no path)
+  const getApiOriginForCsp = () => {
     try {
       const url = new URL(apiBaseUrl)
+      // Return just the origin (protocol + host) to allow all subpaths
       return `${url.protocol}//${url.host}`
     } catch (e) {
       throw new Error(`Invalid VITE_API_BASE_URL: ${apiBaseUrl}. Must be a valid URL.`)
@@ -29,7 +30,7 @@ export default defineConfig(({ command, mode }) => {
       {
         name: 'inject-csp',
         transformIndexHtml(html) {
-          const apiOrigin = getApiOrigin()
+          const apiOrigin = getApiOriginForCsp()
           return html.replace('__API_URLS__', apiOrigin)
         }
       }

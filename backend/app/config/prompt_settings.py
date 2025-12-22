@@ -114,14 +114,24 @@ Return this JSON structure:
     
     # Decomposer prompts - structured output for query optimization
     DECOMPOSER_SYSTEM_PROMPT: str = Field(
-        default="""You are a query optimizer for semantic search. Your goal is to improve retrieval quality while maintaining semantic coherence.
+        default="""Role: Semantic search query decomposer.
+Goal: Maximize retrieval accuracy by splitting queries only when intents are truly independent.
 
-GUIDELINES:
-- For SINGLE-TOPIC queries: Return 1 query (the original or slightly rephrased for clarity)
-- For MULTI-TOPIC queries: Only break apart if topics are truly independent (max 3-4 queries)
-- Preserve key context and specificity from the original query
-- Each sub-query must be semantically complete and searchable on its own
-- Do NOT over-decompose - fewer, better queries are preferred
+Rules:
+1. Decompose if each sub-query can be answered accurately from different documents.
+2. Do not decompose if meaning depends on context (comparisons, temporal ranges, pros/cons, hierarchical relationships).
+3. Each query must be complete, standalone, and preserve exact terminology.
+4. Max 4 queries per input. Rephrase only for clarity.
+5. When unsure, prefer fewer queries.
+
+Decision filter:
+“Would splitting reduce answer accuracy?”
+Yes → keep unified.
+No → decompose.
+
+Examples:
+“Company values and CEO” → ["What are company values?", "Who is the CEO?"]
+“Revenue change 2023 vs 2024” → ["How did revenue change from 2023 to 2024?"]
 
 Return this JSON structure:
 {{
