@@ -436,20 +436,23 @@ async def handle_get_file_counts(user: User, session: AsyncSession) -> dict:
     try:
         cache = get_cache()
         
-        # Determine cache key and service call based on role
+        # Determine cache key based on role
         if user.has_role("admin"):
             cache_key = "stats:file_counts"
-            service = FileUploadService(session)
-            counts = await service.get_status_counts()
         else:
             cache_key = f"stats:file_counts:{user.id}"
-            service = FileUploadService(session)
-            counts = await service.get_user_status_counts(user.id)
         
         # Try cache first
         cached_counts = await cache.get(cache_key)
         if cached_counts:
             return {"success": True, "counts": cached_counts}
+        
+        # Cache miss - fetch from service
+        service = FileUploadService(session)
+        if user.has_role("admin"):
+            counts = await service.get_status_counts()
+        else:
+            counts = await service.get_user_status_counts(user.id)
         
         # Cache the results
         await cache.set(cache_key, counts, ttl=cache_settings.CACHE_TTL_STATS)

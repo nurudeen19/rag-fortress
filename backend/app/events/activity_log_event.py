@@ -9,7 +9,7 @@ from typing import Dict, Any, Optional
 
 from app.events.base import BaseEventHandler
 from app.core import get_logger
-from app.core.database import get_session
+from app.core.database import get_async_session_factory
 from app.services import activity_logger_service
 
 
@@ -81,7 +81,9 @@ class ActivityLogEvent(BaseEventHandler):
                     log_params[field] = event_data[field]
             
             # Create new database session for background task
-            async with get_session() as session:
+            # Use session factory directly (not the FastAPI dependency)
+            session_factory = get_async_session_factory()
+            async with session_factory() as session:
                 await activity_logger_service.log_activity(db=session, **log_params)
                 await session.commit()
             

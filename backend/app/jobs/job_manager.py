@@ -3,6 +3,8 @@ Job Manager - Manages background job scheduling and execution.
 Uses APScheduler for lightweight, in-process job scheduling.
 """
 
+import asyncio
+import inspect
 from typing import Callable, Any, Optional, Dict
 from datetime import datetime, timedelta, timezone
 
@@ -46,6 +48,36 @@ class JobManager:
         self._initialized = True
         logger.info("JobManager initialized")
     
+    def _make_async_wrapper(self, async_func: Callable, *args, **kwargs) -> Callable:
+        """
+        Wrap an async function to run in a new event loop.
+        
+        APScheduler's BackgroundScheduler runs in sync mode, so async functions
+        must be wrapped to create and run in a new event loop.
+        
+        Args:
+            async_func: Async function to wrap
+            *args: Positional arguments for the function
+            **kwargs: Keyword arguments for the function
+            
+        Returns:
+            Synchronous wrapper function
+        """
+        def wrapper():
+            try:
+                # Create new event loop for this job execution
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    # Run the async function
+                    loop.run_until_complete(async_func(*args, **kwargs))
+                finally:
+                    loop.close()
+            except Exception as e:
+                logger.error(f"Error in async job {async_func.__name__}: {e}", exc_info=True)
+        
+        return wrapper
+    
     def start(self) -> None:
         """Start the scheduler if not already running."""
         if not self.scheduler.running:
@@ -68,8 +100,10 @@ class JobManager:
         """
         Execute a job immediately in background.
         
+        Automatically wraps async functions to run in a new event loop.
+        
         Args:
-            func: Callable to execute
+            func: Callable to execute (sync or async)
             *args: Positional arguments for func
             job_id: Optional unique job identifier
             **kwargs: Keyword arguments for func
@@ -77,8 +111,16 @@ class JobManager:
         Returns:
             Job ID
         """
+        # Detect if function is async and wrap it
+        if inspect.iscoroutinefunction(func):
+            wrapped_func = self._make_async_wrapper(func, *args, **kwargs)
+            args = ()
+            kwargs = {}
+        else:
+            wrapped_func = func
+        
         job = self.scheduler.add_job(
-            func,
+            wrapped_func,
             args=args,
             kwargs=kwargs,
             id=job_id,
@@ -98,8 +140,10 @@ class JobManager:
         """
         Schedule a job to run at a specific time.
         
+        Automatically wraps async functions to run in a new event loop.
+        
         Args:
-            func: Callable to execute
+            func: Callable to execute (sync or async)
             run_at: When to run the job (datetime)
             *args: Positional arguments for func
             job_id: Optional unique job identifier
@@ -112,8 +156,16 @@ class JobManager:
         if run_at.tzinfo is None:
             run_at = run_at.replace(tzinfo=timezone.utc)
         
+        # Detect if function is async and wrap it
+        if inspect.iscoroutinefunction(func):
+            wrapped_func = self._make_async_wrapper(func, *args, **kwargs)
+            args = ()
+            kwargs = {}
+        else:
+            wrapped_func = func
+        
         job = self.scheduler.add_job(
-            func,
+            wrapped_func,
             trigger=DateTrigger(run_date=run_at),
             args=args,
             kwargs=kwargs,
@@ -135,8 +187,10 @@ class JobManager:
         """
         Schedule a job to run at regular intervals.
         
+        Automatically wraps async functions to run in a new event loop.
+        
         Args:
-            func: Callable to execute
+            func: Callable to execute (sync or async)
             interval_seconds: Interval in seconds between executions
             *args: Positional arguments for func
             job_id: Optional unique job identifier
@@ -146,8 +200,17 @@ class JobManager:
         Returns:
             Job ID
         """
+        # Detect if function is async and wrap it
+        if inspect.iscoroutinefunction(func):
+            wrapped_func = self._make_async_wrapper(func, *args, **kwargs)
+            # Clear args/kwargs since they're already bound in the wrapper
+            args = ()
+            kwargs = {}
+        else:
+            wrapped_func = func
+        
         job = self.scheduler.add_job(
-            func,
+            wrapped_func,
             trigger=IntervalTrigger(seconds=interval_seconds),
             args=args,
             kwargs=kwargs,

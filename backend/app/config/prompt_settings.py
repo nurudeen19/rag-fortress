@@ -61,11 +61,11 @@ For non-RAG queries, generate a brief friendly response (1-2 sentences).
 For RAG queries, leave response empty.
 
 Return this JSON structure:
-{
+{{
     "requires_rag": boolean,
     "confidence": float (0.0-1.0),
     "response": string
-}""",
+}}""",
         env="CLASSIFIER_SYSTEM_PROMPT"
     )
     
@@ -82,9 +82,9 @@ For SIMPLE queries: Expand and make explicit (return 1 query)
 For COMPLEX queries: Break into focused sub-queries (max 5, ideally 2-3)
 
 Return this JSON structure:
-{
+{{
     "queries": ["query1", "query2", ...]
-}""",
+}}""",
         env="DECOMPOSER_SYSTEM_PROMPT"
     )
     

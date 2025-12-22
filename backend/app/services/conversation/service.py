@@ -15,6 +15,7 @@ from app.models.message import Message, MessageRole
 from app.core import get_logger
 from app.core.events import get_event_bus
 from app.services.query_validator_service import get_query_validator
+from app.config.settings import settings
 
 logger = get_logger(__name__)
 

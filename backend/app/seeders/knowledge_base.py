@@ -288,7 +288,8 @@ class KnowledgeBaseSeeder(BaseSeed):
             # Store relative path from data/files/
             # File is at: data/files/knowledge_base/demo_data/CODE_OF_CONDUCT.md
             # Store path as: knowledge_base/demo_data/CODE_OF_CONDUCT.md
-            rel_path = f"knowledge_base/demo_data/{file_name}"
+            # For sub-folders: knowledge_base/demo_data/departments/engineering/file.md
+            rel_path = file_info.file_path.relative_to(FILES_BASE_DIR).as_posix()
             
             file_upload = FileUpload(
                 upload_token=upload_token,

@@ -151,13 +151,13 @@ class RetrievalCoordinator:
         if self.retriever.reranker:
             logger.info(f"Reranking {len(unique_documents)} documents against original query")
             try:
-                reranked = await self.retriever.reranker.rerank(
+                reranked_docs, scores = self.retriever.reranker.rerank(
                     query=user_query,  # Use original query for reranking
                     documents=unique_documents
                 )
-                if reranked:
-                    final_documents = reranked
-                    logger.info(f"Reranked to {len(final_documents)} documents")
+                if reranked_docs:
+                    final_documents = reranked_docs
+                    logger.info(f"Reranked to {len(final_documents)} documents (scores: {[f'{s:.3f}' for s in scores[:3]]})")
             except Exception as e:
                 logger.warning(f"Reranking failed: {e}, using unranked results")
         

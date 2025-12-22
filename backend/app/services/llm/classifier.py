@@ -33,10 +33,15 @@ class LLMIntentClassifier:
             self.structured_llm = self.llm
         
         # Create prompt from settings
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", settings.prompt_settings.CLASSIFIER_SYSTEM_PROMPT),
-            ("user", settings.prompt_settings.CLASSIFIER_USER_PROMPT)
-        ])
+        from langchain_core.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate
+        
+        system_template = SystemMessagePromptTemplate.from_template(
+            settings.prompt_settings.CLASSIFIER_SYSTEM_PROMPT
+        )
+        user_template = HumanMessagePromptTemplate.from_template(
+            settings.prompt_settings.CLASSIFIER_USER_PROMPT
+        )
+        self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
         
         logger.info("LLMIntentClassifier initialized with structured output")
     

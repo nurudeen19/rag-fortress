@@ -12,7 +12,7 @@ Job handlers should:
 """
 
 from app.core import get_logger
-from app.core.database import get_session
+from app.core.database import get_fresh_async_session_factory
 from app.services.override_request_service import OverrideRequestService
 
 
@@ -30,7 +30,8 @@ async def escalate_stale_override_requests():
     Runs hourly to check for requests pending > 24 hours.
     """
     try:
-        async with get_session() as session:
+        session_factory = await get_fresh_async_session_factory()
+        async with session_factory() as session:
             service = OverrideRequestService(session)
             count = await service.process_auto_escalations(
                 escalation_threshold_hours=24
@@ -51,7 +52,8 @@ async def expire_old_overrides():
     Runs every 10 minutes to keep access control tight.
     """
     try:
-        async with get_session() as session:
+        session_factory = await get_fresh_async_session_factory()
+        async with session_factory() as session:
             service = OverrideRequestService(session)
             count = await service.process_expired_overrides()
             await session.commit()

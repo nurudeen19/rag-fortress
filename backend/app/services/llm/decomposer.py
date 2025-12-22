@@ -5,7 +5,7 @@ Uses structured output to optimize queries for semantic search.
 """
 
 from typing import Optional, List
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 from app.core import get_logger
 from app.services.llm.classifier_llm import get_classifier_llm
@@ -33,10 +33,14 @@ class QueryDecomposer:
             self.structured_llm = self.llm
         
         # Create prompt from settings
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT),
-            ("user", settings.prompt_settings.DECOMPOSER_USER_PROMPT)
-        ])
+        
+        system_template = SystemMessagePromptTemplate.from_template(
+            settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT
+        )
+        user_template = HumanMessagePromptTemplate.from_template(
+            settings.prompt_settings.DECOMPOSER_USER_PROMPT
+        )
+        self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
         
         logger.info("QueryDecomposer initialized with structured output")
     
