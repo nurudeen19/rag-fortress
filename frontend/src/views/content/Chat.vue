@@ -135,8 +135,8 @@
                 </div>
                 
                 <div class="flex-1">
-                  <!-- Main Response / Placeholder Bubble -->
-                  <div class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg transition-all duration-300">
+                  <!-- Main Response / Placeholder Bubble (hide if error exists) -->
+                  <div v-if="!message.error" class="bg-fortress-800/60 backdrop-blur-sm border border-fortress-700/50 rounded-2xl rounded-tl-sm px-6 py-4 shadow-lg transition-all duration-300">
                     <!-- Show loading state if placeholder with no content -->
                     <div v-if="message.isPlaceholder && !message.content" class="flex items-center gap-3">
                       <div class="flex gap-1.5">
@@ -144,7 +144,7 @@
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
                       </div>
-                      <span class="text-fortress-300 text-sm font-medium">Analyzing Knowledge Base...</span>
+                      <span class="text-fortress-300 text-sm font-medium"></span>
                     </div>
                     <!-- Show actual response content -->
                     <div v-else class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
@@ -306,6 +306,11 @@
           <p class="text-sm text-fortress-400 mt-1">This action cannot be undone</p>
         </div>
         <div class="p-6">
+          <!-- Error Message -->
+          <div v-if="deleteError" class="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+            <p class="text-sm text-red-400">{{ deleteError }}</p>
+          </div>
+          
           <p class="text-fortress-300">
             Are you sure you want to delete <span class="font-semibold text-fortress-100">"{{ currentChatTitle }}"</span>?
             All messages in this conversation will be permanently removed.
@@ -342,6 +347,7 @@
 import { ref, nextTick, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useAuthStore } from '../../stores/auth'
 import { useChatHistory } from '../../composables/useChatHistory'
 
@@ -362,6 +368,7 @@ const inputMessage = ref('')
 const loading = ref(false)
 const loadingMessages = ref(false)
 const deleting = ref(false)
+const deleteError = ref(null)
 const messagesContainer = ref(null)
 const inputField = ref(null)
 const showChatOptions = ref(false)
@@ -380,16 +387,25 @@ const currentChatSubtitle = computed(() => {
   return activeChat.value ? '' : 'Start a conversation to unlock insights'
 })
 
-// Render markdown content
+// Render markdown content with XSS protection
 const renderMarkdown = (content) => {
   try {
-    return marked(content, {
+    const rawHtml = marked(content, {
       breaks: true,
       gfm: true
     })
+    // Sanitize HTML to prevent XSS attacks (Option 2: Balanced)
+    // Allows formatted text and safe links without tables
+    return DOMPurify.sanitize(rawHtml, {
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote', 'code', 'pre', 'a', 'hr'],
+      ALLOWED_ATTR: {
+        'a': ['href', 'title', 'rel']
+      },
+      KEEP_CONTENT: true
+    })
   } catch (err) {
     console.error('Markdown rendering error:', err)
-    return `<p>${content}</p>`
+    return DOMPurify.sanitize(`<p>${content}</p>`)
   }
 }
 
@@ -557,6 +573,12 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
 
   const handlePayload = async (payload) => {
     if (!payload || typeof payload !== 'object') {
+      return
+    }
+
+    if (payload.type === 'done') {
+      // Stop loading when stream completes
+      loading.value = false
       return
     }
 
@@ -779,6 +801,7 @@ const submitRename = async () => {
 
 // Open delete modal
 const deleteChat = () => {
+  deleteError.value = null  // Clear any previous errors
   showDeleteModal.value = true
   showChatOptions.value = false
 }
@@ -787,7 +810,9 @@ const deleteChat = () => {
 const confirmDelete = async () => {
   if (!activeChat.value || deleting.value) return
   
+  deleteError.value = null  // Clear previous errors
   deleting.value = true
+  
   try {
     await deleteChatFromHistory(activeChat.value.id)
     // Close modal and reset state
@@ -796,8 +821,21 @@ const confirmDelete = async () => {
     // Navigation happens automatically in deleteChat()
   } catch (error) {
     console.error('Failed to delete conversation:', error)
+    
+    // Extract error message from API response
+    let errorMessage = 'Failed to delete conversation. Please try again.'
+    
+    if (error.response?.data?.detail) {
+      // Backend returned a structured error (e.g., demo mode message)
+      errorMessage = error.response.data.detail
+    } else if (error.message) {
+      // Use error message if available
+      errorMessage = error.message
+    }
+    
+    deleteError.value = errorMessage
     deleting.value = false
-    // Keep modal open on error so user can retry
+    // Keep modal open to show error
   }
 }
 

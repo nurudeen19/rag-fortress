@@ -45,6 +45,11 @@ class VectorDBSettings(BaseSettings):
     MILVUS_COLLECTION_NAME: str = Field("rag_documents", env="MILVUS_COLLECTION_NAME")
     MILVUS_USER: Optional[str] = Field(None, env="MILVUS_USER")
     MILVUS_PASSWORD: Optional[str] = Field(None, env="MILVUS_PASSWORD")
+    
+    # Ingestion Configuration
+    # Batch size for chunk ingestion to vector store (higher = faster but more memory)
+    # Recommended: 1000+ for production environments
+    CHUNK_INGESTION_BATCH_SIZE: int = Field(1000, env="CHUNK_INGESTION_BATCH_SIZE")
 
     def validate_config(self, environment: str):
         """Validate vector database configuration based on environment."""

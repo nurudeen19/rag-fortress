@@ -45,25 +45,22 @@ class AppSettings(BaseSettings):
     # RAG Configuration
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
     CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")
-    MIN_TOP_K: int = Field(3, env="MIN_TOP_K")
-    MAX_TOP_K: int = Field(10, env="MAX_TOP_K")
+    MIN_TOP_K: int = Field(5, env="MIN_TOP_K")
+    MAX_TOP_K: int = Field(15, env="MAX_TOP_K")
     RETRIEVAL_SCORE_THRESHOLD: float = Field(0.5, env="RETRIEVAL_SCORE_THRESHOLD")
     SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
     
     # Reranker Configuration
     ENABLE_RERANKER: bool = Field(True, env="ENABLE_RERANKER")
     RERANKER_MODEL: str = Field("cross-encoder/ms-marco-MiniLM-L-6-v2", env="RERANKER_MODEL")
-    RERANKER_TOP_K: int = Field(3, env="RERANKER_TOP_K")
+    RERANKER_TOP_K: int = Field(5, env="RERANKER_TOP_K")
     RERANKER_SCORE_THRESHOLD: float = Field(0.3, env="RERANKER_SCORE_THRESHOLD")
-    
-    # Intent Classifier Configuration
-    ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
-    INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
     
     # Security
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    SETTINGS_ENCRYPTION_KEY: str = Field(None, env="SETTINGS_ENCRYPTION_KEY")
     
     # CORS Configuration
     CORS_ORIGINS: List[str] = Field(
@@ -114,9 +111,19 @@ class AppSettings(BaseSettings):
     CONVERSATION_RATE_LIMIT_PER_MINUTE: int = Field(10, env="CONVERSATION_RATE_LIMIT_PER_MINUTE")
     CONVERSATION_RATE_LIMIT_PER_HOUR: int = Field(100, env="CONVERSATION_RATE_LIMIT_PER_HOUR")
     
+    # Conversation History Configuration
+    # Number of previous message turns (user+assistant pairs) to include in context
+    # Higher values provide more context but use more tokens
+    CONVERSATION_HISTORY_TURNS: int = Field(3, env="CONVERSATION_HISTORY_TURNS")
+    
     # Rate limit storage backend (memory or redis)
     RATE_LIMIT_STORAGE: str = Field("memory", env="RATE_LIMIT_STORAGE")
     RATE_LIMIT_REDIS_URL: Optional[str] = Field(None, env="RATE_LIMIT_REDIS_URL")
+    
+    # Job Configuration
+    # Enable/disable individual scheduled jobs
+    ENABLE_OVERRIDE_ESCALATION_JOB: bool = Field(True, env="ENABLE_OVERRIDE_ESCALATION_JOB")
+    ENABLE_OVERRIDE_EXPIRATION_JOB: bool = Field(True, env="ENABLE_OVERRIDE_EXPIRATION_JOB")
     
     # Production Configuration
     SKIP_AUTO_SETUP: bool = Field(False, env="SKIP_AUTO_SETUP")

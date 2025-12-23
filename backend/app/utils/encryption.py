@@ -6,12 +6,13 @@ Uses Fernet (symmetric encryption) from cryptography library.
 
 import os
 from cryptography.fernet import Fernet
+from app.config import settings
 from app.core import get_logger
 
 logger = get_logger(__name__)
 
 # Get encryption key from environment or generate one
-ENCRYPTION_KEY = os.getenv("SETTINGS_ENCRYPTION_KEY")
+ENCRYPTION_KEY = settings.SETTINGS_ENCRYPTION_KEY
 
 if not ENCRYPTION_KEY:
     # Generate a key for development (in production, set SETTINGS_ENCRYPTION_KEY in .env)

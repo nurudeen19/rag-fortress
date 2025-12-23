@@ -57,7 +57,7 @@ class DocumentStorageService:
         Load, chunk, and store pending approved files or specific files.
         
         Args:
-            batch_size: Chunks per batch to vector store (default: 100)
+            batch_size: Chunks per batch to vector store (default: 100, overridable via settings.CHUNK_INGESTION_BATCH_SIZE)
             file_ids: Optional list of specific file IDs to ingest.
                      If provided, only those files are processed.
                      If None, all approved unprocessed files are ingested.

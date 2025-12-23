@@ -13,6 +13,7 @@ from app.models.file_upload import FileUpload, FileStatus
 from app.services.vector_store.storage import DocumentStorageService
 from app.core import get_logger
 from app.core.database import get_fresh_async_session_factory
+from app.config.settings import settings
 
 logger = get_logger(__name__)
 
@@ -75,7 +76,7 @@ class DocumentIngestionService:
                     # Use DocumentStorageService to process this single file only
                     # Pass file_ids parameter to load and process only this file
                     result = await storage_service.ingest_pending_files(
-                        batch_size=100,
+                        batch_size=settings.CHUNK_INGESTION_BATCH_SIZE,
                         file_ids=[file_id]
                     )
                     
@@ -121,7 +122,7 @@ class DocumentIngestionService:
                 "error": str(e)
             }
     
-    async def ingest_batch(self, batch_size: int = 100) -> Dict:
+    async def ingest_batch(self, batch_size: int = None) -> Dict:
         """
         Ingest all pending approved files in a batch.
         
@@ -132,13 +133,17 @@ class DocumentIngestionService:
         4. Updates file statuses
         
         Args:
-            batch_size: Chunks per batch to vector store (default: 100)
+            batch_size: Chunks per batch to vector store (default: from settings.CHUNK_INGESTION_BATCH_SIZE)
             
         Returns:
             Dict with batch ingestion results
         """
         try:
-            logger.info(f"Starting batch ingestion")
+            # Use configurable batch size from settings if not explicitly provided
+            if batch_size is None:
+                batch_size = settings.CHUNK_INGESTION_BATCH_SIZE
+            
+            logger.info(f"Starting batch ingestion with batch_size={batch_size}")
             
             # Get fresh session factory bound to CURRENT event loop
             # CRITICAL: This creates a new engine for isolated event loops (background jobs)

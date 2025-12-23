@@ -1,31 +1,15 @@
 Action items improvements/fixes TODO
 
-# Conversation Flow
-Transaction Atomicity:
-
-Issue: In _persist_messages_to_db, the system calls add_message twice (once for user, once for assistant). Each call triggers a separate session.commit().
-Risk: If the second commit fails, you end up with a "dangling" user message with no assistant response in the DB, creating a disjointed history.
-Fix: Refactor add_message to accept an optional flush=True/False parameter or create an add_exchange method that commits both messages in a single transaction.
-Hardcoded Context Window:
-
-Issue: get_conversation_history hardcodes last_n=6 (3 turns).
-Risk: This is arbitrary and may be too short for complex reasoning tasks or too long for models with small context windows.
-Fix: Move this value to AppSettings (e.g., CONVERSATION_HISTORY_LIMIT).
-Cache vs. DB Consistency:
-
-Issue: cache_conversation_exchange updates the Redis cache before persisting to the DB.
-Risk: If DB persistence fails, the cache will contain messages that don't exist in the database. When the cache expires, those messages disappear, confusing the user.
-Fix: Update cache only after successful DB commit, or use a write-through strategy.
-
-Atomic Transactions: Create a method save_conversation_exchange(user_msg, assistant_msg) in ConversationService that wraps both inserts in a single transaction.
-Configuration: Extract last_n=6 into app_settings.py.
-## Architectural Improvements
-Async Event Bus: Consider moving non-critical tasks (like activity_logger_service.log_activity) to a background task or event bus to further reduce response latency.
-Structured Metadata: Define a Pydantic model for the meta JSON field in the Message table to enforce schema consistency for sources and citations.
-
 Future Enhancements (Low Priority)
 Semantic Caching: Implement semantic caching for RAG queries (if query A is semantically similar to query B, return cached result of B) to save embedding costs.
 User Feedback Loop: Add endpoints to allow users to rate responses (thumbs up/down), which can be used to fine-tune the retrieval or intent classification logic.
+
+# Next Version items
++ history encryption
++ reranker by user choice
++ hybrid search introduction
++ frontend conversation cache tightning 
++ better security handling of auth keys and all sensitive keys
 
 
 
@@ -37,18 +21,18 @@ Token Response: The verify_token function returns only a user_id. Returning a st
 
 Document Ingestion Error Granularity: The pipeline catches generic Exception. Defining specific exceptions (e.g., ParsingError, EmbeddingError, StorageError) would allow for smarter retry logic (e.g., retry network errors, but fail permanently on parsing errors).
 
-## Job management improvemnent:
 
-Execution Model: The system appears to run the job scheduler inside the API process (via StartupController). In a horizontal scaling scenario (multiple API replicas), this could lead to race conditions or duplicate job execution unless the scheduler uses distributed locking.
-Recommendation: Move the job worker to a separate process (e.g., python run_worker.py) that consumes from the DB queue. This allows the API to scale independently of the background workers.
+## Cosmetic Updates
+explain_access_scope = false (default)
 
+explain_access_scope = true (opt-in)
 
-Import Safety: Some factories import libraries inside functions (e.g., import langchain_chroma). While this makes dependencies optional, it can hide configuration errors until runtime. A "check dependencies" startup step would be safer.
+When enabled, you can surface high-level scope only, not document specifics.
 
-Centralize job wiring: Move all scheduling into a small jobs/bootstrap.py (or __init__.py) that receives the job manager plus factories (e.g., session factory). Startup calls one function (init_jobs(job_manager, session_factory)) instead of scheduling each job inline.
-Config-driven registration: Keep a registry/list of jobs (id, handler, interval, max_instances, enabled flag). Startup loops that list—easy to add/disable jobs without touching startup logic.
-Defer scheduling until “ready”: After core services (DB, cache) are up, call the job bootstrap. This keeps main startup readable and isolates job errors from core initialization.
-Guardrails: Ensure each job has max_instances=1, reasonable intervals, and error logging. Optionally add per-job enabled flags via env/config to prevent flooding.
-Health and observability: Add a brief log summary of scheduled jobs at startup, and consider a lightweight health endpoint/metric for the job runner.
-If you want, I can refactor the current setup into a jobs/bootstrap.py with a registry and update startup to call a single initializer.
+With flag enabled and user is in the department:
 
+  You do not have sufficient clearance to view this content within the Finance department.
+
+With flag enabled and user is not in the department:
+
+  You do not have access to this content because it belongs to a restricted department.
