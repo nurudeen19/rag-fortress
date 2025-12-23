@@ -341,15 +341,21 @@ class RetrieverService:
                 }
             else:
                 # BLOCKED: Relevant documents exist but user lacks clearance
-                error_msg = "You do not have sufficient clearance to access the relevant documents for this query."
+                # Determine error type based on blocking reason
                 if blocked_depts:
+                    # Department access issue
                     dept_list = ", ".join(blocked_depts)
-                    error_msg = f"Relevant documents were found but you do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department."
+                    error_msg = self.settings.prompt_settings.RETRIEVAL_DEPT_BLOCKED_MESSAGE.format(dept_list=dept_list)
+                    error_type = "no_clearance"
+                else:
+                    # General security clearance issue
+                    error_msg = self.settings.prompt_settings.RETRIEVAL_SECURITY_BLOCKED_MESSAGE
+                    error_type = "insufficient_clearance"
                 
-                logger.info(f"All {len(relevant_docs)} relevant documents blocked by security: {blocked_depts}")
+                logger.info(f"All {len(relevant_docs)} relevant documents blocked by security ({error_type}): {blocked_depts}")
                 return {
                     "success": False,
-                    "error": "insufficient_clearance",
+                    "error": error_type,
                     "message": error_msg,
                     "count": 0,
                     "max_security_level": max_security_level,
@@ -384,14 +390,20 @@ class RetrieverService:
             )
             
             if len(docs) > 0 and len(filtered_docs) == 0:
-                error_msg = "You do not have sufficient clearance to access the retrieved documents."
+                # Determine error type based on blocking reason
                 if blocked_depts:
+                    # Department access issue
                     dept_list = ",".join(blocked_depts)
-                    error_msg = f"You do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department."
+                    error_msg = self.settings.prompt_settings.RETRIEVAL_DEPT_BLOCKED_MESSAGE.format(dept_list=dept_list)
+                    error_type = "no_clearance"
+                else:
+                    # General security clearance issue
+                    error_msg = self.settings.prompt_settings.RETRIEVAL_SECURITY_BLOCKED_MESSAGE
+                    error_type = "insufficient_clearance"
                 
                 return {
                     "success": False,
-                    "error": "insufficient_clearance",
+                    "error": error_type,
                     "message": error_msg,
                     "count": 0,
                     "blocked_departments": blocked_depts

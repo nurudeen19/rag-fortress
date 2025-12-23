@@ -18,7 +18,7 @@ async def test_prompt_configuration():
     
     # Test that all prompts are defined
     assert ps.RAG_SYSTEM_PROMPT, "RAG_SYSTEM_PROMPT not defined"
-    assert ps.NO_CONTEXT_RESPONSE, "NO_CONTEXT_RESPONSE not defined"
+    assert ps.RETRIEVAL_NO_CONTEXT_MESSAGE, "RETRIEVAL_NO_CONTEXT_MESSAGE not defined"
     assert ps.LOW_QUALITY_CONTEXT_RESPONSE, "LOW_QUALITY_CONTEXT_RESPONSE not defined"
     
     print("✅ All system prompts defined")
@@ -97,7 +97,7 @@ async def test_settings_integration():
     
     # Should have all prompt settings attributes
     assert hasattr(settings, 'RAG_SYSTEM_PROMPT')
-    assert hasattr(settings, 'NO_CONTEXT_RESPONSE')
+    assert hasattr(settings, 'RETRIEVAL_NO_CONTEXT_MESSAGE')
     assert hasattr(settings, 'ENABLE_MARKDOWN_FORMATTING')
     assert hasattr(settings, 'RESPONSE_LENGTH_PREFERENCE')
     

@@ -209,7 +209,7 @@ class ApplicationSettingsSeeder(BaseSeed):
             
             # RAG System Prompts
             ("rag_system_prompt", "string", "System prompt for RAG responses - instructs the LLM on how to answer questions from the knowledge base", "prompts", True, False),
-            ("no_context_response", "string", "Response when no relevant documents found in knowledge base", "prompts", True, False),
+            ("retrieval_no_context_message", "string", "Response when no relevant documents found in knowledge base", "prompts", True, False),
         ]
     
         count = 0

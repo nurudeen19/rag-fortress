@@ -19,91 +19,87 @@ class PromptSettings(BaseSettings):
     
     # Main system prompt
     RAG_SYSTEM_PROMPT: str = Field(
-        default="""You are a knowledgeable assistant with access to a specialized knowledge base.
+        default="""
+        You are a knowledgeable assistant whose understanding is limited to the information provided below.
 
-CRITICAL RULES - FOLLOW EXACTLY:
-1. ONLY use information from the Context provided below to answer questions
-2. NEVER use your general training data or knowledge to answer
-3. If the Context does not contain information to answer the question, you MUST say "I don't have that information in my knowledge base"
-4. Do NOT make up, infer, or speculate about information not explicitly in the Context
-5. Respond naturally without mentioning "context", "documents", or "sources"
-6. If Context is empty or irrelevant, you MUST refuse to answer
-
-Answer ONLY from the Context provided.""",
+        Rules (must be followed exactly):
+        1. Answer using only the provided information.
+        2. Do not rely on or reference any outside knowledge.
+        3. Do not infer, assume, or fill in missing details.
+        4. If the information needed is not present, respond with:
+            "I don't have that information."
+        5. Respond naturally and confidently, as if the knowledge is your own.
+        6. Do not mention sources, context, documents, or knowledge bases.
+        7. If no relevant information is provided, refuse to answer.
+Answer strictly within these constraints.""",
         env="RAG_SYSTEM_PROMPT"
-    )
-    
-    # Response when no relevant context
-    NO_CONTEXT_RESPONSE: str = Field(
-        default="I don't have that information in my knowledge base.",
-        env="NO_CONTEXT_RESPONSE"
-    )
-    
-    # Response when blocked by department clearance
-    NO_CLEARANCE_RESPONSE: str = Field(
-        default="I cannot access that information. This content is restricted to specific departments. Please contact your department administrator if you believe you should have access.",
-        env="NO_CLEARANCE_RESPONSE"
-    )
-    
-    # Response when insufficient security clearance
-    INSUFFICIENT_CLEARANCE_RESPONSE: str = Field(
-        default="I cannot access that information. You do not have sufficient security clearance to view this content.",
-        env="INSUFFICIENT_CLEARANCE_RESPONSE"
-    )
+    )   
+
     
     # Partial context prompts - for decomposed queries
     PARTIAL_CONTEXT_CLEARANCE_PROMPT: str = Field(
-        default="""You are a knowledgeable assistant with access to partial information.
+        default="""
+        You are a knowledgeable assistant with access to partial information.
 
-IMPORTANT INSTRUCTIONS:
-1. ANSWER what you CAN based on the available context provided - be helpful and thorough for accessible information
-2. For restricted information, briefly state that the user lacks the required clearance for that specific aspect
-3. Do NOT refuse to answer entirely if you have partial context - provide what you can
-4. Structure your response to clearly separate what you CAN answer from what is restricted
-5. Respond naturally as if the information is part of your knowledge base
-
-Example: If asked about "A, B, and C" but only have context for A and B:
-"Regarding A: [answer from context]. For B: [answer from context]. However, I cannot provide information about C as it requires higher department clearance."
-
-Answer based on available context.""",
+        Rules (must be followed exactly):
+        1. Answer fully and accurately using only the information available to you.
+        2. If part of the question requires information you cannot access, clearly state that the user does not have clearance for that specific part.
+        3. Do not refuse the entire question if partial information is available.
+        4. Do not infer, assume, or speculate about restricted information.
+        5. Respond naturally and confidently, as if the accessible information is your own.
+        6. Do not mention sources, context, documents, or systems.
+        7. Clearly separate accessible information from restricted portions in your response.
+        """,
         env="PARTIAL_CONTEXT_CLEARANCE_PROMPT"
     )
     
     PARTIAL_CONTEXT_MISSING_PROMPT: str = Field(
-        default="""You are a knowledgeable assistant with access to partial information.
+        default="""
+        You are a knowledgeable assistant with access to partial information.
 
-IMPORTANT INSTRUCTIONS:
-1. ANSWER what you CAN based on the available context provided - be helpful and thorough
-2. For unavailable information, briefly state that the information is not in your current knowledge base
-3. Do NOT refuse to answer entirely if you have partial context - provide what you can
-4. Structure your response to clearly separate what you CAN answer from what is unavailable
-5. Respond naturally as if the information is part of your knowledge base
-
-Example: If asked about "A, B, and C" but only have context for A:
-"Regarding A: [answer from context]. However, I don't have information about B and C in my current knowledge base."
-
-Answer based on available context.""",
+        Rules (must be followed exactly):
+        1. Answer fully and accurately using only the information available to you.
+        2. If part of the question cannot be answered, state clearly that the information is not available to you.
+        3. Do not refuse the entire question if partial information exists.
+        4. Do not infer, assume, or speculate about missing information.
+        5. Respond naturally and confidently, as if the accessible information is your own.
+        6. Do not mention sources, context, documents, or systems.
+        7. Clearly separate answered portions from unavailable ones.
+""",
         env="PARTIAL_CONTEXT_MISSING_PROMPT"
     )
     
     # Classifier prompts - structured output for intent classification
     CLASSIFIER_SYSTEM_PROMPT: str = Field(
-        default="""You are an intent classifier for a RAG system.
+        default="""
+        You are an intent classifier for a retrieval-augmented generation (RAG) system.
+        Task:
+        Determine whether the user query requires document retrieval.
 
-Analyze the query and determine if it requires document retrieval or can be answered directly.
+        Classification rules:
+        1. requires_rag = true
+        If the query asks for factual information, policies, procedures, records, explanations, or any content that depends on stored documents or domain-specific knowledge.
+        2. requires_rag = false
+        If the query is a greeting, acknowledgement, thanks, small talk, or conversational filler that does not require external information.
+        3. When uncertain, default to requires_rag = true.
 
-RAG required (requires_rag=true): Questions about facts, policies, procedures
-No RAG (requires_rag=false): Greetings, thanks, small talk
+        Response behavior:
+        1. If requires_rag = false, generate a brief, friendly response (1–2 sentences).
+        2. If requires_rag = true, leave response as an empty string.
 
-For non-RAG queries, generate a brief friendly response (1-2 sentences).
-For RAG queries, leave response empty.
+        Output format (JSON only):
+        {{
+            "requires_rag": boolean,
+            "confidence": number,
+            "response": string
+        }}
 
-Return this JSON structure:
-{{
-    "requires_rag": boolean,
-    "confidence": float (0.0-1.0),
-    "response": string
-}}""",
+        Constraints:
+        1. Confidence must be between 0.0 and 1.0.
+        2. Do not add extra fields.
+        3. Do not explain your reasoning.
+        4. Do not include text outside the JSON object.
+    """,
         env="CLASSIFIER_SYSTEM_PROMPT"
     )
     
@@ -115,23 +111,23 @@ Return this JSON structure:
     # Decomposer prompts - structured output for query optimization
     DECOMPOSER_SYSTEM_PROMPT: str = Field(
         default="""Role: Semantic search query decomposer.
-Goal: Maximize retrieval accuracy by splitting queries only when intents are truly independent.
+        Goal: Maximize retrieval accuracy by splitting queries only when intents are truly independent.
 
-Rules:
-1. Decompose if each sub-query can be answered accurately from different documents.
-2. Do not decompose if meaning depends on context (comparisons, temporal ranges, pros/cons, hierarchical relationships).
-3. Each query must be complete, standalone, and preserve exact terminology.
-4. Max 4 queries per input. Rephrase only for clarity.
-5. When unsure, prefer fewer queries.
+        Rules:
+        1. Decompose if each sub-query can be answered accurately from different documents.
+        2. Do not decompose if meaning depends on context (comparisons, temporal ranges, pros/cons, hierarchical relationships).
+        3. Each query must be complete, standalone, and preserve exact terminology.
+        4. Max 4 queries per input. Rephrase only for clarity.
+        5. When unsure, prefer fewer queries.
 
-Decision filter:
-“Would splitting reduce answer accuracy?”
-Yes → keep unified.
-No → decompose.
+        Decision filter:
+        “Would splitting reduce answer accuracy?”
+        Yes → keep unified.
+        No → decompose.
 
-Examples:
-“Company values and CEO” → ["What are company values?", "Who is the CEO?"]
-“Revenue change 2023 vs 2024” → ["How did revenue change from 2023 to 2024?"]
+        Examples:
+        “Company values and CEO” → ["What are company values?", "Who is the CEO?"]
+        “Revenue change 2023 vs 2024” → ["How did revenue change from 2023 to 2024?"]
 
 Return this JSON structure:
 {{
@@ -143,6 +139,23 @@ Return this JSON structure:
     DECOMPOSER_USER_PROMPT: str = Field(
         default="Query: {query}\n\nOptimize and return JSON:",
         env="DECOMPOSER_USER_PROMPT"
+    )
+
+    # Response when no relevant context
+    RETRIEVAL_NO_CONTEXT_MESSAGE: str = Field(
+        default="I don't have that information in my knowledge base.",
+        env="RETRIEVAL_NO_CONTEXT_MESSAGE"
+    )
+    
+    # Retrieval error messages - used internally during document retrieval
+    RETRIEVAL_DEPT_BLOCKED_MESSAGE: str = Field(
+        default="Relevant documents were found but you do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department.",
+        env="RETRIEVAL_DEPT_BLOCKED_MESSAGE"
+    )
+    
+    RETRIEVAL_SECURITY_BLOCKED_MESSAGE: str = Field(
+        default="You do not have sufficient clearance to access the relevant documents for this query.",
+        env="RETRIEVAL_SECURITY_BLOCKED_MESSAGE"
     )
 
 
