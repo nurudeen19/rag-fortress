@@ -59,7 +59,7 @@ Answer strictly within these constraints.""",
 
         Rules (must be followed exactly):
         1. Answer fully and accurately using only the information available to you.
-        2. If part of the question cannot be answered, state clearly that the information is not available to you.
+        2. If part of the question cannot be answered, state clearly that you don't have information about that part.
         3. Do not refuse the entire question if partial information exists.
         4. Do not infer, assume, or speculate about missing information.
         5. Respond naturally and confidently, as if the accessible information is your own.
@@ -84,7 +84,7 @@ Answer strictly within these constraints.""",
         3. When uncertain, default to requires_rag = true.
 
         Response behavior:
-        1. If requires_rag = false, generate a brief, friendly response (1–2 sentences).
+        1. If requires_rag = false, generate a brief, friendly response (1-2 sentences).
         2. If requires_rag = true, leave response as an empty string.
 
         Output format (JSON only):
