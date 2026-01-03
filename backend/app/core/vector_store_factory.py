@@ -1,6 +1,7 @@
 """
-Vector Store Factory - Creates LangChain vector stores with from_documents().
-Provider-agnostic, clean abstraction.
+Vector Store Factory - Creates LangChain vector stores with singleton pattern.
+Returns configured vector store instance based on settings.
+Reuses instance if already initialized (from startup).
 """
 
 from typing import Optional
@@ -16,7 +17,8 @@ from app.core import get_logger
 logger = get_logger(__name__)
 
 
-# Global retriever instance
+# Global instance (initialized in startup)
+_vector_store_instance: Optional[VectorStore] = None
 _retriever_instance: Optional[BaseRetriever] = None
 
 
@@ -27,7 +29,8 @@ def get_vector_store(
     **kwargs
 ) -> VectorStore:
     """
-    Get or create a LangChain vector store instance.
+    Get LangChain vector store instance.
+    Returns existing instance if initialized, otherwise creates new one.
     
     Args:
         embeddings: Pre-initialized LangChain embeddings (from startup)
@@ -42,18 +45,42 @@ def get_vector_store(
         # Get pre-initialized embeddings from startup
         embeddings = get_embedding_provider()
 
-        # Get a configured vector store instance (provider from settings or explicit)
+        # Get vector store instance (reuses existing if available)
         store = get_vector_store(
             embeddings=embeddings,
             provider="chroma",
             collection_name="my_docs"
         )
+    """
+    global _vector_store_instance
+    
+    # Return existing instance if available
+    if _vector_store_instance is not None:
+        return _vector_store_instance
+    
+    # Create new instance
+    _vector_store_instance = _create_vector_store(embeddings, provider, collection_name, **kwargs)
+    return _vector_store_instance
+
+
+def _create_vector_store(
+    embeddings: Embeddings,
+    provider: Optional[str] = None,
+    collection_name: Optional[str] = None,
+    **kwargs
+) -> VectorStore:
+    """
+    Create LangChain vector store instance based on configuration.
+    Internal function - use get_vector_store() instead.
+    
+    Args:
+        embeddings: LangChain embeddings
+        provider: Vector store provider (faiss, chroma, qdrant, etc.)
+        collection_name: Collection/index name
+        **kwargs: Provider-specific arguments
         
-        # Use LangChain's from_documents pattern
-        vector_store = store.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-        )
+    Returns:
+        VectorStore instance
     """
     provider = (provider or settings.VECTOR_DB_PROVIDER).lower()
     
@@ -64,7 +91,6 @@ def get_vector_store(
     config.update(kwargs)
     
     logger.info(f"Initializing vector store: {provider}")
-    
     # === FAISS (Default for Python 3.14+) ===
     if provider == "faiss":
         try:
