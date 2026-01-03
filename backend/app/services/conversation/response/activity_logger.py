@@ -37,7 +37,9 @@ class ConversationActivityLogger:
             # Map error_type to incident_type and severity
             error_mapping = {
                 "insufficient_clearance": ("insufficient_clearance", "warning"),
+                "no_clearance": ("no_clearance", "warning"),
                 "no_documents": ("retrieval_no_context", "info"),
+                "no_relevant_documents": ("retrieval_no_context", "info"),
                 "low_quality_results": ("retrieval_no_context", "info"),
                 "reranker_no_quality": ("retrieval_no_context", "info"),
             }

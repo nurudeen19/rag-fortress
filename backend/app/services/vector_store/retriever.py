@@ -178,7 +178,8 @@ class RetrieverService:
         user_security_level: Optional[int] = None,
         user_department_id: Optional[int] = None,
         user_department_security_level: Optional[int] = None,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        skip_security_filter: bool = False
     ) -> Dict[str, Any]:
         """
         Adaptive document retrieval with quality-based top-k adjustment.
@@ -199,6 +200,7 @@ class RetrieverService:
             user_department_id: User's department ID
             user_department_security_level: User's department-specific clearance level
             user_id: User ID for activity logging (optional)
+            skip_security_filter: If True, skip security filtering (for multi-query coordination)
             
         Returns:
             Dict with success, context (documents), count, error, message
@@ -226,7 +228,8 @@ class RetrieverService:
             user_security_level,
             user_department_id,
             user_department_security_level,
-            user_id
+            user_id,
+            skip_security_filter
         )
         
         # Note: Caching disabled - Document objects are not JSON serializable
@@ -243,7 +246,8 @@ class RetrieverService:
         user_security_level: Optional[int],
         user_department_id: Optional[int],
         user_department_security_level: Optional[int],
-        user_id: Optional[int]
+        user_id: Optional[int],
+        skip_security_filter: bool = False
     ) -> Dict[str, Any]:
         """
         Perform retrieval with proper flow: Retrieve → Rerank → Filter → Decide.
@@ -251,11 +255,14 @@ class RetrieverService:
         Flow:
         1. Retrieve candidates based on similarity scores
         2. Rerank for relevance if enabled (on ALL candidates)
-        3. Apply security filtering to relevant results
+        3. Apply security filtering to relevant results (unless skip_security_filter=True)
         4. Decide outcome:
            - Relevant + allowed → return context
            - Relevant + blocked → insufficient clearance with dept names
            - Nothing relevant → no context found
+        
+        Args:
+            skip_security_filter: If True, return documents without security filtering
         """
         try:
             # Step 1: Retrieve candidates from vector store
@@ -309,7 +316,7 @@ class RetrieverService:
                         relevant_docs.append(doc)
                 logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
             
-            # Step 3: Apply security filtering to relevant documents
+            # Step 3: Apply security filtering to relevant documents (unless skipped for multi-query)
             if not relevant_docs:
                 # No relevant documents found at all
                 logger.info("No relevant documents found (before security filtering)")
@@ -319,6 +326,16 @@ class RetrieverService:
                     reason="no_relevant_documents",
                     details={"candidates_retrieved": len(results), "relevant_after_rerank": 0}
                 )
+            
+            # If skip_security_filter=True, return unfiltered results for multi-query coordination
+            if skip_security_filter:
+                logger.info(f"Skipping security filter (multi-query mode): returning {len(relevant_docs)} documents")
+                return {
+                    "success": True,
+                    "context": relevant_docs,
+                    "count": len(relevant_docs),
+                    "max_security_level": None,  # Will be calculated after final filtering
+                }
             
             # Apply security filtering
             filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
