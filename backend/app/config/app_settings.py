@@ -50,11 +50,8 @@ class AppSettings(BaseSettings):
     RETRIEVAL_SCORE_THRESHOLD: float = Field(0.5, env="RETRIEVAL_SCORE_THRESHOLD")
     SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
     
-    # Reranker Configuration
+    # Reranker Configuration (see reranker_settings.py for provider-specific settings)
     ENABLE_RERANKER: bool = Field(True, env="ENABLE_RERANKER")
-    RERANKER_MODEL: str = Field("cross-encoder/ms-marco-MiniLM-L-6-v2", env="RERANKER_MODEL")
-    RERANKER_TOP_K: int = Field(5, env="RERANKER_TOP_K")
-    RERANKER_SCORE_THRESHOLD: float = Field(0.3, env="RERANKER_SCORE_THRESHOLD")
     
     # Security
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
@@ -225,12 +222,6 @@ class AppSettings(BaseSettings):
             raise ValueError("MAX_TOP_K must be greater than or equal to MIN_TOP_K")
         if not (0.0 <= self.RETRIEVAL_SCORE_THRESHOLD <= 1.0):
             raise ValueError("RETRIEVAL_SCORE_THRESHOLD must be between 0.0 and 1.0")
-        
-        # Reranker validation
-        if self.RERANKER_TOP_K < 1:
-            raise ValueError("RERANKER_TOP_K must be at least 1")
-        if not (0.0 <= self.RERANKER_SCORE_THRESHOLD <= 1.0):
-            raise ValueError("RERANKER_SCORE_THRESHOLD must be between 0.0 and 1.0")
         
         # Intent classifier validation
         if not (0.0 <= self.INTENT_CONFIDENCE_THRESHOLD <= 1.0):

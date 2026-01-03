@@ -40,11 +40,11 @@ from app.config import (
     DatabaseSettings,
     Settings
 )
+from app.core.reranker_factory import get_reranker
 from app.config.cache_settings import cache_settings
 from app.jobs import get_job_manager
 from app.jobs.integration import JobQueueIntegration
 from app.jobs.bootstrap import init_jobs
-from app.services.vector_store.reranker import get_reranker_service
 
 
 logger = get_logger(__name__)
@@ -116,6 +116,9 @@ class StartupController:
             # ========== STEP 7: Internal LLM Provider (optional) ==========
             if settings.llm_settings.USE_INTERNAL_LLM:
                 await self._initialize_internal_llm()
+
+            if settings.reranker_settings.ENABLE_RERANKER:
+                await self._initialize_reranker()
             
             # ========== STEP 8: Classifier/Decomposer LLM (optional) ==========
             if settings.llm_settings.ENABLE_LLM_CLASSIFIER or settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
@@ -304,49 +307,14 @@ class StartupController:
             logger.warning(f"⚠ Classifier/decomposer LLM initialization skipped: {e}")
     
     async def _initialize_reranker(self):
-        """Check if reranker is enabled and model is accessible.
-        
-        Validates reranker configuration by testing model availability.
-        The model is downloaded once and cached locally for subsequent uses.
-        """
+        """Initialize reranker if enabled."""
         try:
-            # Check if reranker is enabled in settings
-            if not settings.app_settings.ENABLE_RERANKER:
-                return
-            
-            logger.info("Reranker is enabled, testing model availability...")
-            
-            # Get reranker service instance
-            reranker = get_reranker_service()
-            
-            # Test with minimal query to verify model works and is accessible
-            # This triggers the download once (cached locally after)
-            class SimpleDoc:
-                def __init__(self, content):
-                    self.page_content = content
-            
-            test_query = "test"
-            test_docs = [SimpleDoc("test")]
-            
-            # Minimal rerank test - triggers actual model load/download
-            test_results, test_scores = reranker.rerank(test_query, test_docs, top_k=1)
-            
-            if test_results and len(test_scores) > 0:
-                logger.info(
-                    f"Reranker ready (model: {reranker.model_name}, "
-                    f"cached locally for subsequent queries)"
-                )
-            else:
-                raise RuntimeError("Reranker model test returned no results")
-        
-        except ImportError as e:
-            logger.error(f"Missing reranker dependency: {e}")
-            logger.warning("Install with: pip install sentence-transformers")
+            if settings.app_settings.ENABLE_RERANKER:
+                
+                get_reranker()
         except Exception as e:
             logger.error(f"Failed to initialize reranker: {e}")
-            logger.warning(
-                "Reranker unavailable - set ENABLE_RERANKER=false to disable this check"
-            )
+            raise
     
     async def _initialize_retriever(self):
         """Initialize retriever (optional - catches errors without blocking startup)."""

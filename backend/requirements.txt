@@ -68,8 +68,14 @@ llama-cpp-python>=0.2.90
 sentence-transformers>=5.1.2
 
 # Cohere
-langchain-cohere>=0.2.0
+langchain-cohere>=0.5.0
 cohere>=5.5.8
+
+# ============================================================================
+# LangChain - Document Transformers (Rerankers)
+# ============================================================================
+# Cohere Rerank (via langchain-cohere - already included above)
+# Jina Rerank (via langchain-community - already included)
 
 # ============================================================================
 # LangChain - Vector Databases
