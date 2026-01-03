@@ -38,25 +38,19 @@ class DocumentLoader:
         Returns:
             List of documents with content and metadata
         """
-        logger.info(f"Loading pending approved files from database (file_ids={file_ids})")
-        
         # Build query based on file_ids parameter
         if file_ids and len(file_ids) > 0:
             # Load specific files by ID
             stmt = select(FileUpload).where(FileUpload.id.in_(file_ids)).order_by(FileUpload.created_at)
-            logger.info(f"Loading {len(file_ids)} specific files: {file_ids}")
         else:
             # Load all pending approved files (not yet processed)
             stmt = select(FileUpload).where(
                 (FileUpload.status == FileStatus.APPROVED) &
                 (FileUpload.is_processed.is_(False))
             ).order_by(FileUpload.created_at)
-            logger.info("Loading all pending approved files")
         
         result = await self.session.execute(stmt)
         file_uploads = result.scalars().all()
-        
-        logger.info(f"Found {len(file_uploads)} files to load")
         
         documents = []
         for file_upload in file_uploads:
@@ -68,7 +62,6 @@ class DocumentLoader:
             except Exception as e:
                 logger.error(f"✗ Failed to load {file_upload.file_name}: {e}")
         
-        logger.info(f"Successfully loaded {len(documents)} documents")
         return documents
     
     async def _load_and_enrich(self, file_upload: FileUpload) -> Dict[str, Any]:

@@ -50,7 +50,6 @@ class DocumentStorageService:
             embeddings=self.embeddings,
             provider=settings.VECTOR_DB_PROVIDER,
         )
-        logger.info("DocumentStorageService initialized")
     
     async def ingest_pending_files(self, batch_size: int = 100, file_ids: List[int] = None) -> Dict[str, Any]:
         """
@@ -65,16 +64,11 @@ class DocumentStorageService:
         Returns:
             Dict with counts: total_files, successfully_stored, chunks_generated, errors
         """
-        logger.info(f"Starting ingestion pipeline (file_ids={file_ids})")
-        
         # Step 1: Load files from database
         # Pass file_ids to loader - if provided, only those are loaded
         files = await self.loader.load_pending_files(file_ids=file_ids)
         if not files:
-            logger.info("No pending files to process")
             return {"total_files": 0, "successfully_stored": 0, "chunks_generated": 0, "errors": []}
-        
-        logger.info(f"Loaded {len(files)} files")
         
         # Step 2: Chunk files
         chunks = self.chunker.chunk_loaded_files(files)

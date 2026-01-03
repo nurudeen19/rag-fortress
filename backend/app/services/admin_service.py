@@ -80,8 +80,6 @@ class AdminService:
                 max_retries=1  # Batch jobs don't retry to avoid reprocessing
             )
             
-            logger.info(f"Created batch ingestion job {job.id} for admin {admin_id}")
-            
             # Create initial notification for admin
             notification_service = NotificationService(self.session)
             await notification_service.create(
@@ -93,8 +91,6 @@ class AdminService:
             
             # Commit notification
             await self.session.commit()
-            
-            logger.info(f"Created notification for admin {admin_id} about batch job {job.id}")
             
             return {
                 "success": True,

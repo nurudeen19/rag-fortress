@@ -88,7 +88,6 @@ class UserAccountService:
             self.session.add(user)
             await self.session.flush()
             
-            logger.info(f"User created: '{user.username}' (ID: {user.id})")
             return user, None
         
         except Exception as e:

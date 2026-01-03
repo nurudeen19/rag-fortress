@@ -39,7 +39,6 @@ class JobService:
         self.session.add(job)
         await self.session.flush()
         
-        logger.info(f"Created job: {job_type.value} (id={job.id}, ref={reference_type}/{reference_id})")
         return job
     
     async def get(self, job_id: int) -> Optional[Job]:

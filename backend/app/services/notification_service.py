@@ -37,7 +37,6 @@ class NotificationService:
         )
         self.session.add(notif)
         await self.session.flush()  # obtain id early
-        logger.info(f"Created notification {notif.id} for user {user_id}")
         await self._invalidate_notification_cache(user_id)
         return notif
 

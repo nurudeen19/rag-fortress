@@ -43,8 +43,6 @@ class DocumentIngestionService:
             Dict with ingestion result containing status and metadata
         """
         try:
-            logger.info(f"Starting ingestion for file_id={file_id}")
-            
             # Get fresh session factory bound to CURRENT event loop
             # CRITICAL: This creates a new engine for isolated event loops (background jobs)
             session_factory = await get_fresh_async_session_factory()
@@ -66,8 +64,6 @@ class DocumentIngestionService:
                         "status": "error",
                         "error": f"File status is {file_record.status.value}, not APPROVED"
                     }
-                
-                logger.info(f"File {file_id} ({file_record.file_name}) is approved, starting ingestion")
                 
                 try:
                     # Create storage service with fresh session

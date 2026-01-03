@@ -173,8 +173,6 @@ class ConversationService:
             result = await self.session.execute(stmt)
             conversations = result.scalars().all()
             
-            logger.info(f"Retrieved {len(conversations)} conversations for user {user_id}")
-            
             return {
                 "success": True,
                 "total": total,
@@ -360,7 +358,6 @@ class ConversationService:
             cached_data = await self.cache.get(cache_key)
             if cached_data:
                 history = json.loads(cached_data)
-                logger.info(f"Retrieved {len(history)} history messages from cache for {conversation_id}")
                 return history
         except Exception as exc:
             logger.warning(f"Failed to read history cache: {exc}")
@@ -554,8 +551,6 @@ class ConversationService:
             count_result = await self.session.execute(count_stmt)
             total = len(count_result.scalars().all())
             
-            logger.info(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
-            
             return {
                 "success": True,
                 "conversation": self._serialize_conversation(conversation),
@@ -615,8 +610,6 @@ class ConversationService:
                 }
                 for m in messages
             ]
-            
-            logger.info(f"Retrieved context with {len(context)} messages for conversation {conversation_id}")
             
             return {
                 "success": True,

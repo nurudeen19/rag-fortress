@@ -93,8 +93,6 @@ class StartupController:
             logger.warning("StartupController already initialized")
             return
         
-        logger.info("Starting application initialization...")
-        
         try:
             # ========== STEP 1: Database (CRITICAL) ==========
             await self._initialize_database()
@@ -137,7 +135,6 @@ class StartupController:
             # ========== STEP 10: Event Bus (OPTIONAL) ==========
             # Initialize event handlers for background task processing
             init_event_handlers()
-            logger.info("✓ Event bus initialized")
             
             # ========== STEP 11: Job Queue (OPTIONAL, at end) ==========
             # Jobs scheduled last to ensure all dependencies are ready
@@ -152,15 +149,13 @@ class StartupController:
     
     async def _initialize_database(self):
         """Initialize database connection and create tables (without seeding)."""
-        logger.info("Initializing database...")
-        
+
         try:
             # Create database manager
             db_settings = DatabaseSettings()
             self.database_manager = DatabaseManager(db_settings)
             
             # Create async engine
-            logger.info(f"Creating database engine for {db_settings.get_provider_info()}...")
             await self.database_manager.create_async_engine()
             
             # Create session factory
@@ -171,17 +166,12 @@ class StartupController:
             if not is_healthy:
                 raise RuntimeError("Database health check failed")
             
-            logger.info("✓ Database initialized successfully")
-            logger.info("To seed the database, run: python setup.py")
-            
         except Exception as e:
             logger.error(f"Failed to initialize database: {e}", exc_info=True)
             raise
     
     async def _load_db_settings(self):
         """Load settings from database grouped by category and cache them."""
-        logger.info("Loading settings from database...")
-        
         try:
             
             # Load settings from DB grouped by category
@@ -193,11 +183,9 @@ class StartupController:
                 cache = get_cache()
                 cache_key = "app_settings:all"
                 await cache.set(cache_key, cached_settings, ttl=None)  # No expiry
-                logger.info(f"✓ Cached {sum(len(v) for v in cached_settings.values())} settings")
             
             # Re-initialize global settings with cached values
             settings_module.settings = Settings(cached_settings=cached_settings)
-            logger.info("✓ Settings loaded with database values")
             
         except Exception as e:
             logger.warning(f"⚠ Failed to load DB settings: {e}. Using ENV/defaults only.")
@@ -205,8 +193,6 @@ class StartupController:
     
     async def _initialize_job_queue(self):
         """Initialize job queue and schedule jobs via bootstrap."""
-        logger.info("Initializing job queue...")
-        
         try:
             if not self.async_session_factory:
                 raise RuntimeError("Database must be initialized before job queue")
@@ -214,11 +200,9 @@ class StartupController:
             # Start job manager (APScheduler)
             self.job_manager = get_job_manager()
             self.job_manager.start()
-            logger.info("✓ Job manager started")
             
             # Setup job integration (bridges persistence + scheduling)
             self.job_integration = JobQueueIntegration(self.async_session_factory)
-            logger.info("✓ Job queue initialized")
             
             # Schedule all jobs via centralized bootstrap
             await init_jobs(self.job_manager)
@@ -228,8 +212,6 @@ class StartupController:
     
     async def _initialize_email_client(self):
         """Initialize email client for sending emails."""
-        logger.info("Initializing email client...")
-        
         try:
             # Initialize global email client
             self.email_client = init_email_client()
@@ -252,8 +234,6 @@ class StartupController:
     
     async def _initialize_embeddings(self):
         """Initialize and warm up embedding provider."""
-        logger.info("Initializing embedding provider...")
-        
         try:
             # Get embedding provider (creates instance if needed)
             self.embedding_provider = get_embedding_provider()
@@ -262,12 +242,7 @@ class StartupController:
             test_text = "Application startup test"
             test_embedding = self.embedding_provider.embed_query(test_text)
             
-            if test_embedding and len(test_embedding) > 0:
-                logger.info(
-                    f"✓ Embedding provider initialized "
-                    f"(dimension: {len(test_embedding)})"
-                )
-            else:
+            if not test_embedding or len(test_embedding) == 0:
                 raise RuntimeError("Embedding provider returned invalid result")
         
         except Exception as e:
@@ -276,24 +251,18 @@ class StartupController:
     
     async def _initialize_vector_store(self):
         """Initialize vector store (optional - catches errors without blocking startup)."""
-        logger.info("Initializing vector store...")
-        
         try:
             # Get vector store with embeddings
             store = get_vector_store(
                 embeddings=self.embedding_provider,
                 provider=getattr(settings, "VECTOR_DB_PROVIDER", None)
             )
-            
-            logger.info(f"✓ Vector store initialized (provider: {settings.VECTOR_DB_PROVIDER})")
         
         except Exception as e:
             logger.warning(f"⚠ Vector store initialization skipped: {e}", exc_info=True)
 
     async def _initialize_llm(self):
         """Initialize LLM provider (optional - catches errors without blocking startup)."""
-        logger.info("Initializing LLM provider...")
-        
         try:
             # Get LLM provider (creates instance if needed)
             self.llm_provider = get_llm_provider()
@@ -303,8 +272,6 @@ class StartupController:
 
     async def _initialize_fallback_llm(self):
         """Initialize and warm up fallback LLM provider."""
-        logger.info("Initializing fallback LLM provider...")
-        
         try:
             # Get fallback LLM provider (creates instance if needed)
             self.fallback_llm_provider = get_fallback_llm_provider()
@@ -313,9 +280,7 @@ class StartupController:
             test_prompt = "Hello"
             test_response = self.fallback_llm_provider.invoke(test_prompt)
             
-            if test_response:
-                logger.info(f"✓ Fallback LLM provider initialized successfully")
-            else:
+            if not test_response:
                 raise RuntimeError("Fallback LLM provider returned invalid result")
         
         except Exception as e:
@@ -324,30 +289,16 @@ class StartupController:
 
     async def _initialize_internal_llm(self):
         """Initialize internal LLM provider (optional)."""
-        logger.info("Initializing internal LLM provider...")
-
         try:
             self.internal_llm_provider = get_internal_llm_provider()
-
-            if self.internal_llm_provider:
-                logger.info("✓ Internal LLM provider initialized successfully")
-            else:
-                logger.info("Internal LLM provider is disabled or returned no instance")
 
         except Exception as e:
             logger.warning(f"⚠ Internal LLM initialization skipped: {e}")
     
     async def _initialize_classifier_llm(self):
         """Initialize classifier/decomposer LLM provider (optional)."""
-        logger.info("Initializing classifier/decomposer LLM provider...")
-
         try:
             self.classifier_llm_provider = get_classifier_llm()
-
-            if self.classifier_llm_provider:
-                logger.info("✓ Classifier/decomposer LLM provider initialized successfully")
-            else:
-                logger.info("Classifier/decomposer LLM provider is disabled or returned no instance")
 
         except Exception as e:
             logger.warning(f"⚠ Classifier/decomposer LLM initialization skipped: {e}")
@@ -358,12 +309,9 @@ class StartupController:
         Validates reranker configuration by testing model availability.
         The model is downloaded once and cached locally for subsequent uses.
         """
-        logger.info("Checking reranker configuration...")
-        
         try:
             # Check if reranker is enabled in settings
             if not settings.app_settings.ENABLE_RERANKER:
-                logger.info("Reranker is disabled (ENABLE_RERANKER=False)")
                 return
             
             logger.info("Reranker is enabled, testing model availability...")
@@ -402,13 +350,9 @@ class StartupController:
     
     async def _initialize_retriever(self):
         """Initialize retriever (optional - catches errors without blocking startup)."""
-        logger.info("Initializing retriever...")
-        
         try:
             # Get retriever (creates instance from vector store)
             self.retriever = get_retriever(embeddings=self.embedding_provider)
-            
-            logger.info("✓ Retriever initialized successfully")
         
         except Exception as e:
             logger.warning(f"⚠ Retriever initialization skipped: {e}")
@@ -416,19 +360,11 @@ class StartupController:
     def _smoke_test_vector_store(self):
         """Lightweight vector store initialization check without ingestion."""
         try:
-            logger.info("Running vector store smoke test (no ingestion)...")
-
             store = get_vector_store(
                 embeddings=self.embedding_provider,
                 provider=getattr(settings, "VECTOR_DB_PROVIDER", None),
                 collection_name=None,
             )
-
-            # FAISS returns None until created from documents
-            if store is None:
-                logger.info("✓ Vector store (FAISS) ready for on-demand creation")
-            else:
-                logger.info("✓ Vector store initialized successfully")
         except Exception as e:
             logger.error(f"Vector store smoke test failed: {e}", exc_info=True)
             # Do not block app startup for smoke test failures
@@ -456,8 +392,6 @@ class StartupController:
         
         Graceful fallback: If any error occurs, always falls back to memory cache.
         """
-        logger.info("Initializing cache layer...")
-        
         try:
             # Determine cache backend based entirely on .env settings
             should_use_redis = (
@@ -476,9 +410,6 @@ class StartupController:
                 use_redis=should_use_redis,
                 redis_options=redis_options
             )
-            
-            backend_type = "Redis" if should_use_redis else "Memory"
-            logger.info(f"✓ Cache initialized ({backend_type} backend, CACHE_ENABLED={settings.CACHE_ENABLED})")
         
         except Exception as e:
             logger.warning(f"⚠ Cache initialization failed: {e}. Using fallback memory cache.")
@@ -489,7 +420,6 @@ class StartupController:
                     use_redis=False,
                     redis_options=None
                 )
-                logger.info("✓ Fallback memory cache initialized")
             except Exception as fallback_error:
                 logger.error(f"✗ Critical: Even memory cache failed: {fallback_error}")
                 # This should never happen, but log it clearly if it does

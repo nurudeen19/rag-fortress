@@ -280,8 +280,6 @@ class RetrieverService:
                     details={"k": max_k}
                 )
             
-            logger.info(f"Retrieved {len(results)} candidates from vector store")
-            
             # Step 2: Rerank ALL candidates to identify truly relevant documents
             relevant_docs = []
             reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
@@ -509,6 +507,5 @@ def get_retriever_service() -> RetrieverService:
     
     if _retriever_service is None:
         _retriever_service = RetrieverService()
-        logger.info("✓ Retriever service initialized")
     
     return _retriever_service

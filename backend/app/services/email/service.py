@@ -35,7 +35,6 @@ class EmailService:
         self.invitation_builder = InvitationEmailBuilder()
         self.notification_builder = NotificationEmailBuilder()
         self.bulk_notification_builder = BulkNotificationEmailBuilder()
-        logger.info("Email service initialized")
     
     async def send_account_activation(
         self,

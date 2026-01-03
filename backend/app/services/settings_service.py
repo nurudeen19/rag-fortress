@@ -44,7 +44,6 @@ class SettingsService:
             result = await self.session.execute(stmt)
             settings = result.scalars().all()
             
-            logger.info(f"Retrieved {len(settings)} settings" + (f" in category '{category}'" if category else ""))
             return settings
             
         except Exception as e:
@@ -154,7 +153,6 @@ class SettingsService:
             # Invalidate cache after creation
             await self._invalidate_cache()
             
-            logger.info(f"Created setting '{key}' in category '{category}'")
             return setting
             
         except IntegrityError as e:

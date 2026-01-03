@@ -61,10 +61,6 @@ class FileUploadService:
             self.session.add(file_upload)
             await self.session.flush()
             
-            logger.info(
-                f"Created upload: {data.file_name} "
-                f"(size={data.file_size}, security={security_level.name}, dept={data.department_id})"
-            )
             return file_upload
         
         except Exception as e:
@@ -124,7 +120,6 @@ class FileUploadService:
             self.session.add(file_upload)
             await self.session.flush()
             
-            logger.info(f"Created upload: {file_name} (size={file_size}, security={security_level.name})")
             return file_upload
         
         except Exception as e:
@@ -210,8 +205,6 @@ class FileUploadService:
                     max_retries=2
                 )
                 
-                logger.info(f"Created ingestion job {job.id} for file {file_id}")
-                
                 return {
                     "success": True,
                     "file_upload": file_upload,
@@ -284,8 +277,6 @@ class FileUploadService:
                     max_retries=2
                 )
                 
-                logger.info(f"Created ingestion job {job.id} for file {file_id}")
-                
                 return {
                     "success": True,
                     "job_id": job.id,
@@ -340,7 +331,6 @@ class FileUploadService:
         file_upload.mark_processed(chunks_created, processing_time_ms)
         await self.session.flush()
         
-        logger.info(f"Processed: {file_upload.file_name} (chunks={chunks_created}, time={processing_time_ms}ms)")
         return file_upload
     
     async def mark_failed(self, file_id: int, error: str) -> FileUpload:
@@ -574,8 +564,6 @@ class FileUploadService:
             # Read and return file content
             with open(full_path, "rb") as f:
                 file_content = f.read()
-            
-            logger.info(f"Retrieved file content for file_id={file_id}, user_id={user_id}")
             
             return {
                 "success": True,

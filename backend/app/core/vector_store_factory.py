@@ -90,7 +90,6 @@ def _create_vector_store(
         config["collection_name"] = collection_name
     config.update(kwargs)
     
-    logger.info(f"Initializing vector store: {provider}")
     # === FAISS (Default for Python 3.14+) ===
     if provider == "faiss":
         try:
@@ -113,7 +112,6 @@ def _create_vector_store(
                     embeddings,
                     allow_dangerous_deserialization=True
                 )
-                logger.info(f"✓ FAISS loaded from disk: {config['collection_name']}")
             except Exception as e:
                 logger.warning(f"Failed to load FAISS index, creating new one: {e}")
                 # Create empty FAISS store with a dummy document
@@ -129,7 +127,6 @@ def _create_vector_store(
                 [Document(page_content="init", metadata={"init": True})],
                 embeddings
             )
-            logger.info(f"✓ FAISS initialized (new): {config['collection_name']}")
         
         # Store the persist path for later saving
         store._persist_directory = persist_directory
@@ -156,7 +153,6 @@ def _create_vector_store(
             embedding_function=embeddings,
             persist_directory=config["persist_directory"]
         )
-        logger.info(f"✓ Chroma initialized: {config['collection_name']}")
         return store
     
     # === Qdrant ===
@@ -180,7 +176,6 @@ def _create_vector_store(
             collection_name=config["collection_name"],
             embedding=embeddings
         )
-        logger.info(f"✓ Qdrant initialized: {config['collection_name']}")
         return store
     
     # === Pinecone ===
@@ -197,7 +192,6 @@ def _create_vector_store(
             index_name=config["collection_name"],
             embedding=embeddings
         )
-        logger.info(f"✓ Pinecone initialized: {config['collection_name']}")
         return store
     
     # === Weaviate ===
@@ -221,7 +215,6 @@ def _create_vector_store(
             index_name=config["collection_name"],
             embedding=embeddings
         )
-        logger.info(f"✓ Weaviate initialized: {config['collection_name']}")
         return store
     
     else:
@@ -276,7 +269,6 @@ def get_retriever(
         search_kwargs={"k": k}
     )
     
-    logger.info(f"✓ Retriever initialized (top_k={k})")
     return _retriever_instance
 
 
@@ -312,8 +304,6 @@ def save_vector_store(vector_store: VectorStore) -> bool:
             # Save to disk
             index_path = os.path.join(persist_dir, collection_name)
             vector_store.save_local(index_path)
-            
-            logger.info(f"✓ FAISS index saved to: {index_path}")
             return True
         else:
             # Other providers handle persistence automatically

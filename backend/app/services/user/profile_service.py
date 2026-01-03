@@ -97,7 +97,6 @@ class UserProfileService:
                 "job_title": profile.job_title if profile else None,
             }
             
-            logger.info(f"Retrieved profile for user {user.username}")
             return profile_data, None
             
         except Exception as e:
@@ -167,7 +166,6 @@ class UserProfileService:
                 profile = UserProfile(user_id=user_id)
                 self.session.add(profile)
                 await self.session.flush()
-                logger.info(f"Created new UserProfile for user {user.username}")
             
             # Update profile fields
             profile_updates = {}

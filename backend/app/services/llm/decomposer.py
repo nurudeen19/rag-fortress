@@ -41,8 +41,6 @@ class QueryDecomposer:
             settings.prompt_settings.DECOMPOSER_USER_PROMPT
         )
         self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
-        
-        logger.info("QueryDecomposer initialized with structured output")
     
     async def decompose(self, query: str) -> Optional[QueryDecompositionResult]:
         """

@@ -42,8 +42,6 @@ class LLMIntentClassifier:
             settings.prompt_settings.CLASSIFIER_USER_PROMPT
         )
         self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
-        
-        logger.info("LLMIntentClassifier initialized with structured output")
     
     async def classify(self, query: str) -> Optional[LLMClassificationResult]:
         """

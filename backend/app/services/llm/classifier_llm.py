@@ -47,7 +47,6 @@ def get_classifier_llm():
                 temperature=config["temperature"],
                 max_tokens=config["max_tokens"]
             )
-            logger.info(f"Initialized classifier LLM: OpenAI/{config['model']}")
         
         elif provider == "google":
             _classifier_llm = ChatGoogleGenerativeAI(
@@ -56,7 +55,6 @@ def get_classifier_llm():
                 temperature=config["temperature"],
                 max_output_tokens=config["max_tokens"]
             )
-            logger.info(f"Initialized classifier LLM: Google/{config['model']}")
         
         elif provider == "llamacpp":
             # For llamacpp, use OpenAI-compatible endpoint
@@ -68,7 +66,6 @@ def get_classifier_llm():
                     temperature=config["temperature"],
                     max_tokens=config["max_tokens"]
                 )
-                logger.info(f"Initialized classifier LLM: LlamaCPP endpoint/{config['model']}")
             else:
                 logger.warning("Classifier LLM: llamacpp local mode not supported, using OpenAI endpoint mode")
                 return None

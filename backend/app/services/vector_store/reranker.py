@@ -28,7 +28,6 @@ class RerankerService:
         """
         self.model_name = model_name
         self._model = None
-        logger.info(f"Reranker service initialized with model: {model_name}")
     
     def _load_model(self):
         """Lazy load the cross-encoder model."""
