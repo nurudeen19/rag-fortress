@@ -6,7 +6,6 @@ User Feedback Loop: Add endpoints to allow users to rate responses (thumbs up/do
 
 # Next Version items
 + history encryption
-+ reranker by user choice
 + hybrid search introduction
 + frontend conversation cache tightning 
 + better security handling of auth keys and all sensitive keys

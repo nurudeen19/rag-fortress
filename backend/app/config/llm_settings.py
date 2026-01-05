@@ -15,54 +15,48 @@ class LLMSettings(BaseSettings):
     
     model_config = SettingsConfigDict(extra="ignore")
     
-    # Provider selection
+    # ============================================================================
+    # PRIMARY LLM CONFIGURATION
+    # ============================================================================
+    # Provider selection: openai, google, huggingface, llamacpp
     LLM_PROVIDER: str = Field("openai", env="LLM_PROVIDER")
     
-    # OpenAI Provider
-    OPENAI_API_KEY: Optional[str] = Field(None, env="OPENAI_API_KEY")
-    OPENAI_MODEL: str = Field("gpt-3.5-turbo", env="OPENAI_MODEL")
-    OPENAI_TEMPERATURE: float = Field(0.7, env="OPENAI_TEMPERATURE")
-    OPENAI_MAX_TOKENS: int = Field(2000, env="OPENAI_MAX_TOKENS")
+    # Generic fields for all providers
+    LLM_API_KEY: Optional[str] = Field(None, env="LLM_API_KEY")
+    LLM_MODEL: str = Field("gpt-3.5-turbo", env="LLM_MODEL")
+    LLM_TEMPERATURE: float = Field(0.7, env="LLM_TEMPERATURE")
+    LLM_MAX_TOKENS: int = Field(2000, env="LLM_MAX_TOKENS")
+    
+    # Optional provider-specific fields (user fills only when applicable)
+    LLM_ENDPOINT_URL: Optional[str] = Field(None, env="LLM_ENDPOINT_URL")
+    LLM_MODEL_PATH: Optional[str] = Field(None, env="LLM_MODEL_PATH")
+    LLM_MODE: Optional[str] = Field(None, env="LLM_MODE")  # For llamacpp: 'local' or 'api'
+    LLM_TIMEOUT: Optional[int] = Field(None, env="LLM_TIMEOUT")
+    LLM_TASK: Optional[str] = Field(None, env="LLM_TASK")  # For huggingface
+    
+    # Llamacpp-specific advanced options
+    LLM_CONTEXT_SIZE: Optional[int] = Field(None, env="LLM_CONTEXT_SIZE")
+    LLM_N_THREADS: Optional[int] = Field(None, env="LLM_N_THREADS")
+    LLM_N_BATCH: Optional[int] = Field(None, env="LLM_N_BATCH")
 
-    # Google Provider
-    GOOGLE_API_KEY: Optional[str] = Field(None, env="GOOGLE_API_KEY")
-    GOOGLE_MODEL: str = Field("gemini-pro", env="GOOGLE_MODEL")
-    GOOGLE_TEMPERATURE: float = Field(0.7, env="GOOGLE_TEMPERATURE")
-    GOOGLE_MAX_TOKENS: int = Field(2000, env="GOOGLE_MAX_TOKENS")
-
-    # HuggingFace Provider (hosted endpoints)
-    HF_API_TOKEN: Optional[str] = Field(None, env="HF_API_TOKEN")
-    HF_MODEL: Optional[str] = Field("meta-llama/Llama-2-7b-chat-hf", env="HF_MODEL")
-    HF_ENDPOINT_URL: Optional[str] = Field(None, env="HF_ENDPOINT_URL")
-    HF_TASK: str = Field("text-generation", env="HF_TASK")
-    HF_TEMPERATURE: float = Field(0.7, env="HF_TEMPERATURE")
-    HF_MAX_TOKENS: int = Field(2000, env="HF_MAX_TOKENS")
-    HF_TIMEOUT: int = Field(120, env="HF_TIMEOUT")
-
-    # Fallback LLM configuration
+    # ============================================================================
+    # FALLBACK LLM CONFIGURATION (Optional)
+    # ============================================================================
     ENABLE_FALLBACK_LLM: bool = Field(False, env="ENABLE_FALLBACK_LLM")
     FALLBACK_LLM_PROVIDER: Optional[str] = Field(None, env="FALLBACK_LLM_PROVIDER")
     FALLBACK_LLM_API_KEY: Optional[str] = Field(None, env="FALLBACK_LLM_API_KEY")
     FALLBACK_LLM_MODEL: Optional[str] = Field(None, env="FALLBACK_LLM_MODEL")
     FALLBACK_LLM_TEMPERATURE: Optional[float] = Field(None, env="FALLBACK_LLM_TEMPERATURE")
     FALLBACK_LLM_MAX_TOKENS: Optional[int] = Field(None, env="FALLBACK_LLM_MAX_TOKENS")
-    FALLBACK_LLAMACPP_MODE: Optional[str] = Field(None, env="FALLBACK_LLAMACPP_MODE")
+    FALLBACK_LLM_ENDPOINT_URL: Optional[str] = Field(None, env="FALLBACK_LLM_ENDPOINT_URL")
+    FALLBACK_LLM_MODEL_PATH: Optional[str] = Field(None, env="FALLBACK_LLM_MODEL_PATH")
+    FALLBACK_LLM_MODE: Optional[str] = Field(None, env="FALLBACK_LLM_MODE")
+    FALLBACK_LLM_TIMEOUT: Optional[int] = Field(None, env="FALLBACK_LLM_TIMEOUT")
+    FALLBACK_LLM_TASK: Optional[str] = Field(None, env="FALLBACK_LLM_TASK")
 
-
-    # Llama.cpp Provider (local or endpoint)
-    LLAMACPP_MODE: str = Field("api", env="LLAMACPP_MODE")
-    LLAMACPP_MODEL_PATH: Optional[str] = Field(None, env="LLAMACPP_MODEL_PATH")
-    LLAMACPP_TEMPERATURE: float = Field(0.1, env="LLAMACPP_TEMPERATURE")
-    LLAMACPP_MAX_TOKENS: int = Field(512, env="LLAMACPP_MAX_TOKENS")
-    LLAMACPP_CONTEXT_SIZE: int = Field(4096, env="LLAMACPP_CONTEXT_SIZE")
-    LLAMACPP_N_THREADS: int = Field(4, env="LLAMACPP_N_THREADS")
-    LLAMACPP_N_BATCH: int = Field(512, env="LLAMACPP_N_BATCH")
-    LLAMACPP_ENDPOINT_URL: Optional[str] = Field(None, env="LLAMACPP_ENDPOINT_URL")
-    LLAMACPP_ENDPOINT_MODEL: Optional[str] = Field(None, env="LLAMACPP_ENDPOINT_MODEL")
-    LLAMACPP_ENDPOINT_API_KEY: Optional[str] = Field(None, env="LLAMACPP_ENDPOINT_API_KEY")
-    LLAMACPP_ENDPOINT_TIMEOUT: int = Field(120, env="LLAMACPP_ENDPOINT_TIMEOUT")
-
-    # Internal LLM Provider
+    # ============================================================================
+    # INTERNAL LLM CONFIGURATION (Optional - for sensitive documents)
+    # ============================================================================
     USE_INTERNAL_LLM: bool = Field(False, env="USE_INTERNAL_LLM")
     INTERNAL_LLM_PROVIDER: Optional[str] = Field(None, env="INTERNAL_LLM_PROVIDER")
     INTERNAL_LLM_API_KEY: Optional[str] = Field(None, env="INTERNAL_LLM_API_KEY")
@@ -74,28 +68,20 @@ class LLMSettings(BaseSettings):
     INTERNAL_LLM_TIMEOUT: int = Field(120, env="INTERNAL_LLM_TIMEOUT")
     INTERNAL_LLM_MODE: Optional[str] = Field(None, env="INTERNAL_LLM_MODE")
 
-    # Intent Classifier Configuration (LLM-based and heuristic)
+    # ============================================================================
+    # CLASSIFIER/DECOMPOSER CONFIGURATION
+    # ============================================================================
     ENABLE_LLM_CLASSIFIER: bool = Field(False, env="ENABLE_LLM_CLASSIFIER")
     ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
     INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
-    
-    # Query Decomposer Configuration
     ENABLE_QUERY_DECOMPOSER: bool = Field(False, env="ENABLE_QUERY_DECOMPOSER")
     
     # Optional: Override primary LLM for classifier/decomposer
     CLASSIFIER_LLM_PROVIDER: Optional[str] = Field(None, env="CLASSIFIER_LLM_PROVIDER")
     CLASSIFIER_LLM_API_KEY: Optional[str] = Field(None, env="CLASSIFIER_LLM_API_KEY")
     CLASSIFIER_LLM_MODEL: Optional[str] = Field(None, env="CLASSIFIER_LLM_MODEL")
-    
-    # HuggingFace-specific classifier fields
-    CLASSIFIER_HF_ENDPOINT_URL: Optional[str] = Field(None, env="CLASSIFIER_HF_ENDPOINT_URL")
-    CLASSIFIER_HF_TASK: str = Field("text-generation", env="CLASSIFIER_HF_TASK")
-    CLASSIFIER_HF_TIMEOUT: int = Field(120, env="CLASSIFIER_HF_TIMEOUT")
-    
-    # Llama.cpp-specific classifier fields
-    CLASSIFIER_LLAMACPP_MODE: Optional[str] = Field(None, env="CLASSIFIER_LLAMACPP_MODE")
-    CLASSIFIER_LLAMACPP_ENDPOINT_URL: Optional[str] = Field(None, env="CLASSIFIER_LLAMACPP_ENDPOINT_URL")
-    CLASSIFIER_LLAMACPP_TIMEOUT: int = Field(120, env="CLASSIFIER_LLAMACPP_TIMEOUT")
+    CLASSIFIER_LLM_ENDPOINT_URL: Optional[str] = Field(None, env="CLASSIFIER_LLM_ENDPOINT_URL")
+    CLASSIFIER_LLM_TIMEOUT: Optional[int] = Field(None, env="CLASSIFIER_LLM_TIMEOUT")
 
 
     def get_classifier_llm_config(self) -> Optional[dict]:
@@ -271,18 +257,18 @@ class LLMSettings(BaseSettings):
 
     # Provider-specific builders - use their own env vars by default, accept optional config overrides
     def _build_openai_config(self, config: Optional[dict] = None) -> dict:
-        """Build OpenAI configuration - uses env vars by default, accepts optional overrides."""
+        """Build OpenAI configuration - uses consolidated env vars by default, accepts optional overrides."""
         config = config or {}
         
-        api_key = config.get("api_key") or self.OPENAI_API_KEY
-        model = config.get("model") or self.OPENAI_MODEL
-        temperature = config.get("temperature") or self.OPENAI_TEMPERATURE
-        max_tokens = config.get("max_tokens") or self.OPENAI_MAX_TOKENS
+        api_key = config.get("api_key") or self.LLM_API_KEY
+        model = config.get("model") or self.LLM_MODEL
+        temperature = config.get("temperature") if config.get("temperature") is not None else self.LLM_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.LLM_MAX_TOKENS
         
         if not api_key:
-            raise ValueError("OpenAI API key is required")
+            raise ValueError("OpenAI API key is required (set LLM_API_KEY)")
         if not model:
-            raise ValueError("OpenAI model is required")
+            raise ValueError("OpenAI model is required (set LLM_MODEL)")
         
         return {
             "provider": "openai",
@@ -293,18 +279,18 @@ class LLMSettings(BaseSettings):
         }
 
     def _build_google_config(self, config: Optional[dict] = None) -> dict:
-        """Build Google configuration - uses env vars by default, accepts optional overrides."""
+        """Build Google configuration - uses consolidated env vars by default, accepts optional overrides."""
         config = config or {}
         
-        api_key = config.get("api_key") or self.GOOGLE_API_KEY
-        model = config.get("model") or self.GOOGLE_MODEL
-        temperature = config.get("temperature") or self.GOOGLE_TEMPERATURE
-        max_tokens = config.get("max_tokens") or self.GOOGLE_MAX_TOKENS
+        api_key = config.get("api_key") or self.LLM_API_KEY
+        model = config.get("model") or self.LLM_MODEL
+        temperature = config.get("temperature") if config.get("temperature") is not None else self.LLM_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.LLM_MAX_TOKENS
         
         if not api_key:
-            raise ValueError("Google API key is required")
+            raise ValueError("Google API key is required (set LLM_API_KEY)")
         if not model:
-            raise ValueError("Google model is required")
+            raise ValueError("Google model is required (set LLM_MODEL)")
         
         return {
             "provider": "google",
@@ -315,21 +301,21 @@ class LLMSettings(BaseSettings):
         }
 
     def _build_huggingface_config(self, config: Optional[dict] = None) -> dict:
-        """Build HuggingFace configuration - uses env vars by default, accepts optional overrides."""
+        """Build HuggingFace configuration - uses consolidated env vars by default, accepts optional overrides."""
         config = config or {}
         
-        api_key = config.get("api_key") or self.HF_API_TOKEN
-        model = config.get("model") or self.HF_MODEL
-        endpoint_url = config.get("endpoint_url") or self.HF_ENDPOINT_URL
-        task = config.get("task") or self.HF_TASK
-        temperature = config.get("temperature") or self.HF_TEMPERATURE
-        max_tokens = config.get("max_tokens") or self.HF_MAX_TOKENS
-        timeout = config.get("timeout") or self.HF_TIMEOUT
+        api_key = config.get("api_key") or self.LLM_API_KEY
+        model = config.get("model") or self.LLM_MODEL
+        endpoint_url = config.get("endpoint_url") or self.LLM_ENDPOINT_URL
+        task = config.get("task") or self.LLM_TASK or "text-generation"
+        temperature = config.get("temperature") if config.get("temperature") is not None else self.LLM_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.LLM_MAX_TOKENS
+        timeout = config.get("timeout") or self.LLM_TIMEOUT or 120
         
         if not api_key:
-            raise ValueError("HuggingFace API token is required")
+            raise ValueError("HuggingFace API token is required (set LLM_API_KEY)")
         if not (model or endpoint_url):
-            raise ValueError("HuggingFace model or endpoint URL is required")
+            raise ValueError("HuggingFace model or endpoint URL is required (set LLM_MODEL or LLM_ENDPOINT_URL)")
         
         return {
             "provider": "huggingface",
@@ -344,7 +330,7 @@ class LLMSettings(BaseSettings):
 
     def _build_llamacpp_config(self, config: Optional[dict] = None) -> dict:
         """
-        Build llama.cpp configuration - uses env vars by default, accepts optional overrides.
+        Build llama.cpp configuration - uses consolidated env vars by default, accepts optional overrides.
         
         Mode determines which fields are included:
         - 'api' or 'endpoint': Returns endpoint-only config (no model_path)
@@ -352,42 +338,42 @@ class LLMSettings(BaseSettings):
         """
         config = config or {}
         
-        mode = config.get("mode") or self.LLAMACPP_MODE
-        model_path = config.get("model_path") or self.LLAMACPP_MODEL_PATH
-        endpoint_url = self.LLAMACPP_ENDPOINT_URL
-        endpoint_model = self.LLAMACPP_ENDPOINT_MODEL
-        endpoint_api_key = self.LLAMACPP_ENDPOINT_API_KEY
-        endpoint_timeout = self.LLAMACPP_ENDPOINT_TIMEOUT
-        temperature = config.get("temperature") or self.LLAMACPP_TEMPERATURE
-        max_tokens = config.get("max_tokens") or self.LLAMACPP_MAX_TOKENS
-        context_size = self.LLAMACPP_CONTEXT_SIZE
-        n_threads = self.LLAMACPP_N_THREADS
-        n_batch = self.LLAMACPP_N_BATCH
+        mode = config.get("mode") or self.LLM_MODE or "api"
+        model_path = config.get("model_path") or self.LLM_MODEL_PATH
+        endpoint_url = config.get("endpoint_url") or self.LLM_ENDPOINT_URL
+        model = config.get("model") or self.LLM_MODEL
+        api_key = config.get("api_key") or self.LLM_API_KEY
+        temperature = config.get("temperature") if config.get("temperature") is not None else self.LLM_TEMPERATURE
+        max_tokens = config.get("max_tokens") or self.LLM_MAX_TOKENS
+        timeout = config.get("timeout") or self.LLM_TIMEOUT or 120
+        context_size = config.get("context_size") or self.LLM_CONTEXT_SIZE or 4096
+        n_threads = config.get("n_threads") or self.LLM_N_THREADS or 4
+        n_batch = config.get("n_batch") or self.LLM_N_BATCH or 512
         
         normalized_mode = (mode or "api").lower()
         
         # API/Endpoint mode: use OpenAI-compatible endpoint
         if normalized_mode in ("api", "endpoint"):
             if not endpoint_url:
-                raise ValueError("llama.cpp endpoint URL is required for api mode")
-            if not endpoint_model:
-                raise ValueError("llama.cpp endpoint model is required for api mode")
+                raise ValueError("llama.cpp endpoint URL is required for api mode (set LLM_ENDPOINT_URL)")
+            if not model:
+                raise ValueError("llama.cpp model is required for api mode (set LLM_MODEL)")
             
             return {
                 "provider": "llamacpp",
                 "mode": "endpoint",
                 "endpoint_url": endpoint_url,
-                "model": endpoint_model,
-                "api_key": endpoint_api_key,
+                "model": model,
+                "api_key": api_key,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
-                "timeout": endpoint_timeout
+                "timeout": timeout
             }
         
         # Local mode: use local GGUF model file
         if normalized_mode == "local":
             if not model_path:
-                raise ValueError("llama.cpp model path is required for local mode")
+                raise ValueError("llama.cpp model path is required for local mode (set LLM_MODEL_PATH)")
             
             return {
                 "provider": "llamacpp",
@@ -401,3 +387,4 @@ class LLMSettings(BaseSettings):
             }
         
         raise ValueError(f"Invalid llama.cpp mode: {mode}. Must be 'api' or 'local'")
+
