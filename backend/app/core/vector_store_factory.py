@@ -42,21 +42,17 @@ def _validate_hybrid_search_config(provider: str, config: dict) -> None:
     # Providers that natively support hybrid search (dense + sparse vectors)
     hybrid_supported_providers = {"qdrant", "weaviate", "milvus"}
     
-    if provider in hybrid_supported_providers:
-        logger.info(
-            f"✓ Hybrid search: ENABLED for {provider.upper()} "
-            "(dense + sparse vectors with Reciprocal Rank Fusion)"
-        )
-    else:
+    if not provider in hybrid_supported_providers:
         logger.error(
-            f"✗ HYBRID SEARCH ERROR: {provider.upper()} does not support hybrid search. "
+            f"✗ HYBRID SEARCH ERROR: {provider.upper()} does not support hybrid search natively. "
             f"Supported providers: {', '.join(sorted(hybrid_supported_providers))}"
         )
         raise VectorStoreError(
-            f"Hybrid search enabled but {provider.upper()} does not support it. "
+            f"Hybrid search enabled but {provider.upper()} does not support it natively. "
             f"Set ENABLE_HYBRID_SEARCH=false or switch to one of: {', '.join(sorted(hybrid_supported_providers))}",
             provider=provider
         )
+       
 
 
 def get_vector_store(
