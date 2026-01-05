@@ -26,14 +26,15 @@ def _validate_hybrid_search_config(provider: str, config: dict) -> None:
     """
     Validate hybrid search configuration against vector store provider.
     
+    If hybrid search is enabled but the provider doesn't support it,
+    logs a warning but does not block startup. Only vector search will be used.
+    
     Args:
         provider: Vector store provider name
         config: Vector database configuration dict
-        
-    Raises:
-        VectorStoreError: If hybrid search is enabled but provider doesn't support it
     """
     hybrid_enabled = config.get("hybrid_search", False)
+    
     
     if not hybrid_enabled:
         logger.info("Hybrid search: DISABLED")
@@ -42,17 +43,18 @@ def _validate_hybrid_search_config(provider: str, config: dict) -> None:
     # Providers that natively support hybrid search (dense + sparse vectors)
     hybrid_supported_providers = {"qdrant", "weaviate", "milvus"}
     
-    if not provider in hybrid_supported_providers:
-        logger.error(
-            f"✗ HYBRID SEARCH ERROR: {provider.upper()} does not support hybrid search natively. "
-            f"Supported providers: {', '.join(sorted(hybrid_supported_providers))}"
+    if provider in hybrid_supported_providers:
+        logger.info(
+            f"✓ Hybrid search: ENABLED for {provider.upper()} "
+            "(dense + sparse vectors)"
         )
-        raise VectorStoreError(
-            f"Hybrid search enabled but {provider.upper()} does not support it natively. "
-            f"Set ENABLE_HYBRID_SEARCH=false or switch to one of: {', '.join(sorted(hybrid_supported_providers))}",
-            provider=provider
+    else:
+        logger.warning(
+            f"⚠ HYBRID SEARCH WARNING: {provider.upper()} does not support hybrid search natively. "
+            f"Hybrid search is only available for: {', '.join(sorted(hybrid_supported_providers))}. "
+            f"Application will use standard vector search only. "
+            f"To enable hybrid search, switch to one of the supported providers or set ENABLE_HYBRID_SEARCH=false"
         )
-       
 
 
 def get_vector_store(
@@ -115,10 +117,10 @@ def _create_vector_store(
     Returns:
         VectorStore instance
     """
-    provider = (provider or settings.VECTOR_DB_PROVIDER).lower()
-    
-    # Get config from composed settings
+    # Get config from composed settings   
     config = settings.get_vector_db_config()
+    provider = (provider or config["provider"]).lower()    
+     
     if collection_name:
         config["collection_name"] = collection_name
     config.update(kwargs)
