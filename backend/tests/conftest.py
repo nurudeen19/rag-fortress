@@ -19,6 +19,26 @@ def pytest_configure(config):
 
 
 @pytest.fixture
+def base_env():
+    """Provide base environment variables for tests."""
+    return {
+        "APP_NAME": "RAG Fortress",
+        "APP_DESCRIPTION": "Secure document intelligence platform for teams",
+        "APP_VERSION": "1.0.0",
+        "DEBUG": "True",
+        "ENVIRONMENT": "development",
+        "LLM_PROVIDER": "openai",
+        "LLM_API_KEY": "test_key",
+        "LLM_MODEL": "gpt-4",
+        "LLM_TEMPERATURE": "0.7",
+        "LLM_MAX_TOKENS": "2000",
+        "EMBEDDING_PROVIDER": "huggingface",
+        "EMBEDDING_MODEL": "sentence-transformers/all-MiniLM-L6-v2",
+        "VECTOR_DB_PROVIDER": "chroma",
+    }
+
+
+@pytest.fixture
 async def clean_test_settings(db_session):
     """Clean up test settings before and after each test."""
     from sqlalchemy import text
