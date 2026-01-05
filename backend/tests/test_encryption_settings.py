@@ -151,12 +151,12 @@ class TestEncryptionSecurity:
         settings_obj = Settings(cached_settings=cached_settings)
         
         # Access the value - should decrypt
-        accessed_value = settings_obj.COHERE_API_KEY
+        accessed_value = settings_obj.EMBEDDING_API_KEY
         
         assert accessed_value == test_api_key  # Decrypted!
         
         # Verify internal storage still encrypted
-        stored_value = settings_obj._encrypted_settings['COHERE_API_KEY']
+        stored_value = settings_obj._encrypted_settings['EMBEDDING_API_KEY']
         assert stored_value != test_api_key
     
     @pytest.mark.asyncio
