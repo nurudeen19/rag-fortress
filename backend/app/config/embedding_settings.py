@@ -2,7 +2,7 @@
 Embedding provider configuration settings.
 """
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,6 +29,14 @@ class EmbeddingSettings(BaseSettings):
     EMBEDDING_DEVICE: Optional[str] = Field(None, env="EMBEDDING_DEVICE")  # For HuggingFace
     EMBEDDING_TASK_TYPE: Optional[str] = Field(None, env="EMBEDDING_TASK_TYPE")  # For Google
     EMBEDDING_INPUT_TYPE: Optional[str] = Field(None, env="EMBEDDING_INPUT_TYPE")  # For Cohere
+    
+    @field_validator("EMBEDDING_DIMENSIONS", mode="before")
+    @classmethod
+    def validate_embedding_dimensions(cls, v):
+        """Convert empty strings to None for optional int field."""
+        if v == "" or v is None:
+            return None
+        return int(v) if isinstance(v, str) else v
     
 
     def validate_config(self):
