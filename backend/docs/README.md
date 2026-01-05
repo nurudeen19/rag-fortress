@@ -51,6 +51,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Embedding providers comparison
   - Vector database comparison
   - Provider selection guide
+  - **Hybrid Search** (dense + sparse vectors) - Qdrant, Weaviate, Milvus
   - Metadata filtering
   - Migration between providers
 

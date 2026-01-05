@@ -253,6 +253,9 @@ class RetrieverService:
         
         Flow:
         1. Retrieve candidates based on similarity scores
+           - Uses hybrid search (dense + sparse vectors) if ENABLE_HYBRID_SEARCH=True
+           - Hybrid search is transparent: vector store handles fusion automatically
+           - Falls back to dense-only search if hybrid not configured
         2. Rerank for relevance if enabled (on ALL candidates)
         3. Apply security filtering to relevant results (unless skip_security_filter=True)
         4. Decide outcome:
@@ -260,18 +263,26 @@ class RetrieverService:
            - Relevant + blocked → insufficient clearance with dept names
            - Nothing relevant → no context found
         
+        Hybrid Search Details:
+        - Qdrant: Uses RetrievalMode.HYBRID with BM25 sparse embeddings (FastEmbed)
+        - Weaviate: Native BM25F via alpha parameter (no special config needed)
+        - Milvus: Uses BM25BuiltInFunction with separate dense/sparse vectors
+        - Results are fused using RRF (Reciprocal Rank Fusion) by default
+        
         Args:
             skip_security_filter: If True, return documents without security filtering
         """
         try:
             # Step 1: Retrieve candidates from vector store
-            final_k = top_k or self.settings.app_settings.TOP_K
+            # NOTE: Hybrid search (if enabled) happens automatically here via vector store config
+            top_k = top_k or self.settings.app_settings.TOP_K
             max_k = self.settings.app_settings.MAX_K
             vector_store = self.retriever.vectorstore
             
-            logger.info(f"Retrieving candidates: max_k={max_k}, final_k={final_k}")
+            logger.info(f"Retrieving candidates: max_k={max_k}, top_k={top_k}")
             
             try:
+                # This method automatically uses hybrid search if configured in vector store
                 results = vector_store.similarity_search_with_score(query_text, k=max_k)
             except (AttributeError, NotImplementedError):
                 logger.warning("Vector store doesn't support scores, falling back")
@@ -293,11 +304,11 @@ class RetrieverService:
             if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
                 docs_to_rerank = [doc for doc, _ in results]
                 
-                logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {final_k})")
+                logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {top_k})")
                 reranked_docs, reranked_scores = self.reranker.rerank(
                     query_text,
                     docs_to_rerank,
-                    top_k=final_k
+                    top_k=top_k
                 )
                 
                 # Filter by reranker threshold to get truly relevant docs

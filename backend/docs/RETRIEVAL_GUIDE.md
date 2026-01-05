@@ -79,6 +79,9 @@ RERANKER_SCORE_THRESHOLD=0.5    # Minimum reranker score (0.0-1.0)
 
 ```
 1. Retrieve MAX_K candidates from vector store
+   - Uses hybrid search (dense + sparse) if ENABLE_HYBRID_SEARCH=True
+   - Hybrid results automatically fused via RRF (Reciprocal Rank Fusion)
+   - Falls back to dense-only if hybrid not configured
 2. Apply security filtering (remove inaccessible docs)
 3. If reranker enabled:
    a. Rerank all candidates using cross-encoder
@@ -90,6 +93,8 @@ RERANKER_SCORE_THRESHOLD=0.5    # Minimum reranker score (0.0-1.0)
 5. If no quality results:
    - Return empty with no context message
 ```
+
+**Note:** Hybrid search is transparent - when enabled via `ENABLE_HYBRID_SEARCH=true`, the vector store automatically combines dense (semantic) and sparse (keyword/BM25) search. No code changes needed in retrieval logic. See [VECTOR_STORES_GUIDE.md](VECTOR_STORES_GUIDE.md#hybrid-search-dense--sparse-vectors) for configuration details.
 
 ## Reranking System
 

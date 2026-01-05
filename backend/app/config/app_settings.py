@@ -47,7 +47,7 @@ class AppSettings(BaseSettings):
     CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")
     
     # Retrieval Configuration
-    TOP_K: int = Field(5, env="TOP_K")  # Final number of results to return
+    TOP_K: int = Field(3, env="TOP_K")  # Final number of results to return
     MAX_K: int = Field(15, env="MAX_K")  # Maximum candidates to retrieve before reranking
     RETRIEVAL_SCORE_THRESHOLD: float = Field(0.5, env="RETRIEVAL_SCORE_THRESHOLD")
     SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
