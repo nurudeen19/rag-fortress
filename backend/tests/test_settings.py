@@ -75,8 +75,8 @@ class TestLLMConfiguration:
         """Test OpenAI provider configuration from ENV."""
         env = {
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_openai_key",
-            "OPENAI_MODEL": "gpt-4",
+            "LLM_API_KEY": "test_openai_key",
+            "LLM_MODEL": "gpt-4",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -94,8 +94,8 @@ class TestLLMConfiguration:
         """Test Google provider configuration from ENV."""
         env = {
             "LLM_PROVIDER": "google",
-            "GOOGLE_API_KEY": "test_google_key",
-            "GOOGLE_MODEL": "gemini-pro",
+            "LLM_API_KEY": "test_google_key",
+            "LLM_MODEL": "gemini-pro",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -111,11 +111,11 @@ class TestLLMConfiguration:
         """Test HuggingFace provider configuration from ENV."""
         env = {
             "LLM_PROVIDER": "huggingface",
-            "HF_API_TOKEN": "test_hf_token",
-            "HF_MODEL": "meta-llama/Llama-2-7b-chat-hf",
-            "HF_ENDPOINT_URL": "https://example.endpoints.huggingface.cloud",
-            "HF_TASK": "text-generation",
-            "HF_TIMEOUT": "90",
+            "LLM_API_KEY": "test_hf_token",
+            "LLM_MODEL": "meta-llama/Llama-2-7b-chat-hf",
+            "LLM_ENDPOINT_URL": "https://example.endpoints.huggingface.cloud",
+            "LLM_TASK": "text-generation",
+            "LLM_TIMEOUT": "90",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -134,12 +134,12 @@ class TestLLMConfiguration:
         """Test llama.cpp provider configuration from ENV."""
         env = {
             "LLM_PROVIDER": "llamacpp",
-            "LLAMACPP_MODEL_PATH": "/models/llama-3.1.gguf",
-            "LLAMACPP_TEMPERATURE": "0.2",
-            "LLAMACPP_MAX_TOKENS": "256",
-            "LLAMACPP_CONTEXT_SIZE": "2048",
-            "LLAMACPP_N_THREADS": "6",
-            "LLAMACPP_N_BATCH": "128",
+            "LLM_MODEL_PATH": "/models/llama-3.1.gguf",
+            "LLM_TEMPERATURE": "0.2",
+            "LLM_MAX_TOKENS": "256",
+            "LLM_CONTEXT_SIZE": "2048",
+            "LLM_N_THREADS": "6",
+            "LLM_N_BATCH": "128",
         }
 
         with patch.dict(os.environ, env, clear=True):
@@ -160,12 +160,12 @@ class TestLLMConfiguration:
         """Test llama.cpp endpoint configuration when URL is provided."""
         env = {
             "LLM_PROVIDER": "llamacpp",
-            "LLAMACPP_ENDPOINT_URL": "http://localhost:8080/v1",
-            "LLAMACPP_ENDPOINT_MODEL": "llama-3.1-8b-instruct",
-            "LLAMACPP_ENDPOINT_API_KEY": "test_key",
-            "LLAMACPP_TEMPERATURE": "0.3",
-            "LLAMACPP_MAX_TOKENS": "256",
-            "LLAMACPP_ENDPOINT_TIMEOUT": "90",
+            "LLM_ENDPOINT_URL": "http://localhost:8080/v1",
+            "LLM_MODEL": "llama-3.1-8b-instruct",
+            "LLM_API_KEY": "test_key",
+            "LLM_TEMPERATURE": "0.3",
+            "LLM_MAX_TOKENS": "256",
+            "LLM_TIMEOUT": "90",
         }
 
         with patch.dict(os.environ, env, clear=True):
@@ -185,7 +185,7 @@ class TestLLMConfiguration:
         """Endpoint URL works without explicitly declaring a model."""
         env = {
             "LLM_PROVIDER": "llamacpp",
-            "LLAMACPP_ENDPOINT_URL": "http://localhost:8080/v1",
+            "LLM_ENDPOINT_URL": "http://localhost:8080/v1",
         }
 
         with patch.dict(os.environ, env, clear=True):
@@ -208,7 +208,7 @@ class TestLLMConfiguration:
             from app.config.settings import Settings
             settings = Settings()
 
-            with pytest.raises(ValueError, match="LLAMACPP_MODEL_PATH is required"):
+            with pytest.raises(ValueError, match="LLM_MODEL_PATH is required"):
                 settings.get_llm_config()
 
     def test_internal_llamacpp_endpoint_config(self, clean_env):
@@ -258,7 +258,7 @@ class TestLLMConfiguration:
             from app.config.settings import Settings
             settings = Settings()
             
-            with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
+            with pytest.raises(ValueError, match="LLM_API_KEY is required"):
                 settings.get_llm_config()
     
     def test_unsupported_provider_raises_error(self, clean_env):
@@ -281,7 +281,7 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_key",
+            "LLM_API_KEY": "test_key",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -300,8 +300,8 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_key",
-            "OPENAI_MODEL": "gpt-4",
+            "LLM_API_KEY": "test_key",
+            "LLM_MODEL": "gpt-4",
             "FALLBACK_LLM_PROVIDER": "openai",
             "FALLBACK_LLM_API_KEY": "test_key",
             "FALLBACK_LLM_MODEL": "gpt-3.5-turbo",
@@ -324,9 +324,9 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_openai_key",
+            "LLM_API_KEY": "test_openai_key",
             "FALLBACK_LLM_PROVIDER": "google",
-            "GOOGLE_API_KEY": "test_google_key",
+            "FALLBACK_LLM_API_KEY": "test_google_key",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -344,8 +344,8 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_key",
-            "OPENAI_MODEL": "gpt-3.5-turbo",
+            "LLM_API_KEY": "test_key",
+            "LLM_MODEL": "gpt-3.5-turbo",
             "FALLBACK_LLM_PROVIDER": "openai",
             "FALLBACK_LLM_API_KEY": "test_key",
             "FALLBACK_LLM_MODEL": "gpt-3.5-turbo",
@@ -362,8 +362,8 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_key",
-            "OPENAI_MODEL": "gpt-4",
+            "LLM_API_KEY": "test_key",
+            "LLM_MODEL": "gpt-4",
             "FALLBACK_LLM_PROVIDER": "openai",
             "FALLBACK_LLM_API_KEY": "test_key",
             "FALLBACK_LLM_MODEL": "gpt-3.5-turbo",
@@ -384,11 +384,11 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_key",
-            "OPENAI_MODEL": "gpt-4",
+            "LLM_API_KEY": "test_key",
+            "LLM_MODEL": "gpt-4",
             "FALLBACK_LLM_PROVIDER": "openai",
             "FALLBACK_LLM_MODEL": "gpt-3.5-turbo",
-            # No FALLBACK_LLM_API_KEY - should reuse OPENAI_API_KEY
+            # No FALLBACK_LLM_API_KEY - should reuse LLM_API_KEY
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -403,12 +403,12 @@ class TestFallbackLLMConfiguration:
         env = {
             **base_env,
             "LLM_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_openai_key",
-            "OPENAI_MODEL": "gpt-4",
+            "LLM_API_KEY": "test_openai_key",
+            "LLM_MODEL": "gpt-4",
             "FALLBACK_LLM_PROVIDER": "google",
-            "GOOGLE_API_KEY": "test_google_key",
-            "GOOGLE_MODEL": "gemini-pro",
-            # No FALLBACK_LLM_MODEL - should use GOOGLE_MODEL
+            "FALLBACK_LLM_API_KEY": "test_google_key",
+            "FALLBACK_LLM_MODEL": "gemini-pro",
+            # No FALLBACK_LLM_MODEL override - should use provided model
         }
         
         with patch.dict(os.environ, env, clear=True):

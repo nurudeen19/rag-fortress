@@ -49,10 +49,10 @@ class TestEncryptionSecurity:
         
         # Update or create the setting
         try:
-            await settings_service.update("openai_api_key", test_api_key)
+            await settings_service.update("llm_api_key", test_api_key)
         except ValueError:
             await settings_service.create(
-                key="openai_api_key",
+                key="llm_api_key",
                 value=test_api_key,
                 data_type="string",
                 category="llm",
@@ -62,7 +62,7 @@ class TestEncryptionSecurity:
         # Check DB storage
         result = await db_session.execute(
             select(ApplicationSetting).where(
-                ApplicationSetting.key == 'openai_api_key'
+                ApplicationSetting.key == 'llm_api_key'
             )
         )
         setting = result.scalar_one()
@@ -78,10 +78,10 @@ class TestEncryptionSecurity:
         
         # Set the value
         try:
-            await settings_service.update("google_api_key", test_api_key)
+            await settings_service.update("llm_api_key", test_api_key)
         except ValueError:
             await settings_service.create(
-                key="google_api_key",
+                key="llm_api_key",
                 value=test_api_key,
                 data_type="string",
                 category="llm",
@@ -92,9 +92,9 @@ class TestEncryptionSecurity:
         cached_settings = await load_settings_by_category(db_session)
         
         assert 'llm' in cached_settings
-        assert 'google_api_key' in cached_settings['llm']
+        assert 'llm_api_key' in cached_settings['llm']
         
-        cached_data = cached_settings['llm']['google_api_key']
+        cached_data = cached_settings['llm']['llm_api_key']
         assert isinstance(cached_data, dict)
         assert cached_data['is_sensitive'] is True
         assert cached_data['value'] != test_api_key  # Still encrypted
@@ -107,10 +107,10 @@ class TestEncryptionSecurity:
         
         # Set the value
         try:
-            await settings_service.update("hf_api_token", test_api_key)
+            await settings_service.update("llm_api_key", test_api_key)
         except ValueError:
             await settings_service.create(
-                key="hf_api_token",
+                key="llm_api_key",
                 value=test_api_key,
                 data_type="string",
                 category="llm",
@@ -123,9 +123,9 @@ class TestEncryptionSecurity:
         
         # Check internal storage
         assert hasattr(settings_obj, '_encrypted_settings')
-        assert 'HF_API_TOKEN' in settings_obj._encrypted_settings
+        assert 'LLM_API_KEY' in settings_obj._encrypted_settings
         
-        stored_value = settings_obj._encrypted_settings['HF_API_TOKEN']
+        stored_value = settings_obj._encrypted_settings['LLM_API_KEY']
         assert stored_value != test_api_key  # Still encrypted
         assert stored_value.startswith('gAAAAA')
     
@@ -136,10 +136,10 @@ class TestEncryptionSecurity:
         
         # Set the value
         try:
-            await settings_service.update("cohere_api_key", test_api_key)
+            await settings_service.update("embedding_api_key", test_api_key)
         except ValueError:
             await settings_service.create(
-                key="cohere_api_key",
+                key="embedding_api_key",
                 value=test_api_key,
                 data_type="string",
                 category="embedding",
@@ -166,10 +166,10 @@ class TestEncryptionSecurity:
         
         # Set the value
         try:
-            await settings_service.update("openai_api_key", test_api_key)
+            await settings_service.update("llm_api_key", test_api_key)
         except ValueError:
             await settings_service.create(
-                key="openai_api_key",
+                key="llm_api_key",
                 value=test_api_key,
                 data_type="string",
                 category="llm",
@@ -181,9 +181,9 @@ class TestEncryptionSecurity:
         settings_obj = Settings(cached_settings=cached_settings)
         
         # Access multiple times
-        first_access = settings_obj.OPENAI_API_KEY
-        second_access = settings_obj.OPENAI_API_KEY
-        third_access = settings_obj.OPENAI_API_KEY
+        first_access = settings_obj.LLM_API_KEY
+        second_access = settings_obj.LLM_API_KEY
+        third_access = settings_obj.LLM_API_KEY
         
         assert first_access == test_api_key
         assert second_access == test_api_key
