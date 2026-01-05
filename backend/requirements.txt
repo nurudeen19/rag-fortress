@@ -93,6 +93,7 @@ langchain-chroma>=1.0.0
 # Qdrant (Recommended for production)
 langchain-qdrant>=1.1.0
 qdrant-client>=1.10.0
+fastembed>=0.4.2
 
 # Pinecone
 langchain-pinecone>=0.0.1

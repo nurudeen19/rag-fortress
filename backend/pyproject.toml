@@ -103,6 +103,7 @@ dependencies = [
     "faiss-cpu==1.13.1",  # FAISS vector store (Python 3.14+ compatible)
     "langchain-qdrant==1.1.0",
     "qdrant-client==1.16.1",
+    "fastembed==0.4.2",  # Required for Qdrant hybrid search (BM25 sparse vectors)
     "langchain-pinecone==0.2.13",
     "pinecone==6.0.0",
     "langchain-weaviate==0.0.6",

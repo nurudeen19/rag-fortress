@@ -48,6 +48,10 @@ class VectorDBSettings(BaseSettings):
     # Only supported by: Qdrant, Weaviate, Milvus
     ENABLE_HYBRID_SEARCH: bool = Field(False, env="ENABLE_HYBRID_SEARCH")
     
+    # hybrid search vector field names
+    VECTOR_DB_DENSE_VECTOR_NAME: str = Field("dense", env="VECTOR_DB_DENSE_VECTOR_NAME")
+    VECTOR_DB_SPARSE_VECTOR_NAME: str = Field("sparse", env="VECTOR_DB_SPARSE_VECTOR_NAME")
+    
     # ============================================================================
     # INGESTION CONFIGURATION
     # ============================================================================
@@ -145,6 +149,8 @@ class VectorDBSettings(BaseSettings):
                 **base_config,
                 "provider": "qdrant",
                 "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
+                "dense_vector_name": self.VECTOR_DB_DENSE_VECTOR_NAME,
+                "sparse_vector_name": self.VECTOR_DB_SPARSE_VECTOR_NAME,
             }
             
             if self.VECTOR_DB_URL:

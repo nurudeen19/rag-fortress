@@ -130,6 +130,9 @@ def _create_vector_store(
         config["collection_name"] = collection_name
     config.update(kwargs)
     
+    # Check if hybrid search is enabled (used by all providers)
+    hybrid_enabled = config.get("hybrid_search", False)
+    
     # Validate hybrid search configuration for this provider
     _validate_hybrid_search_config(provider, config)
     
@@ -201,7 +204,7 @@ def _create_vector_store(
     # === Qdrant ===
     elif provider == "qdrant":
         try:
-            from langchain_qdrant import QdrantVectorStore
+            from langchain_qdrant import QdrantVectorStore, RetrievalMode
             from qdrant_client import QdrantClient
         except ImportError:
             raise VectorStoreError(
@@ -214,11 +217,47 @@ def _create_vector_store(
             api_key=config.get("api_key")
         )
         
-        store = QdrantVectorStore(
-            client=client,
-            collection_name=config["collection_name"],
-            embedding=embeddings
-        )
+        # Hybrid search configuration for Qdrant
+        if hybrid_enabled:
+            try:
+                from langchain_qdrant import FastEmbedSparse
+                
+                logger.info("Initializing Qdrant with hybrid search (dense + sparse BM25 vectors)")
+                
+                # Initialize sparse embeddings for BM25
+                sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
+                
+                # Get vector names from config (user-configurable via env)
+                dense_name = config.get("dense_vector_name", "dense")
+                sparse_name = config.get("sparse_vector_name", "sparse")
+                
+                store = QdrantVectorStore(
+                    client=client,
+                    collection_name=config["collection_name"],
+                    embedding=embeddings,
+                    sparse_embedding=sparse_embeddings,
+                    retrieval_mode=RetrievalMode.HYBRID,
+                    vector_name=dense_name,
+                    sparse_vector_name=sparse_name
+                )
+            except ImportError:
+                logger.warning(
+                    "FastEmbed not installed for Qdrant hybrid search. "
+                    "Run: pip install fastembed. Falling back to dense vector search only."
+                )
+                store = QdrantVectorStore(
+                    client=client,
+                    collection_name=config["collection_name"],
+                    embedding=embeddings
+                )
+        else:
+            # Dense vector search only (default)
+            store = QdrantVectorStore(
+                client=client,
+                collection_name=config["collection_name"],
+                embedding=embeddings
+            )
+        
         return store
     
     # === Pinecone ===
@@ -253,6 +292,15 @@ def _create_vector_store(
             auth_client_secret=weaviate.AuthApiKey(api_key=config.get("api_key"))
         )
         
+        # Note: Weaviate uses hybrid search by default in similarity_search()
+        # You can control with alpha parameter: alpha=0 (keyword), alpha=1 (vector)
+        # No special initialization needed - hybrid is native to Weaviate
+        if hybrid_enabled:
+            logger.info(
+                "Weaviate will use hybrid search (BM25F + vectors). "
+                "Default alpha balances both. Pass alpha parameter to similarity_search() to adjust."
+            )
+        
         store = WeaviateVectorStore(
             client=client,
             index_name=config["collection_name"],
@@ -282,11 +330,44 @@ def _create_vector_store(
         if config.get("password"):
             connection_args["password"] = config.get("password")
         
-        store = Milvus(
-            embedding_function=embeddings,
-            collection_name=config["collection_name"],
-            connection_args=connection_args
-        )
+        # Hybrid search configuration for Milvus (requires Milvus 2.5+)
+        if hybrid_enabled:
+            try:
+                from langchain_milvus import BM25BuiltInFunction
+                
+                logger.info(
+                    "Initializing Milvus with hybrid search (dense embeddings + BM25 sparse vectors). "
+                    "Note: Requires Milvus 2.5+ server. NOT available in Milvus Lite."
+                )
+                
+                # Initialize with BM25 built-in function for full-text search
+                store = Milvus(
+                    embedding_function=embeddings,
+                    builtin_function=BM25BuiltInFunction(),
+                    vector_field=["dense", "sparse"],  # Both dense and sparse vectors
+                    collection_name=config["collection_name"],
+                    connection_args=connection_args,
+                    consistency_level="Strong",
+                    drop_old=False
+                )
+            except ImportError:
+                logger.warning(
+                    "BM25BuiltInFunction not available in langchain-milvus. "
+                    "Ensure you have langchain-milvus>=0.3.0. Falling back to dense vector search only."
+                )
+                store = Milvus(
+                    embedding_function=embeddings,
+                    collection_name=config["collection_name"],
+                    connection_args=connection_args
+                )
+        else:
+            # Dense vector search only (default)
+            store = Milvus(
+                embedding_function=embeddings,
+                collection_name=config["collection_name"],
+                connection_args=connection_args
+            )
+        
         return store
     
     else:
