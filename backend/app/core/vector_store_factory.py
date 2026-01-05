@@ -390,7 +390,7 @@ def get_retriever(
     Args:
         embeddings: Pre-initialized embeddings (optional, uses existing if available)
         provider: Vector store provider (optional, uses settings default)
-        top_k: Number of results to return (optional, uses MIN_TOP_K from settings)
+        top_k: Number of results to return (optional, uses TOP_K from settings)
     
     Returns:
         BaseRetriever: LangChain Retriever instance
@@ -415,7 +415,7 @@ def get_retriever(
     )
     
     # Get top_k from settings or parameter
-    k = top_k or settings.app_settings.MIN_TOP_K
+    k = top_k or settings.app_settings.TOP_K
     
     # Create retriever from vector store
     _retriever_instance = vector_store.as_retriever(

@@ -187,15 +187,14 @@ class RetrieverService:
         Process:
         1. Preprocess query (remove stop words, normalize)
         2. Check cache for existing results
-        3. If cache miss: Start with min_top_k documents
-        4. Check retrieval quality (scores above threshold)
-        5. If quality is low, increase top_k (up to max_top_k) and retry
-        6. If quality remains low, return empty context with explanation
-        7. If only one high-scoring doc exists, return just that one
+        3. Retrieve max_k candidates from vector store
+        4. Rerank candidates if reranker is enabled
+        5. Filter by threshold to get relevant documents
+        6. Return top_k final results
         
         Args:
             query_text: The search query (will be preprocessed internally)
-            top_k: Optional override (uses min_top_k by default)
+            top_k: Optional override (uses TOP_K from settings by default)
             user_security_level: User's org-wide clearance level
             user_department_id: User's department ID
             user_department_security_level: User's department-specific clearance level
@@ -266,11 +265,11 @@ class RetrieverService:
         """
         try:
             # Step 1: Retrieve candidates from vector store
-            min_k = top_k or self.settings.app_settings.MIN_TOP_K
-            max_k = self.settings.app_settings.MAX_TOP_K
+            final_k = top_k or self.settings.app_settings.TOP_K
+            max_k = self.settings.app_settings.MAX_K
             vector_store = self.retriever.vectorstore
             
-            logger.info(f"Retrieving candidates: max_k={max_k}")
+            logger.info(f"Retrieving candidates: max_k={max_k}, final_k={final_k}")
             
             try:
                 results = vector_store.similarity_search_with_score(query_text, k=max_k)
@@ -293,13 +292,12 @@ class RetrieverService:
             
             if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
                 docs_to_rerank = [doc for doc, _ in results]
-                reranker_top_k = self.settings.app_settings.RERANKER_TOP_K
                 
-                logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {reranker_top_k})")
+                logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {final_k})")
                 reranked_docs, reranked_scores = self.reranker.rerank(
                     query_text,
                     docs_to_rerank,
-                    top_k=reranker_top_k
+                    top_k=final_k
                 )
                 
                 # Filter by reranker threshold to get truly relevant docs

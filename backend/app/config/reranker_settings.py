@@ -22,7 +22,6 @@ class RerankerSettings(BaseSettings):
     RERANKER_API_KEY: Optional[str] = Field(None, env="RERANKER_API_KEY")
     
     # Reranker Behavior
-    RERANKER_TOP_K: int = Field(5, env="RERANKER_TOP_K")
     RERANKER_SCORE_THRESHOLD: float = Field(0.5, env="RERANKER_SCORE_THRESHOLD")
     
     def get_reranker_config(self) -> dict:
@@ -55,14 +54,6 @@ class RerankerSettings(BaseSettings):
                 f"Unsupported reranker provider: {provider}. "
                 f"Supported: huggingface, cohere, jina"
             )
-    
-    @field_validator("RERANKER_TOP_K")
-    @classmethod
-    def validate_top_k(cls, v: int) -> int:
-        """Validate RERANKER_TOP_K is at least 1."""
-        if v < 1:
-            raise ValueError("RERANKER_TOP_K must be at least 1")
-        return v
     
     @field_validator("RERANKER_SCORE_THRESHOLD")
     @classmethod
