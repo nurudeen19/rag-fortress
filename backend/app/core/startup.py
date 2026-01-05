@@ -345,10 +345,10 @@ class StartupController:
         if not settings.app_settings.ENABLE_RERANKER:
             logger.warning(
                 "⚠ CONFIGURATION WARNING: Query decomposer is enabled but reranker is disabled. "
-                "This can lead to:\n"
-                "  - Sub-optimal document ordering (not ranked against original query)\n"
-                "  - Higher token usage (more potentially irrelevant documents sent to LLM)\n"
-                "  - Lower quality responses\n"
+                "This can lead to:\\n"
+                "  - Sub-optimal document ordering (not ranked against original query)\\n"
+                "  - Higher token usage (more potentially irrelevant documents sent to LLM)\\n"
+                "  - Lower quality responses\\n"
                 "RECOMMENDATION: Enable reranker by setting ENABLE_RERANKER=true"
             )
     

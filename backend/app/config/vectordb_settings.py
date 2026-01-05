@@ -50,6 +50,12 @@ class VectorDBSettings(BaseSettings):
     # Batch size for chunk ingestion to vector store (higher = faster but more memory)
     # Recommended: 1000+ for production environments
     CHUNK_INGESTION_BATCH_SIZE: int = Field(1000, env="CHUNK_INGESTION_BATCH_SIZE")
+    
+    # Hybrid Search Configuration
+    # Enable hybrid search (combines dense and sparse vectors using RRF)
+    # Only supported by: Qdrant, Weaviate, Milvus
+    # Requires provider to support hybrid search natively
+    ENABLE_HYBRID_SEARCH: bool = Field(False, env="ENABLE_HYBRID_SEARCH")
 
     def validate_config(self, environment: str):
         """Validate vector database configuration based on environment."""
@@ -70,6 +76,18 @@ class VectorDBSettings(BaseSettings):
                 "Please use Qdrant, Pinecone, Weaviate, or Milvus instead."
             )
         
+        # Hybrid search validation: Check provider compatibility
+        if self.ENABLE_HYBRID_SEARCH:
+            # Providers that natively support hybrid search with RRF (Reciprocal Rank Fusion)
+            hybrid_supported_providers = {"qdrant", "weaviate", "milvus"}
+            
+            if vector_db not in hybrid_supported_providers:
+                raise ValueError(
+                    f"Hybrid search is not supported for {vector_db.upper()}. "
+                    f"ENABLE_HYBRID_SEARCH requires one of: {', '.join(sorted(hybrid_supported_providers))}. "
+                    f"Current provider: {vector_db}"
+                )
+        
         # Validate required fields for each provider
         if vector_db == "qdrant":
             if self.QDRANT_URL and not self.QDRANT_API_KEY:
@@ -82,11 +100,22 @@ class VectorDBSettings(BaseSettings):
                 raise ValueError("PINECONE_ENVIRONMENT is required for Pinecone provider")
 
     def get_vector_db_config(self) -> dict:
-        """Get vector database configuration for the selected provider."""
+        """
+        Get vector database configuration for the selected provider.
+        
+        Returns:
+            dict with provider-specific config including hybrid_search_enabled flag
+        """
         provider = self.VECTOR_DB_PROVIDER.lower()
+        
+        # Base config included for all providers
+        base_config = {
+            "hybrid_search": self.ENABLE_HYBRID_SEARCH,
+        }
         
         if provider == "faiss":
             return {
+                **base_config,
                 "provider": "faiss",
                 "persist_directory": self.VECTOR_STORE_PERSIST_DIRECTORY,
                 "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
@@ -94,6 +123,7 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "qdrant":
             config = {
+                **base_config,
                 "provider": "qdrant",
                 "collection_name": self.QDRANT_COLLECTION_NAME,
             }
@@ -111,6 +141,7 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "chroma":
             return {
+                **base_config,
                 "provider": "chroma",
                 "persist_directory": self.VECTOR_STORE_PERSIST_DIRECTORY,
                 "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
@@ -118,6 +149,7 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "pinecone":
             return {
+                **base_config,
                 "provider": "pinecone",
                 "api_key": self.PINECONE_API_KEY,
                 "environment": self.PINECONE_ENVIRONMENT,
@@ -126,6 +158,7 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "weaviate":
             config = {
+                **base_config,
                 "provider": "weaviate",
                 "url": self.WEAVIATE_URL,
                 "class_name": self.WEAVIATE_CLASS_NAME,
@@ -136,6 +169,7 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "milvus":
             config = {
+                **base_config,
                 "provider": "milvus",
                 "host": self.MILVUS_HOST,
                 "port": self.MILVUS_PORT,

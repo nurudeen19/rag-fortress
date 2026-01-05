@@ -22,6 +22,43 @@ _vector_store_instance: Optional[VectorStore] = None
 _retriever_instance: Optional[BaseRetriever] = None
 
 
+def _validate_hybrid_search_config(provider: str, config: dict) -> None:
+    """
+    Validate hybrid search configuration against vector store provider.
+    
+    Args:
+        provider: Vector store provider name
+        config: Vector database configuration dict
+        
+    Raises:
+        VectorStoreError: If hybrid search is enabled but provider doesn't support it
+    """
+    hybrid_enabled = config.get("hybrid_search", False)
+    
+    if not hybrid_enabled:
+        logger.info("Hybrid search: DISABLED")
+        return
+    
+    # Providers that natively support hybrid search (dense + sparse vectors)
+    hybrid_supported_providers = {"qdrant", "weaviate", "milvus"}
+    
+    if provider in hybrid_supported_providers:
+        logger.info(
+            f"✓ Hybrid search: ENABLED for {provider.upper()} "
+            "(dense + sparse vectors with Reciprocal Rank Fusion)"
+        )
+    else:
+        logger.error(
+            f"✗ HYBRID SEARCH ERROR: {provider.upper()} does not support hybrid search. "
+            f"Supported providers: {', '.join(sorted(hybrid_supported_providers))}"
+        )
+        raise VectorStoreError(
+            f"Hybrid search enabled but {provider.upper()} does not support it. "
+            f"Set ENABLE_HYBRID_SEARCH=false or switch to one of: {', '.join(sorted(hybrid_supported_providers))}",
+            provider=provider
+        )
+
+
 def get_vector_store(
     embeddings: Embeddings,
     provider: Optional[str] = None,
@@ -89,6 +126,9 @@ def _create_vector_store(
     if collection_name:
         config["collection_name"] = collection_name
     config.update(kwargs)
+    
+    # Validate hybrid search configuration for this provider
+    _validate_hybrid_search_config(provider, config)
     
     # === FAISS (Default for Python 3.14+) ===
     if provider == "faiss":
