@@ -119,7 +119,7 @@ class StartupController:
                 logger.info("Fallback LLM: DISABLED")
 
             # ========== STEP 7: Internal LLM Provider (optional) ==========
-            if settings.llm_settings.USE_INTERNAL_LLM:
+            if settings.llm_settings.ENABLE_INTERNAL_LLM:
                 await self._initialize_internal_llm()
 
             if settings.reranker_settings.ENABLE_RERANKER:

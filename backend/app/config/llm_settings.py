@@ -57,7 +57,7 @@ class LLMSettings(BaseSettings):
     # ============================================================================
     # INTERNAL LLM CONFIGURATION (Optional - for sensitive documents)
     # ============================================================================
-    USE_INTERNAL_LLM: bool = Field(False, env="USE_INTERNAL_LLM")
+    ENABLE_INTERNAL_LLM: bool = Field(False, env="ENABLE_INTERNAL_LLM")
     INTERNAL_LLM_PROVIDER: Optional[str] = Field(None, env="INTERNAL_LLM_PROVIDER")
     INTERNAL_LLM_API_KEY: Optional[str] = Field(None, env="INTERNAL_LLM_API_KEY")
     INTERNAL_LLM_MODEL: Optional[str] = Field(None, env="INTERNAL_LLM_MODEL")
@@ -213,11 +213,11 @@ class LLMSettings(BaseSettings):
 
     def get_internal_llm_config(self) -> Optional[dict]:
         """Get internal LLM configuration (for sensitive data processing)."""
-        if not self.USE_INTERNAL_LLM:
+        if not self.ENABLE_INTERNAL_LLM:
             return None
         
         if not self.INTERNAL_LLM_PROVIDER:
-            raise ValueError("INTERNAL_LLM_PROVIDER is required when USE_INTERNAL_LLM is true")
+            raise ValueError("INTERNAL_LLM_PROVIDER is required when ENABLE_INTERNAL_LLM is true")
         
         provider = self.INTERNAL_LLM_PROVIDER.lower()
         

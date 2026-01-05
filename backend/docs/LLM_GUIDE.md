@@ -110,7 +110,7 @@ Optional secure LLM for highly sensitive documents. Prevents sending confidentia
 ### When Internal LLM is Used
 
 The `LLMRouter` automatically selects the Internal LLM when:
-- `USE_INTERNAL_LLM=true`
+- `ENABLE_INTERNAL_LLM=true`
 - Document security level ≥ `INTERNAL_LLM_MIN_SECURITY_LEVEL`
 
 ### Configuration
@@ -119,7 +119,7 @@ Internal LLM uses the same consolidated approach as the primary LLM:
 
 ```env
 # Enable internal LLM
-USE_INTERNAL_LLM=true
+ENABLE_INTERNAL_LLM=true
 INTERNAL_LLM_PROVIDER=llamacpp
 INTERNAL_LLM_MIN_SECURITY_LEVEL=4  # Security level threshold (4 = HIGHLY_CONFIDENTIAL)
 
@@ -242,7 +242,7 @@ LLM_API_KEY=sk-xxx
 LLM_MODEL=gpt-4
 
 # Internal (local secure)
-USE_INTERNAL_LLM=true
+ENABLE_INTERNAL_LLM=true
 INTERNAL_LLM_PROVIDER=llamacpp
 INTERNAL_LLM_MIN_SECURITY_LEVEL=4
 INTERNAL_LLM_MODEL_PATH=./models/secure-model.gguf
@@ -270,7 +270,7 @@ LLM_N_THREADS=8
 LLM_N_BATCH=512
 
 # Internal (same setup, different threshold)
-USE_INTERNAL_LLM=false
+ENABLE_INTERNAL_LLM=false
 
 # Fallback (optional, disabled)
 ENABLE_FALLBACK_LLM=false
@@ -305,7 +305,7 @@ The router decides which LLM to use:
 ```python
 def select_llm(max_security_level: Optional[int]) -> Tuple[BaseLanguageModel, LLMType]:
     # 1. Check if internal LLM should be used
-    if USE_INTERNAL_LLM and max_security_level >= INTERNAL_LLM_MIN_SECURITY_LEVEL:
+    if ENABLE_INTERNAL_LLM and max_security_level >= INTERNAL_LLM_MIN_SECURITY_LEVEL:
         return internal_llm, "internal"
     
     # 2. Use primary LLM
@@ -350,7 +350,7 @@ def get_llm_provider() -> BaseLanguageModel:
 ### Internal LLM Not Being Used
 
 **Check:**
-1. `USE_INTERNAL_LLM=true`
+1. `ENABLE_INTERNAL_LLM=true`
 2. Document security level ≥ `INTERNAL_LLM_MIN_SECURITY_LEVEL`
 3. Internal LLM provider is configured
 
@@ -413,7 +413,7 @@ The system now uses consolidated fields with optional provider-specific fields. 
 ## Best Practices
 
 1. **Use Internal LLM for Sensitive Data**
-   - Set `USE_INTERNAL_LLM=true` for organizations with confidential documents
+   - Set `ENABLE_INTERNAL_LLM=true` for organizations with confidential documents
    - Run llama.cpp locally or on a secure internal server
 
 2. **Configure Fallback for Reliability (Optional)**

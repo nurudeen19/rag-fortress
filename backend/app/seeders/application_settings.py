@@ -101,7 +101,7 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("internal_llm_mode", "string", "Internal llama.cpp mode (api or local)", "llm", True, False),
             
             # New setting for controlling internal LLM usage
-            ("use_internal_llm", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),
+            ("ENABLE_INTERNAL_LLM", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),
             ("internal_llm_min_security_level", "integer", "Minimum security level required to use the internal LLM (e.g., 4 for HIGHLY_CONFIDENTIAL). Accepts only valid PermissionLevel values.", "llm", True, False),
             
             # Embedding Settings

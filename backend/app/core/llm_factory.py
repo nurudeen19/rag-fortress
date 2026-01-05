@@ -76,7 +76,7 @@ def get_internal_llm_provider() -> Optional[BaseLanguageModel]:
     Returns:
         Optional[BaseLanguageModel]: Internal LangChain LLM instance or None
     """
-    if not settings.llm_settings.USE_INTERNAL_LLM:
+    if not settings.llm_settings.ENABLE_INTERNAL_LLM:
         return None
     
     global _internal_llm_instance

@@ -417,7 +417,7 @@ class TestSettingsNamespaceCompatibility:
         """settings.llm_settings must expose subclass fields even when cached."""
         cached_settings = {
             "llm": {
-                "use_internal_llm": {"value": True, "is_sensitive": False},
+                "ENABLE_INTERNAL_LLM": {"value": True, "is_sensitive": False},
                 "internal_llm_provider": {"value": "openai", "is_sensitive": False},
             }
         }
@@ -425,7 +425,7 @@ class TestSettingsNamespaceCompatibility:
         settings_obj = Settings(cached_settings=cached_settings)
 
         assert settings_obj.llm_settings is settings_obj
-        assert settings_obj.llm_settings.USE_INTERNAL_LLM is True
+        assert settings_obj.llm_settings.ENABLE_INTERNAL_LLM is True
         assert settings_obj.llm_settings.INTERNAL_LLM_PROVIDER == "openai"
 
 

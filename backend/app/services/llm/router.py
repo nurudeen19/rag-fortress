@@ -76,7 +76,7 @@ class LLMRouter:
             Tuple of (LLM instance, LLMType to track which was selected)
         """
         # Settings inherits from LLMSettings, so attributes are directly on settings
-        if not settings.USE_INTERNAL_LLM:
+        if not settings.ENABLE_INTERNAL_LLM:
             logger.info("Internal LLM disabled; using primary LLM")
             self._last_selected_type = LLMType.PRIMARY
             return self._get_primary_llm(), LLMType.PRIMARY

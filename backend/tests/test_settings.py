@@ -214,7 +214,7 @@ class TestLLMConfiguration:
     def test_internal_llamacpp_endpoint_config(self, clean_env):
         """Ensure internal llama.cpp endpoint can be configured without a path."""
         env = {
-            "USE_INTERNAL_LLM": "true",
+            "ENABLE_INTERNAL_LLM": "true",
             "INTERNAL_LLM_PROVIDER": "llamacpp",
             "INTERNAL_LLAMACPP_ENDPOINT_URL": "http://localhost:8080/v1",
             "INTERNAL_LLAMACPP_ENDPOINT_MODEL": "phi-3.1",
@@ -235,7 +235,7 @@ class TestLLMConfiguration:
     def test_internal_llamacpp_endpoint_without_model(self, clean_env):
         """Model field is optional for internal endpoint mode."""
         env = {
-            "USE_INTERNAL_LLM": "true",
+            "ENABLE_INTERNAL_LLM": "true",
             "INTERNAL_LLM_PROVIDER": "llamacpp",
             "INTERNAL_LLAMACPP_ENDPOINT_URL": "http://localhost:8080/v1",
         }
