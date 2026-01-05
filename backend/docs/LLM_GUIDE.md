@@ -146,39 +146,38 @@ Else:
 
 ---
 
-## 3. Fallback LLM
+## 3. Fallback LLM (Optional)
 
-Backup LLM used when the primary LLM fails (rate limits, API errors, timeouts).
+Optional backup LLM used when the primary LLM fails (rate limits, API errors, timeouts). **Disabled by default** to prevent startup failures on incomplete configuration.
+
+### Enabling Fallback LLM
+
+Fallback LLM is disabled by default. To enable it, set:
+
+```env
+ENABLE_FALLBACK_LLM=true
+```
+
+When disabled (`ENABLE_FALLBACK_LLM=false` or not set), the system will not initialize the fallback LLM and will not attempt failover.
 
 ### Configuration
 
-**Option 1: Explicit Fallback (Recommended)**
+Fallback LLM must be explicitly configured with its own provider credentials:
+
 ```env
+ENABLE_FALLBACK_LLM=true
 FALLBACK_LLM_PROVIDER=openai
 FALLBACK_LLM_API_KEY=sk-xxx
-FALLBACK_LLM_MODEL=gpt-5-mini
+FALLBACK_LLM_MODEL=gpt-4o-mini
 FALLBACK_LLM_TEMPERATURE=0.5
 FALLBACK_LLM_MAX_TOKENS=1000
 ```
 
-**Option 2: Reuse Existing Provider Config**
-```env
-# Primary uses OpenAI
-LLM_PROVIDER=openai
-
-# Fallback uses Google's config
-FALLBACK_LLM_PROVIDER=google
-GOOGLE_API_KEY=xxx
-GOOGLE_MODEL=gemini-pro
-```
-
-**Option 3: No Configuration (Uses Default)**
-
-If no fallback is configured, the system automatically uses a default HuggingFace model.
+**Supported providers:** `openai`, `google`, `huggingface`, `llamacpp` (same as primary LLM)
 
 ### Fallback Behavior
 
-The fallback LLM is triggered when:
+When **enabled**, the fallback LLM is triggered when:
 - Primary LLM returns rate limit errors (429)
 - Primary LLM times out
 - Primary LLM returns server errors (500+)
@@ -187,6 +186,8 @@ The system does NOT use fallback for:
 - Authentication errors (401/403)
 - Configuration errors
 - Invalid request errors
+
+When **disabled**, no fallback behavior occurs—the primary LLM error propagates directly.
 
 ---
 
@@ -208,7 +209,7 @@ GOOGLE_API_KEY=xxx
 GOOGLE_MODEL=gemini-pro
 ```
 
-### Example 2: OpenAI Primary + Internal Llama.cpp + OpenAI Fallback
+### Example 2: OpenAI Primary + Internal Llama.cpp + Optional OpenAI Fallback
 
 ```env
 # Primary (external API)
@@ -222,7 +223,8 @@ INTERNAL_LLM_MIN_SECURITY_LEVEL=4
 INTERNAL_LLM_PROVIDER=llamacpp
 INTERNAL_LLAMACPP_MODEL_PATH=./models/secure-model.gguf
 
-# Fallback (cheaper model)
+# Fallback (optional, cheaper model)
+ENABLE_FALLBACK_LLM=true
 FALLBACK_LLM_PROVIDER=openai
 FALLBACK_LLM_API_KEY=sk-xxx
 FALLBACK_LLM_MODEL=gpt-3.5-turbo
@@ -241,7 +243,8 @@ LLAMACPP_ENDPOINT_MODEL=llama-3.1-8b
 # Internal (same as primary for this setup)
 USE_INTERNAL_LLM=false
 
-# No fallback needed for local setup
+# Fallback (optional, disabled by default)
+ENABLE_FALLBACK_LLM=false
 ```
 
 ---
@@ -316,17 +319,17 @@ print(f"Selected LLM type: {llm_type}")  # Should be "internal"
 ### Fallback Not Triggering
 
 **Check:**
-1. Primary LLM is actually failing (check logs)
-2. Error is a retryable error (rate limit, timeout, server error)
-3. Fallback LLM is configured
+1. `ENABLE_FALLBACK_LLM=true` in your `.env` file
+2. Primary LLM is actually failing (check logs)
+3. Error is a retryable error (rate limit, timeout, server error)
+4. Fallback LLM provider is properly configured
 
 **Debug:**
 ```python
-from app.services.llm_router_service import get_llm_router
+from app.config.llm_settings import llm_settings
 
-router = get_llm_router()
-is_configured = router.is_fallback_configured()
-print(f"Fallback configured: {is_configured}")
+print(f"Fallback enabled: {llm_settings.ENABLE_FALLBACK_LLM}")
+print(f"Fallback provider: {llm_settings.FALLBACK_LLM_PROVIDER}")
 ```
 
 ### LLM Initialization Fails
@@ -355,13 +358,15 @@ pip install langchain-openai
    - Set `USE_INTERNAL_LLM=true` for organizations with confidential documents
    - Run llama.cpp locally or on a secure internal server
 
-2. **Configure Fallback for Reliability**
+2. **Configure Fallback for Reliability (Optional)**
+   - Only enable if you want automatic failover behavior
    - Use a different provider or cheaper model
-   - Test fallback regularly
+   - Test fallback regularly by temporarily disabling primary LLM
 
 3. **Monitor LLM Usage**
    - Check which LLM type is being used via logs
-   - Track fallback frequency to identify primary LLM issues
+   - If fallback is enabled, track fallback frequency to identify primary LLM issues
+   - Verify `ENABLE_FALLBACK_LLM` setting at startup in logs
 
 4. **Cost Optimization**
    - Use cheaper models for fallback (e.g., GPT-4 → GPT-3.5-turbo)
