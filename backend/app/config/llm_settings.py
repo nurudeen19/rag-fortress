@@ -76,7 +76,7 @@ class LLMSettings(BaseSettings):
     INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
     ENABLE_QUERY_DECOMPOSER: bool = Field(False, env="ENABLE_QUERY_DECOMPOSER")
     
-    # Optional: Override primary LLM for classifier/decomposer
+    # Classifier requires explicit configuration when enabled
     CLASSIFIER_LLM_PROVIDER: Optional[str] = Field(None, env="CLASSIFIER_LLM_PROVIDER")
     CLASSIFIER_LLM_API_KEY: Optional[str] = Field(None, env="CLASSIFIER_LLM_API_KEY")
     CLASSIFIER_LLM_MODEL: Optional[str] = Field(None, env="CLASSIFIER_LLM_MODEL")
@@ -88,51 +88,47 @@ class LLMSettings(BaseSettings):
         """
         Get classifier/decomposer LLM configuration.
         
-        Falls back to primary LLM if no specific classifier LLM is configured.
+        When classifier/decomposer is enabled, requires explicit configuration.
         Uses temperature=0 for factual, deterministic responses.
         """
         if not (self.ENABLE_LLM_CLASSIFIER or self.ENABLE_QUERY_DECOMPOSER):
             return None
         
-        # Use dedicated classifier LLM if configured
-        if self.CLASSIFIER_LLM_PROVIDER:
-            provider = self.CLASSIFIER_LLM_PROVIDER.lower()
-            
-            config = {
-                "api_key": self.CLASSIFIER_LLM_API_KEY,
-                "model": self.CLASSIFIER_LLM_MODEL,
-                "temperature": 0.0,  # Factual, deterministic
-                "max_tokens": 300,
-            }
-            
-            if provider == "openai":
-                return self._build_openai_config(config)
-            elif provider == "google":
-                return self._build_google_config(config)
-            elif provider == "huggingface":
-                # Add HuggingFace-specific classifier fields
-                config.update({
-                    "endpoint_url": self.CLASSIFIER_HF_ENDPOINT_URL,
-                    "task": self.CLASSIFIER_HF_TASK,
-                    "timeout": self.CLASSIFIER_HF_TIMEOUT,
-                })
-                return self._build_huggingface_config(config)
-            elif provider == "llamacpp":
-                # Add llamacpp-specific classifier fields
-                config.update({
-                    "mode": self.CLASSIFIER_LLAMACPP_MODE or "api",
-                    "endpoint_url": self.CLASSIFIER_LLAMACPP_ENDPOINT_URL,
-                    "timeout": self.CLASSIFIER_LLAMACPP_TIMEOUT,
-                })
-                return self._build_llamacpp_config(config)
-            else:
-                raise ValueError(f"Unsupported classifier LLM provider: {provider}")
+        # Classifier/decomposer requires explicit configuration
+        if not self.CLASSIFIER_LLM_PROVIDER:
+            raise ValueError(
+                "Classifier/decomposer LLM is enabled but CLASSIFIER_LLM_PROVIDER is not configured. "
+                "Please set CLASSIFIER_LLM_PROVIDER (openai, google, huggingface, llamacpp) along with "
+                "CLASSIFIER_LLM_API_KEY and CLASSIFIER_LLM_MODEL, or disable ENABLE_LLM_CLASSIFIER and ENABLE_QUERY_DECOMPOSER."
+            )
         
-        # Fall back to primary LLM config with temperature=0
-        primary_config = self.get_llm_config()
-        primary_config["temperature"] = 0.0  # Override for factual responses
-        primary_config["max_tokens"] = 300
-        return primary_config
+        provider = self.CLASSIFIER_LLM_PROVIDER.lower()
+        
+        config = {
+            "api_key": self.CLASSIFIER_LLM_API_KEY,
+            "model": self.CLASSIFIER_LLM_MODEL,
+            "temperature": 0.0,  # Factual, deterministic
+            "max_tokens": 300,
+        }
+        
+        if provider == "openai":
+            return self._build_openai_config(config)
+        elif provider == "google":
+            return self._build_google_config(config)
+        elif provider == "huggingface":
+            config.update({
+                "endpoint_url": self.CLASSIFIER_LLM_ENDPOINT_URL,
+                "timeout": self.CLASSIFIER_LLM_TIMEOUT,
+            })
+            return self._build_huggingface_config(config)
+        elif provider == "llamacpp":
+            config.update({
+                "endpoint_url": self.CLASSIFIER_LLM_ENDPOINT_URL,
+                "timeout": self.CLASSIFIER_LLM_TIMEOUT,
+            })
+            return self._build_llamacpp_config(config)
+        else:
+            raise ValueError(f"Unsupported classifier LLM provider: {provider}")
 
     def get_llm_config(self) -> dict:
         """Get primary LLM configuration."""
