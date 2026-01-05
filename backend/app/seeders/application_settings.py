@@ -42,112 +42,63 @@ class ApplicationSettingsSeeder(BaseSeed):
                 "message": f"Required tables missing: {', '.join(missing)}"
             }
         settings_to_seed = [
-            # LLM Settings
+            # Primary LLM Settings (Consolidated)
             ("llm_provider", "string", "Primary LLM provider (openai, google, huggingface, llamacpp)", "llm", True, False),
-            ("llm_model", "string", "LLM model name for selected provider", "llm", True, False),
+            ("llm_api_key", "string", "LLM API key (encrypted)", "llm", True, True),
+            ("llm_model", "string", "LLM model name", "llm", True, False),
             ("llm_temperature", "float", "LLM temperature (0.0-2.0)", "llm", True, False),
             ("llm_max_tokens", "integer", "Maximum tokens per LLM response", "llm", True, False),
             ("llm_timeout", "integer", "LLM request timeout in seconds", "llm", True, False),
-            ("llm_enable_fallback", "boolean", "Enable fallback LLM on primary failure", "llm", True, False),
             
-            # LLM Provider-Specific (API Keys are sensitive)
-            ("openai_api_key", "string", "OpenAI API key (encrypted)", "llm", True, True),
-            ("openai_model", "string", "OpenAI model name", "llm", True, False),
-            ("openai_temperature", "float", "OpenAI temperature", "llm", True, False),
-            ("openai_max_tokens", "integer", "OpenAI max tokens", "llm", True, False),
+            # LLM Provider-Specific Optional Fields (consolidated)
+            ("llm_endpoint_url", "string", "LLM endpoint URL (HuggingFace/Llama.cpp)", "llm", True, False),
+            ("llm_model_path", "string", "Path to local model file (Llama.cpp)", "llm", True, False),
+            ("llm_mode", "string", "LLM mode (api or local) for Llama.cpp", "llm", True, False),
+            ("llm_task", "string", "Task type (HuggingFace)", "llm", True, False),
+            ("llm_context_size", "integer", "Context window size (Llama.cpp)", "llm", True, False),
+            ("llm_n_threads", "integer", "CPU threads (Llama.cpp)", "llm", True, False),
+            ("llm_n_batch", "integer", "Batch size (Llama.cpp)", "llm", True, False),
             
-            ("google_api_key", "string", "Google Gemini API key (encrypted)", "llm", True, True),
-            ("google_model", "string", "Google Gemini model name", "llm", True, False),
-            ("google_temperature", "float", "Google temperature", "llm", True, False),
-            ("google_max_tokens", "integer", "Google max tokens", "llm", True, False),
-            
-            ("hf_api_token", "string", "HuggingFace API token (encrypted)", "llm", True, True),
-            ("hf_model", "string", "HuggingFace model name", "llm", True, False),
-            ("hf_endpoint_url", "string", "Custom HuggingFace endpoint URL", "llm", True, False),
-            ("hf_task", "string", "HuggingFace task (text-generation, text2text-generation, etc.)", "llm", True, False),
-            ("hf_temperature", "float", "HuggingFace temperature", "llm", True, False),
-            ("hf_max_tokens", "integer", "HuggingFace max tokens", "llm", True, False),
-            ("hf_timeout", "integer", "HuggingFace endpoint timeout (seconds)", "llm", True, False),
-
-            # Llama.cpp Provider
-            ("llamacpp_mode", "string", "llama.cpp mode (api or local)", "llm", True, False),
-            ("llamacpp_model_path", "string", "Path to local llama.cpp model", "llm", True, False),
-            ("llamacpp_temperature", "float", "llama.cpp temperature", "llm", True, False),
-            ("llamacpp_max_tokens", "integer", "llama.cpp max tokens", "llm", True, False),
-            ("llamacpp_context_size", "integer", "llama.cpp context window size", "llm", True, False),
-            ("llamacpp_n_threads", "integer", "CPU threads for llama.cpp", "llm", True, False),
-            ("llamacpp_n_batch", "integer", "Batch size for llama.cpp inference", "llm", True, False),
-            ("llamacpp_endpoint_url", "string", "OpenAI-compatible llama.cpp endpoint URL", "llm", True, False),
-            ("llamacpp_endpoint_model", "string", "Model identifier for llama.cpp endpoint", "llm", True, False),
-            ("llamacpp_endpoint_api_key", "string", "llama.cpp endpoint API key (encrypted)", "llm", True, True),
-            ("llamacpp_endpoint_timeout", "integer", "llama.cpp endpoint timeout (seconds)", "llm", True, False),
-            
-            # Fallback LLM
+            # Fallback LLM Settings (Consolidated)
             ("fallback_llm_provider", "string", "Fallback LLM provider", "llm", True, False),
             ("fallback_llm_api_key", "string", "Fallback LLM API key (encrypted)", "llm", True, True),
             ("fallback_llm_model", "string", "Fallback LLM model", "llm", True, False),
-            ("fallback_hf_endpoint_url", "string", "Fallback HuggingFace endpoint URL", "llm", True, False),
-            ("fallback_hf_task", "string", "Fallback HuggingFace task", "llm", True, False),
-            ("fallback_hf_timeout", "integer", "Fallback HuggingFace timeout (seconds)", "llm", True, False),
+            ("fallback_llm_temperature", "float", "Fallback LLM temperature", "llm", True, False),
+            ("fallback_llm_max_tokens", "integer", "Fallback LLM max tokens", "llm", True, False),
+            ("fallback_llm_endpoint_url", "string", "Fallback LLM endpoint URL", "llm", True, False),
+            ("fallback_llm_timeout", "integer", "Fallback LLM timeout (seconds)", "llm", True, False),
             
-            # Internal LLM
-            ("internal_llm_provider", "string", "Internal LLM provider for sensitive data", "llm", True, False),
-            ("internal_llm_api_key", "string", "Internal LLM API key (encrypted)", "llm", True, True),
-            ("internal_llm_model", "string", "Internal LLM model name", "llm", True, False),
-            ("internal_llm_temperature", "float", "Internal LLM temperature (0.0-2.0)", "llm", True, False),
-            ("internal_llm_max_tokens", "integer", "Internal LLM max tokens", "llm", True, False),
-            ("internal_llm_endpoint_url", "string", "Internal HuggingFace endpoint URL", "llm", True, False),
-            ("internal_llm_timeout", "integer", "Internal LLM timeout (seconds)", "llm", True, False),
-            ("internal_llm_mode", "string", "Internal llama.cpp mode (api or local)", "llm", True, False),
+            # Classifier LLM Settings (Consolidated)
+            ("classifier_llm_provider", "string", "Classifier LLM provider", "llm", True, False),
+            ("classifier_llm_api_key", "string", "Classifier LLM API key (encrypted)", "llm", True, True),
+            ("classifier_llm_model", "string", "Classifier LLM model", "llm", True, False),
+            ("classifier_llm_temperature", "float", "Classifier LLM temperature", "llm", True, False),
+            ("classifier_llm_max_tokens", "integer", "Classifier LLM max tokens", "llm", True, False),
+            ("classifier_llm_timeout", "integer", "Classifier LLM timeout (seconds)", "llm", True, False),
             
-            # New setting for controlling internal LLM usage
-            ("ENABLE_INTERNAL_LLM", "boolean", "Allow application to use internal LLM for sensitive information processing. If false, the configured external LLM will be used for all tasks.", "llm", True, False),
-            ("internal_llm_min_security_level", "integer", "Minimum security level required to use the internal LLM (e.g., 4 for HIGHLY_CONFIDENTIAL). Accepts only valid PermissionLevel values.", "llm", True, False),
-            
-            # Embedding Settings
-            ("embedding_provider", "string", "Embedding provider (openai, google, huggingface, cohere, ollama)", "embedding", True, False),
+            # Embedding Settings (Consolidated)
+            ("embedding_provider", "string", "Embedding provider (openai, google, huggingface, cohere)", "embedding", True, False),
+            ("embedding_api_key", "string", "Embedding API key (encrypted)", "embedding", True, True),
             ("embedding_model", "string", "Embedding model name", "embedding", True, False),
             ("embedding_dimensions", "integer", "Embedding vector dimensions", "embedding", True, False),
-            
-            # Embedding Provider-Specific (API Keys are sensitive)
-            ("embedding_model", "string", "Embedding model name", "embedding", True, False),
-            ("embedding_api_key", "string", "Embedding API key (encrypted)", "embedding", True, True),
             ("embedding_device", "string", "Embedding device (cpu/cuda) - HuggingFace only", "embedding", True, False),
             ("embedding_task_type", "string", "Embedding task type - Google only (RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY)", "embedding", True, False),
             ("embedding_input_type", "string", "Embedding input type - Cohere only (search_document, search_query)", "embedding", True, False),
             
-            # Vector Database Settings
-            ("vector_db_provider", "string", "Vector DB provider (chroma, qdrant, pinecone, weaviate, milvus)", "vector_db", True, False),
+            # Vector Database Settings (Consolidated)
+            ("vector_db_provider", "string", "Vector DB provider (faiss, chroma, qdrant, pinecone, weaviate, milvus)", "vector_db", True, False),
+            ("vector_db_url", "string", "Vector DB connection URL", "vector_db", True, False),
+            ("vector_db_host", "string", "Vector DB server host", "vector_db", True, False),
+            ("vector_db_port", "integer", "Vector DB server port", "vector_db", True, False),
+            ("vector_db_api_key", "string", "Vector DB API key (encrypted)", "vector_db", True, True),
+            ("vector_db_username", "string", "Vector DB username", "vector_db", True, False),
+            ("vector_db_password", "string", "Vector DB password (encrypted)", "vector_db", True, True),
+            ("vector_db_grpc_port", "integer", "Vector DB gRPC port (Qdrant)", "vector_db", True, False),
+            ("vector_db_prefer_grpc", "boolean", "Use gRPC for Vector DB (Qdrant)", "vector_db", True, False),
+            ("vector_db_index_name", "string", "Vector DB index/collection name", "vector_db", True, False),
+            ("vector_db_class_name", "string", "Vector DB class name (Weaviate)", "vector_db", True, False),
+            ("vector_db_environment", "string", "Vector DB environment (Pinecone)", "vector_db", True, False),
             ("vector_store_collection_name", "string", "Vector store collection/index name", "vector_db", True, False),
-            
-            # Adaptive Retrieval Settings
-            ("min_top_k", "integer", "Minimum number of documents to retrieve initially", "retrieval", True, False),
-            ("max_top_k", "integer", "Maximum number of documents to retrieve when increasing top-k", "retrieval", True, False),
-            ("retrieval_score_threshold", "float", "Minimum quality score for retrieved documents (0.0-1.0)", "retrieval", True, False),
-            
-            # Reranker Settings
-            ("enable_reranker", "boolean", "Enable reranking when initial results are poor quality", "retrieval", True, False),
-            ("reranker_model", "string", "Cross-encoder model for reranking", "retrieval", True, False),
-            ("reranker_top_k", "integer", "Number of documents to return after reranking", "retrieval", True, False),
-            ("reranker_score_threshold", "float", "Minimum reranker quality score (0.0-1.0)", "retrieval", True, False),
-            
-            # Intent Classifier Settings
-            ("enable_intent_classifier", "boolean", "Enable intent classification for smart query routing", "retrieval", True, False),
-            ("intent_confidence_threshold", "float", "Confidence threshold (0.0-1.0) for using template responses", "retrieval", True, False),
-            
-            # Rate Limiting Settings
-            ("rate_limit_enabled", "boolean", "Enable rate limiting to protect endpoints from abuse", "security", True, False),           
-            
-            # Qdrant-specific
-            ("qdrant_host", "string", "Qdrant server host", "vector_db", True, False),
-            ("qdrant_port", "integer", "Qdrant HTTP port", "vector_db", True, False),
-            ("qdrant_api_key", "string", "Qdrant API key (encrypted)", "vector_db", True, True),
-            ("qdrant_prefer_grpc", "boolean", "Use gRPC for Qdrant", "vector_db", True, False),
-            
-            # Pinecone-specific
-            ("pinecone_api_key", "string", "Pinecone API key (encrypted)", "vector_db", True, True),
-            ("pinecone_environment", "string", "Pinecone environment", "vector_db", True, False),
-            ("pinecone_index_name", "string", "Pinecone index name", "vector_db", True, False),
             
             # Cache Settings
             ("cache_enabled", "boolean", "Enable caching", "cache", True, False),
