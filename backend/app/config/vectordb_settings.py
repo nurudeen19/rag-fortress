@@ -2,7 +2,7 @@
 Vector database configuration settings.
 """
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -54,6 +54,26 @@ class VectorDBSettings(BaseSettings):
     # Batch size for chunk ingestion to vector store (higher = faster but more memory)
     # Recommended: 1000+ for production environments
     CHUNK_INGESTION_BATCH_SIZE: int = Field(1000, env="CHUNK_INGESTION_BATCH_SIZE")
+
+    @field_validator("VECTOR_DB_PORT", "VECTOR_DB_GRPC_PORT", mode="before")
+    @classmethod
+    def validate_optional_int_fields(cls, v):
+        """Convert empty strings to None for optional int fields."""
+        if v == "" or v is None:
+            return None
+        return int(v) if isinstance(v, str) else v
+
+    @field_validator("VECTOR_DB_PREFER_GRPC", mode="before")
+    @classmethod
+    def validate_optional_bool_fields(cls, v):
+        """Convert empty strings to None for optional bool fields."""
+        if v == "" or v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on")
+        return bool(v)
 
     def validate_config(self, environment: str):
         """Validate vector database configuration based on environment."""

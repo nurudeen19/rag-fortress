@@ -4,7 +4,7 @@ Main settings module that composes all configuration modules.
 import json
 from typing import Any, Optional
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, field_validator
 from pydantic_settings import SettingsConfigDict
 
 from .app_settings import AppSettings
@@ -68,6 +68,30 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         
         # NOW store encrypted metadata for lazy decryption (after Pydantic init)
         self._encrypted_settings = {}
+    
+    # Validators for empty string fields that should be None or typed conversions
+    @field_validator("VECTOR_DB_PORT", "VECTOR_DB_GRPC_PORT", "EMBEDDING_DIMENSIONS", 
+                    "LLM_TIMEOUT", "LLM_CONTEXT_SIZE", "LLM_N_THREADS", "LLM_N_BATCH",
+                    "FALLBACK_LLM_TIMEOUT", "FALLBACK_LLM_MAX_TOKENS",
+                    "CLASSIFIER_LLM_TIMEOUT", "DB_PORT", mode="before")
+    @classmethod
+    def validate_optional_int_fields(cls, v):
+        """Convert empty strings to None for optional int fields."""
+        if v == "" or v is None:
+            return None
+        return int(v) if isinstance(v, str) else v
+    
+    @field_validator("VECTOR_DB_PREFER_GRPC", mode="before")
+    @classmethod
+    def validate_optional_bool_fields(cls, v):
+        """Convert empty strings to None for optional bool fields."""
+        if v == "" or v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on")
+        return bool(v)
         self._encrypted_overrides = {}  # Track which attrs have encrypted overrides
         self._cached_settings = cached_settings or {}
         

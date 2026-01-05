@@ -2,7 +2,7 @@
 LLM provider configuration settings.
 """
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -83,6 +83,16 @@ class LLMSettings(BaseSettings):
     CLASSIFIER_LLM_ENDPOINT_URL: Optional[str] = Field(None, env="CLASSIFIER_LLM_ENDPOINT_URL")
     CLASSIFIER_LLM_TIMEOUT: Optional[int] = Field(None, env="CLASSIFIER_LLM_TIMEOUT")
 
+
+    @field_validator("LLM_TIMEOUT", "LLM_CONTEXT_SIZE", "LLM_N_THREADS", "LLM_N_BATCH",
+                    "FALLBACK_LLM_TIMEOUT", "FALLBACK_LLM_MAX_TOKENS",
+                    "CLASSIFIER_LLM_TIMEOUT", mode="before")
+    @classmethod
+    def validate_optional_int_fields(cls, v):
+        """Convert empty strings to None for optional int fields."""
+        if v == "" or v is None:
+            return None
+        return int(v) if isinstance(v, str) else v
 
     def get_classifier_llm_config(self) -> Optional[dict]:
         """
