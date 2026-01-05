@@ -48,8 +48,8 @@ Below are the primary environment variables used by each config module. Defaults
   - `DEBUG` (False)
   - `DEMO_MODE` (False) — when True, destructive endpoints are blocked by the `prevent_in_demo_mode` decorator
   - `HOST`, `PORT` ("0.0.0.0", 8000)
-  - RAG parameters: `CHUNK_SIZE`, `CHUNK_OVERLAP`, `MIN_TOP_K`, `MAX_TOP_K`, `RETRIEVAL_SCORE_THRESHOLD`, `SIMILARITY_THRESHOLD`
-  - Reranker: `ENABLE_RERANKER`, `RERANKER_MODEL`, `RERANKER_TOP_K`, `RERANKER_SCORE_THRESHOLD`
+  - RAG parameters: `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K`, `MAX_K`, `RETRIEVAL_SCORE_THRESHOLD`, `SIMILARITY_THRESHOLD`
+  - Reranker: `ENABLE_RERANKER`, `RERANKER_MODEL`, `RERANKER_SCORE_THRESHOLD`
   - Logging: `LOG_LEVEL`, `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`
 
 - LLMs (in `llm_settings.py`)

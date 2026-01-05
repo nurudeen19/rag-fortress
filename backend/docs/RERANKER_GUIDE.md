@@ -42,31 +42,22 @@ The reranker system supports multiple providers to improve retrieval quality by 
 ### Integration with Retrieval
 
 Reranking is integrated into the adaptive retrieval flow:
-- Triggers when initial MIN_TOP_K results have poor quality scores
-- Retrieves expanded MAX_TOP_K documents from vector store
+- Retrieves MAX_K documents from vector store
 - Applies selected reranker for semantic relevance
-- Returns top RERANKER_TOP_K documents above score threshold
+- Filters by RERANKER_SCORE_THRESHOLD
+- Returns top TOP_K documents
 
 ## Retrieval Flow
 
-### Stage 1: Initial Retrieval
-1. Retrieve MIN_TOP_K (3) documents
-2. Check quality against RETRIEVAL_SCORE_THRESHOLD (0.5)
-3. If quality is good → return results
-4. If quality is poor → proceed to Stage 2
-
-### Stage 2: Reranking (if enabled)
-1. Retrieve MAX_TOP_K (10) documents
-2. Apply security filtering
-3. Use cross-encoder to rerank by semantic relevance
-4. Return top RERANKER_TOP_K (3) documents above RERANKER_SCORE_THRESHOLD (0.3)
-5. If no quality results → return empty with error
-
-### Stage 3: Incremental Scaling (if reranker disabled/failed)
-1. Increase k by 2 (3 → 5 → 7 → 9 → 10)
-2. Retry retrieval at each increment
-3. Check quality at each step
-4. Return first quality results or empty at MAX_TOP_K
+### Unified Retrieval Process
+1. Retrieve MAX_K (15) candidates from vector store
+2. Apply security filtering to candidates
+3. If reranker enabled:
+   - Use cross-encoder to rerank by semantic relevance
+   - Filter by RERANKER_SCORE_THRESHOLD (0.5)
+4. If reranker disabled:
+   - Filter by RETRIEVAL_SCORE_THRESHOLD (0.5)
+5. Return top TOP_K (5) documents
 
 ## Configuration
 
@@ -86,8 +77,11 @@ RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2  # Required for HuggingFace 
 RERANKER_API_KEY=                                       # Required for Cohere & Jina
 
 # Behavior settings
-RERANKER_TOP_K=3
 RERANKER_SCORE_THRESHOLD=0.5
+
+# Retrieval settings (in app_settings.py)
+TOP_K=5                  # Final number of results to return
+MAX_K=15                 # Maximum candidates to retrieve
 ```
 
 ### Provider Selection Guide
@@ -125,13 +119,13 @@ RERANKER_SCORE_THRESHOLD=0.5
 - Cohere: Check Cohere docs for available models
 - Jina: Leave default or specify custom model
 
-**RERANKER_TOP_K**
-- Increase to 5-7 for broader context
-- Decrease to 1-2 for very focused responses
-
 **RERANKER_SCORE_THRESHOLD**
-- Increase (0.4-0.5) for stricter quality requirements
+- Increase (0.4-0.5+) for stricter quality requirements
 - Decrease (0.2-0.25) for more permissive retrieval
+
+**Retrieval Settings (in app_settings.py)**
+- TOP_K: Increase to 7-10 for broader context, decrease to 3-5 for focused responses
+- MAX_K: Increase to 20-30 for larger candidate pools
 
 ## Reranking Strategy
 
@@ -151,10 +145,10 @@ RERANKER_SCORE_THRESHOLD=0.5
 
 ### Hybrid Retrieval Flow
 
-1. **First pass**: Bi-encoder retrieves candidates quickly (MIN_TOP_K)
-2. **Quality check**: Fast threshold check on similarity scores
-3. **Second pass**: If needed, reranker re-scores larger set (MAX_TOP_K)
-4. **Result**: Best of both worlds - speed + accuracy
+1. **First pass**: Bi-encoder retrieves candidates quickly (MAX_K)
+2. **Reranking**: Cross-encoder re-scores all candidates
+3. **Filtering**: Keep documents above RERANKER_SCORE_THRESHOLD
+4. **Result**: Return top TOP_K documents - best of both worlds (speed + accuracy)
 
 ## Performance Considerations
 
@@ -172,9 +166,9 @@ RERANKER_SCORE_THRESHOLD=0.5
 ### Latency
 
 **HuggingFace (Local)**
-- Initial retrieval (MIN_TOP_K): ~10-50ms
+- Initial retrieval (MAX_K): ~10-50ms
 - Vector similarity check: <1ms
-- Reranking (MAX_TOP_K=10): ~50-200ms
+- Reranking (MAX_K=15): ~50-200ms
 - Total worst case: ~250-300ms (with reranking)
 - Best case: ~10-50ms (quality results without reranking)
 
