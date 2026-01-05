@@ -2,6 +2,11 @@
 Vector Store Factory - Creates LangChain vector stores with singleton pattern.
 Returns configured vector store instance based on settings.
 Reuses instance if already initialized (from startup).
+
+Hybrid Search Support (Dense + Sparse Vectors):
+- Qdrant: Native BM25 sparse vectors
+- Weaviate: Built-in BM25F (BM25 with field boosting)
+- Milvus: Native sparse vector support
 """
 
 from typing import Optional
@@ -252,6 +257,35 @@ def _create_vector_store(
             client=client,
             index_name=config["collection_name"],
             embedding=embeddings
+        )
+        return store
+    
+    # === Milvus ===
+    elif provider == "milvus":
+        try:
+            from langchain_milvus import Milvus
+        except ImportError:
+            raise VectorStoreError(
+                "langchain-milvus not installed. Run: pip install langchain-milvus pymilvus",
+                provider="milvus"
+            )
+        
+        # Build connection args using unified VECTOR_DB_* settings
+        connection_args = {
+            "host": config.get("host"),
+            "port": config.get("port")
+        }
+        
+        # Add authentication if provided (using unified settings)
+        if config.get("user"):
+            connection_args["user"] = config.get("user")
+        if config.get("password"):
+            connection_args["password"] = config.get("password")
+        
+        store = Milvus(
+            embedding_function=embeddings,
+            collection_name=config["collection_name"],
+            connection_args=connection_args
         )
         return store
     
