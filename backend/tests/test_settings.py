@@ -469,9 +469,9 @@ class TestEmbeddingProviderConfiguration:
         env = {
             **base_env,
             "EMBEDDING_PROVIDER": "openai",
-            "OPENAI_API_KEY": "test_openai_key",
-            "OPENAI_EMBEDDING_MODEL": "text-embedding-3-large",
-            "OPENAI_EMBEDDING_DIMENSIONS": "1024",
+            "EMBEDDING_API_KEY": "test_openai_key",
+            "EMBEDDING_MODEL": "text-embedding-3-large",
+            "EMBEDDING_DIMENSIONS": "1024",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -489,10 +489,10 @@ class TestEmbeddingProviderConfiguration:
         env = {
             **base_env,
             "EMBEDDING_PROVIDER": "google",
-            "GOOGLE_API_KEY": "test_google_key",
-            "GOOGLE_EMBEDDING_MODEL": "gemini-embedding-001",
-            "GOOGLE_EMBEDDING_DIMENSIONS": "1536",
-            "GOOGLE_EMBEDDING_TASK_TYPE": "RETRIEVAL_QUERY",
+            "EMBEDDING_API_KEY": "test_google_key",
+            "EMBEDDING_MODEL": "gemini-embedding-001",
+            "EMBEDDING_DIMENSIONS": "1536",
+            "EMBEDDING_TASK_TYPE": "RETRIEVAL_QUERY",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -511,9 +511,9 @@ class TestEmbeddingProviderConfiguration:
         env = {
             **base_env,
             "EMBEDDING_PROVIDER": "cohere",
-            "COHERE_API_KEY": "test_cohere_key",
-            "COHERE_EMBEDDING_MODEL": "embed-english-v3.0",
-            "COHERE_INPUT_TYPE": "search_query",
+            "EMBEDDING_API_KEY": "test_cohere_key",
+            "EMBEDDING_MODEL": "embed-english-v3.0",
+            "EMBEDDING_INPUT_TYPE": "search_query",
         }
         
         with patch.dict(os.environ, env, clear=True):
@@ -546,7 +546,7 @@ class TestEmbeddingProviderConfiguration:
             from app.config.settings import Settings
             settings = Settings()
             
-            with pytest.raises(ValueError, match="OPENAI_API_KEY is required"):
+            with pytest.raises(ValueError, match="EMBEDDING_API_KEY is required"):
                 settings.validate_config()
     
     def test_google_embedding_missing_api_key(self, clean_env):
@@ -557,7 +557,7 @@ class TestEmbeddingProviderConfiguration:
             from app.config.settings import Settings
             settings = Settings()
             
-            with pytest.raises(ValueError, match="GOOGLE_API_KEY is required"):
+            with pytest.raises(ValueError, match="EMBEDDING_API_KEY is required"):
                 settings.validate_config()
     
     def test_cohere_embedding_missing_api_key(self, clean_env):
@@ -568,7 +568,7 @@ class TestEmbeddingProviderConfiguration:
             from app.config.settings import Settings
             settings = Settings()
             
-            with pytest.raises(ValueError, match="COHERE_API_KEY is required"):
+            with pytest.raises(ValueError, match="EMBEDDING_API_KEY is required"):
                 settings.validate_config()
 
 

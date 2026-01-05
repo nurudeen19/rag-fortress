@@ -110,12 +110,11 @@ class ApplicationSettingsSeeder(BaseSeed):
             ("embedding_dimensions", "integer", "Embedding vector dimensions", "embedding", True, False),
             
             # Embedding Provider-Specific (API Keys are sensitive)
-            ("openai_embedding_model", "string", "OpenAI embedding model", "embedding", True, False),
-            ("google_embedding_model", "string", "Google embedding model", "embedding", True, False),
-            ("hf_embedding_model", "string", "HuggingFace embedding model", "embedding", True, False),
-            ("hf_embedding_device", "string", "HuggingFace device (cpu/cuda)", "embedding", True, False),
-            ("cohere_api_key", "string", "Cohere API key (encrypted)", "embedding", True, True),
-            ("cohere_embedding_model", "string", "Cohere embedding model", "embedding", True, False),
+            ("embedding_model", "string", "Embedding model name", "embedding", True, False),
+            ("embedding_api_key", "string", "Embedding API key (encrypted)", "embedding", True, True),
+            ("embedding_device", "string", "Embedding device (cpu/cuda) - HuggingFace only", "embedding", True, False),
+            ("embedding_task_type", "string", "Embedding task type - Google only (RETRIEVAL_DOCUMENT, RETRIEVAL_QUERY)", "embedding", True, False),
+            ("embedding_input_type", "string", "Embedding input type - Cohere only (search_document, search_query)", "embedding", True, False),
             
             # Vector Database Settings
             ("vector_db_provider", "string", "Vector DB provider (chroma, qdrant, pinecone, weaviate, milvus)", "vector_db", True, False),
