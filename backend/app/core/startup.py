@@ -111,7 +111,12 @@ class StartupController:
             
             # ========== STEP 6: LLM Provider (CRITICAL) ==========
             await self._initialize_llm()
-            await self._initialize_fallback_llm()
+            
+            # ========== STEP 6.1: Fallback LLM Provider (OPTIONAL) ==========
+            if settings.llm_settings.ENABLE_FALLBACK_LLM:
+                await self._initialize_fallback_llm()
+            else:
+                logger.info("Fallback LLM: DISABLED")
 
             # ========== STEP 7: Internal LLM Provider (optional) ==========
             if settings.llm_settings.USE_INTERNAL_LLM:

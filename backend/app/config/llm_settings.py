@@ -40,6 +40,7 @@ class LLMSettings(BaseSettings):
     HF_TIMEOUT: int = Field(120, env="HF_TIMEOUT")
 
     # Fallback LLM configuration
+    ENABLE_FALLBACK_LLM: bool = Field(False, env="ENABLE_FALLBACK_LLM")
     FALLBACK_LLM_PROVIDER: Optional[str] = Field(None, env="FALLBACK_LLM_PROVIDER")
     FALLBACK_LLM_API_KEY: Optional[str] = Field(None, env="FALLBACK_LLM_API_KEY")
     FALLBACK_LLM_MODEL: Optional[str] = Field(None, env="FALLBACK_LLM_MODEL")
