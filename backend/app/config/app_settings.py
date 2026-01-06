@@ -35,7 +35,8 @@ class AppSettings(BaseSettings):
     # Server Configuration
     HOST: str = Field("0.0.0.0", env="HOST")
     PORT: int = Field(8000, env="PORT")
-    
+    FRONTEND_URL: str = Field("http://localhost:3000", env="FRONTEND_URL")
+
     # Data Directories
     DATA_DIR: str = Field("./data", env="DATA_DIR")
     KNOWLEDGE_BASE_DIR: str = Field("./data/knowledge_base", env="KNOWLEDGE_BASE_DIR")

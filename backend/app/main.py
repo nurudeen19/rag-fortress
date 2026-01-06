@@ -15,6 +15,7 @@ from app.core.startup import get_startup_controller
 from app.core.exceptions import register_exception_handlers
 from app.middleware import setup_middlewares
 from app.utils.rate_limiter import get_limiter, rate_limit_exceeded_handler
+from app.config.app_settings import AppSettings
 
 # Suppress langchain_core's Pydantic V1 compatibility warning on Python 3.14+
 # This is a known issue with langchain_core that will be fixed in future versions
@@ -143,7 +144,8 @@ def create_app() -> FastAPI:
             "status": "operational",
             "documentation": "/docs",
             "health": "/health",
-            "api_prefix": "/api/v1"
+            "api_prefix": "/api/v1",
+            "frontend_url": AppSettings().FRONTEND_URL
         }
     
     # Health check endpoint
