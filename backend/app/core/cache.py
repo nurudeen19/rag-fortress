@@ -7,7 +7,6 @@ from typing import Any, Optional, Union
 from datetime import timedelta
 
 from app.core import get_logger
-from app.config.settings import settings
 
 
 logger = get_logger(__name__)

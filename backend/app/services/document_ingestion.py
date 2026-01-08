@@ -7,7 +7,6 @@ Manages the document ingestion pipeline by coordinating with existing services:
 """
 
 from typing import Dict
-import asyncio
 
 from app.models.file_upload import FileUpload, FileStatus
 from app.services.vector_store.storage import DocumentStorageService
@@ -23,7 +22,6 @@ class DocumentIngestionService:
     
     def __init__(self):
         """Initialize ingestion service (session managed per operation)."""
-        pass
     
     async def ingest_single_file(self, file_id: int) -> Dict:
         """

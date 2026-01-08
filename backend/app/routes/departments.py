@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
-from app.core.security import get_current_user, require_role
+from app.core.security import require_role
 from app.models.user import User
 from app.core import get_logger
 from app.utils.demo_mode import prevent_in_demo_mode

@@ -10,9 +10,8 @@ import os
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.config.settings import settings
 from app.core import get_logger
-from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
+from app.models.file_upload import FileUpload, FileStatus
 from app.models.department import Department
 
 

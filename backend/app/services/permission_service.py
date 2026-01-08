@@ -27,10 +27,9 @@ from typing import Optional
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.file_upload import FileUpload, SecurityLevel
+from app.models.file_upload import FileUpload
 from app.models.permission_override import OverrideType, PermissionOverride
 from app.models.user import User
-from app.models.user_permission import PermissionLevel, UserPermission
 
 
 class PermissionService:

@@ -155,7 +155,6 @@ class AppSettings(BaseSettings):
                 except json.JSONDecodeError as e:
                     # If JSON parsing fails, fall back to comma-separated
                     print(f"Warning: Failed to parse JSON array '{v}': {e}. Falling back to CSV parsing.")
-                    pass
             
             # Parse as comma-separated string
             items = [item.strip() for item in v.split(",") if item.strip()]

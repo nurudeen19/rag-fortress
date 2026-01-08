@@ -6,7 +6,7 @@ to bypass the full RAG pipeline and return templated responses directly.
 """
 
 import re
-from typing import Tuple, Optional
+from typing import Optional
 from enum import Enum
 from dataclasses import dataclass
 

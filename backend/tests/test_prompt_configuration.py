@@ -8,7 +8,7 @@ import os
 
 sys.path.append(os.getcwd())
 
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, patch
 
 async def test_prompt_configuration():
     """Test that system prompts are properly configured."""
@@ -50,7 +50,6 @@ async def test_prompt_configuration():
 async def test_no_context_response_handling():
     """Test that response service handles no-context scenarios."""
     from app.services.conversation.response_service import ConversationResponseService
-    from app.config.prompt_settings import get_prompt_settings
     
     with patch('app.services.conversation.response_service.get_retriever_service'), \
          patch('app.services.conversation.response_service.get_llm_router'), \

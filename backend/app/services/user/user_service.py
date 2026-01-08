@@ -3,9 +3,7 @@ User account service for creating, activating, and managing user accounts.
 Handles user registration, account lifecycle, and profile management.
 """
 
-from datetime import datetime, timezone
 from typing import Optional, Tuple
-import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

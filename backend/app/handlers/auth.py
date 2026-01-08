@@ -11,9 +11,8 @@ Handlers manage business logic for:
 import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from jose import jwt
 
-from app.core.security import create_access_token, hash_password
+from app.core.security import create_access_token
 from app.config.settings import settings
 from app.models.user import User
 from app.models.user_permission import PermissionLevel, UserPermission

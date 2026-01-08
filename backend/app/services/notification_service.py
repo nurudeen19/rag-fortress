@@ -2,9 +2,7 @@
 
 from typing import List, Optional, Tuple, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone
+from sqlalchemy import select
 
 from app.models.notification import Notification
 from app.models.user import User

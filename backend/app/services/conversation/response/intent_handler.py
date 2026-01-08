@@ -12,7 +12,7 @@ Supports hybrid classification:
 from typing import Dict, Any, AsyncGenerator, Optional
 import asyncio
 
-from app.utils.intent_classifier import IntentClassifier, IntentType, IntentResult
+from app.utils.intent_classifier import IntentClassifier
 from app.config.response_templates import get_template_response
 from app.services.conversation.service import ConversationService
 from app.models.message import MessageRole

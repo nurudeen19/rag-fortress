@@ -6,7 +6,7 @@ following the builder pattern for extensibility.
 """
 
 import logging
-from typing import List, Optional
+from typing import List
 from abc import ABC, abstractmethod
 
 from pydantic import EmailStr
@@ -42,7 +42,6 @@ class BaseEmailBuilder(ABC):
         
         Must be implemented by subclasses.
         """
-        pass
 
 
 class AccountActivationEmailBuilder(BaseEmailBuilder):

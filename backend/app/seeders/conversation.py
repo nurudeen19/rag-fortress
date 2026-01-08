@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from datetime import datetime, timezone, timedelta
 import uuid
-import json
 
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole

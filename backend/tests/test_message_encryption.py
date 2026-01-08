@@ -12,7 +12,6 @@ from app.utils.encryption import (
     encrypt_conversation_message,
     decrypt_conversation_message,
     parse_versioned_data,
-    EncryptionError,
     DecryptionError
 )
 

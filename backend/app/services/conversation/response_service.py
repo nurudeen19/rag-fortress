@@ -8,7 +8,7 @@ Clean orchestration service that delegates to specialized components:
 - ConversationActivityLogger: Activity logging
 """
 
-from typing import Dict, Any, AsyncGenerator, Optional
+from typing import Dict, Any
 
 from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm import get_llm_router

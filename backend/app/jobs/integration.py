@@ -14,11 +14,8 @@ Flow:
 """
 
 import json
-from typing import Optional, Callable, Any, List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
+from typing import Optional, Callable
 import asyncio
-import concurrent.futures
 
 from app.models.job import Job, JobStatus, JobType
 from app.services.job_service import JobService
@@ -161,7 +158,6 @@ class JobQueueIntegration:
         try:
             # Run in a subprocess-like isolated context
             import concurrent.futures
-            import threading
             
             def _run_async():
                 """Run async code in isolated event loop."""

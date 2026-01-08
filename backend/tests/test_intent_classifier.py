@@ -8,7 +8,6 @@ import pytest
 from app.utils.intent_classifier import (
     IntentClassifier,
     IntentType,
-    IntentResult,
     get_intent_classifier,
     reset_intent_classifier
 )

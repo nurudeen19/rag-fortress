@@ -5,7 +5,6 @@ Initializes a dedicated LLM instance for classification and decomposition tasks.
 Falls back to primary LLM if no dedicated config is provided.
 """
 
-from typing import Optional
 from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 

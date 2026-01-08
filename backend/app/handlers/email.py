@@ -5,9 +5,7 @@ Handlers manage validation, business rules, and coordinate with email service.
 """
 
 import logging
-from typing import List
 
-from pydantic import EmailStr, ValidationError
 
 from app.services.email import get_email_service
 from app.schemas.email import (

@@ -1,7 +1,7 @@
 """Job service for managing async jobs and background processing."""
 
 import json
-from typing import Optional, List, Any
+from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

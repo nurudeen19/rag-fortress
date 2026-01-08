@@ -13,7 +13,7 @@ Endpoints:
 - DELETE /api/v1/override-requests/{id} - Cancel pending request
 """
 
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 

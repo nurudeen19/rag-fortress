@@ -8,7 +8,6 @@ Usage:
 
 import asyncio
 import sys
-from datetime import datetime, timedelta, timezone
 
 # Setup path for imports
 import os
@@ -19,7 +18,6 @@ from app.core.database import get_async_session_factory
 from app.core.startup import get_startup_controller
 from app.models.job import Job, JobStatus
 from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = get_logger(__name__)
 

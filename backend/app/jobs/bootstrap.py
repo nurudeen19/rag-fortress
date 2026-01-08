@@ -16,10 +16,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.core import get_logger
-from app.core.database import get_session
 from app.jobs import JobManager
-from app.config.settings import settings
-from app.services.override_request_service import OverrideRequestService
 
 
 logger = get_logger(__name__)

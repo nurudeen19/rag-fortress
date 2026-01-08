@@ -4,9 +4,8 @@ Message model for storing individual messages in conversations.
 This model represents individual messages (user queries and AI responses) within a conversation.
 Messages are encrypted at rest using HKDF-derived keys from the master encryption key.
 """
-from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, Index, Enum as SQLEnum, JSON, event
+from sqlalchemy import String, Text, Integer, ForeignKey, Index, Enum as SQLEnum, JSON, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime, timezone
 from typing import Optional, Dict, Any, TYPE_CHECKING
 import uuid
 import enum

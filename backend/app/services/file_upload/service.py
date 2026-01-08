@@ -5,7 +5,6 @@ Core service for tracking uploads, approvals, and processing status.
 
 import uuid
 import json
-import os
 from typing import Optional, List, Dict, Tuple
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession

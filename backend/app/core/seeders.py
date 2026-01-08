@@ -49,7 +49,6 @@ class BaseSeed(ABC):
         Returns:
             Dict with seeding results including 'success' key.
         """
-        pass
 
 
 class AdminAccountSeeder(BaseSeed):

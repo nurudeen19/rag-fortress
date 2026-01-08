@@ -4,7 +4,6 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from app.models.notification import Notification
 from app.services.notification_service import NotificationService
 from app.config.cache_settings import cache_settings
 from app.core.cache import get_cache

@@ -30,12 +30,10 @@ logger = get_logger(__name__)
 
 class EncryptionError(Exception):
     """Base exception for encryption operations."""
-    pass
 
 
 class DecryptionError(Exception):
     """Exception raised when decryption fails."""
-    pass
 
 
 def derive_key(purpose: str, version: int = 1) -> bytes:

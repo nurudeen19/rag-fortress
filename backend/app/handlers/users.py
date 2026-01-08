@@ -14,19 +14,15 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone, timedelta
 
 from app.models.user import User
 from app.models.auth import Role
-from app.config.settings import settings
 from app.services.user import (
     UserAccountService,
     RolePermissionService,
-    PasswordService,
     InvitationService,
 )
 from app.models.user_invitation import UserInvitation
-from app.services.email.builders.specialized import InvitationEmailBuilder
 from app.utils.user_clearance_cache import get_user_clearance_cache
 
 logger = logging.getLogger(__name__)

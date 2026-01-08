@@ -1,9 +1,7 @@
 """File upload endpoints."""
 
-import os
 import json
-import tempfile
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, status, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,9 +13,6 @@ from app.schemas.file_upload import (
     FileUploadResponse,
     FileUploadDetailResponse,
     FileUploadListResponse,
-    FileUploadListWithCountsResponse,
-    FileUploadApproveRequest,
-    FileUploadRejectRequest,
     SecurityLevelEnum,
 )
 from app.schemas.user import SuccessResponse

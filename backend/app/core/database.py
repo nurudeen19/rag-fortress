@@ -7,7 +7,7 @@ management, connection pooling, and migration handling.
 from typing import AsyncGenerator, Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import NullPool
 from app.config.database_settings import DatabaseSettings
 from app.models import Base
 import logging

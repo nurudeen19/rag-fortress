@@ -248,3 +248,8 @@ disallow_untyped_calls = false
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unused_variables = true
+
+[dependency-groups]
+dev = [
+    "autoflake>=2.3.1",
+]

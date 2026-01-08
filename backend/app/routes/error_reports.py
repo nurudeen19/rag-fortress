@@ -14,7 +14,7 @@ Admin Endpoints:
 - PATCH /api/admin/error-reports/{report_id} - Update error report status/notes
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
 

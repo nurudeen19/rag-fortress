@@ -107,7 +107,7 @@ class TestFilterBuilding:
         retriever.provider = "weaviate"
         
         try:
-            from weaviate.classes.query import Filter
+            pass
         except ImportError:
             pytest.skip("weaviate-client not installed or incompatible version")
         

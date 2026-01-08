@@ -8,7 +8,7 @@ This migration:
 1. Creates the departments table for organizational structure
 2. Adds department_id to users table
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 from alembic import op
 import sqlalchemy as sa

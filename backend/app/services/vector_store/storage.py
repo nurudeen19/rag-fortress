@@ -4,9 +4,8 @@ Manages ingestion from FileUpload model through vector store.
 Supports hybrid search (dense + sparse vectors) for compatible providers.
 """
 
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple
 from datetime import datetime, timezone
-import json
 
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings

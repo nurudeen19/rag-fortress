@@ -6,7 +6,7 @@ Handles field detection for field_selection in document uploads.
 import json
 import csv
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Optional
 from pathlib import Path
 
 from app.core import get_logger

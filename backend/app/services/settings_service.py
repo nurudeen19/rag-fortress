@@ -8,7 +8,7 @@ Updates invalidate memory cache and Redis cache for individual setting keys.
 import json
 from typing import Dict, List, Optional, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, delete
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.core import get_logger

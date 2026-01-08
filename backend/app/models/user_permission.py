@@ -4,7 +4,7 @@ UserPermission model for managing access control.
 Defines user security levels at organization-wide and department-specific levels.
 Enables granular access control for files and resources.
 """
-from sqlalchemy import String, Integer, ForeignKey, Boolean, Index, DateTime
+from sqlalchemy import Integer, ForeignKey, Boolean, Index, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
@@ -153,7 +153,6 @@ class UserPermission(Base):
             for override in permission.get_active_overrides():
                 print(f"Override: {override.reason}, expires in {override.days_remaining()} days")
         """
-        from datetime import timezone
         
         if not self.user:
             return []

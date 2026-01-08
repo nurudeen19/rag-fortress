@@ -11,16 +11,16 @@ the extended PermissionOverride model with status field for approval workflow:
 
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List, Tuple
+from typing import Optional, List, Tuple
 
-from sqlalchemy import select, and_, or_
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.permission_override import PermissionOverride, OverrideType, OverrideStatus
 from app.models.user import User
 from app.models.department import Department
-from app.models.user_permission import UserPermission, PermissionLevel
+from app.models.user_permission import PermissionLevel
 from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)

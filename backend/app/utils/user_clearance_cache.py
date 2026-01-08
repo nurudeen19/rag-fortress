@@ -18,8 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.cache import get_cache
 from app.models.user import User
-from app.models.user_permission import UserPermission, PermissionLevel
-from app.models.department import Department
+from app.models.user_permission import PermissionLevel
 from app.config.settings import settings
 from app.core import get_logger
 

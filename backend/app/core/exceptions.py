@@ -48,7 +48,6 @@ class ConfigurationError(RAGFortressException):
 
 class InvalidSettingsError(ConfigurationError):
     """Raised when settings validation fails."""
-    pass
 
 
 class MissingEnvironmentVariableError(ConfigurationError):
@@ -90,7 +89,6 @@ class LLMError(RAGFortressException):
 
 class LLMProviderError(LLMError):
     """Raised when LLM provider encounters an error."""
-    pass
 
 
 class LLMRateLimitError(LLMError):
@@ -257,7 +255,6 @@ class VectorStoreError(RAGFortressException):
 
 class VectorStoreConnectionError(VectorStoreError):
     """Raised when vector store connection fails."""
-    pass
 
 
 class CollectionNotFoundError(VectorStoreError):
@@ -297,7 +294,6 @@ class DatabaseError(RAGFortressException):
 
 class DatabaseConnectionError(DatabaseError):
     """Raised when database connection fails."""
-    pass
 
 
 class RecordNotFoundError(DatabaseError):
@@ -439,7 +435,6 @@ async def validation_exception_handler(
 ) -> JSONResponse:
     """Handle Pydantic validation errors with detailed logging."""
     from app.core import get_logger
-    import json
     
     logger = get_logger(__name__)
     
