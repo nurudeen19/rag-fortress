@@ -419,3 +419,118 @@ async def get_cache_stats():
         "size": cache.get_size()
     }
 ```
+
+---
+
+## Conversation History Cache Encryption
+
+### Overview
+
+RAG Fortress provides flexible caching strategies for conversation history, allowing you to choose between:
+
+1. **Fast Plaintext Caching** (Default) - Short TTL with minimal data exposure
+2. **Encrypted Cache Storage** - Secure at-rest encryption for sensitive data
+
+### Configuration
+
+Add these settings to your `.env` file:
+
+```env
+# Cache TTL for conversation history (seconds)
+# Default: 3600 (1 hour)
+CACHE_TTL_HISTORY=3600
+
+# Enable encryption for history stored in cache
+# Default: false (no encryption)
+ENABLE_CACHE_HISTORY_ENCRYPTION=false
+```
+
+### Usage Scenarios
+
+#### Scenario 1: Fast Caching (Default)
+```env
+ENABLE_CACHE_HISTORY_ENCRYPTION=false
+CACHE_TTL_HISTORY=3600  # 1 hour
+```
+- **Best for**: High-volume conversations, internal tools
+- **Performance**: Fast reads/writes, low CPU
+- **Security**: Plaintext in cache for 1 hour
+
+#### Scenario 2: Secure Caching
+```env
+ENABLE_CACHE_HISTORY_ENCRYPTION=true
+CACHE_TTL_HISTORY=3600  # 1 hour encrypted
+```
+- **Best for**: Healthcare/PII data, compliance (HIPAA, GDPR)
+- **Performance**: ~5-10% CPU overhead
+- **Security**: Encrypted at-rest in cache
+
+#### Scenario 3: Short-Lived Cache
+```env
+ENABLE_CACHE_HISTORY_ENCRYPTION=false
+CACHE_TTL_HISTORY=300  # 5 minutes
+```
+- **Best for**: Maximum privacy, minimal caching
+- **Performance**: More DB queries
+- **Security**: Very short exposure window
+
+### Encryption Format
+
+When encryption is enabled, history uses versioned encryption:
+
+```
+v1:{base64_encrypted_data}
+```
+
+This enables:
+- Automatic format detection
+- Future key rotation support
+- Backward compatibility
+
+### Implementation Details
+
+**Cache Key Format:**
+```
+conversation:history:{conversation_id}
+```
+
+**Stored Data:**
+```json
+[
+  {"role": "user", "content": "What is AI?"},
+  {"role": "assistant", "content": "Artificial Intelligence is..."}
+]
+```
+
+When encryption is enabled, this entire JSON is encrypted before caching.
+
+### Security Considerations
+
+| Threat | Plaintext Cache | Encrypted Cache |
+|--------|-----------------|-----------------|
+| Cache backend breach | Exposed | Encrypted ✅ |
+| Network sniffer | Protected* | Protected* |
+| Memory inspection | Exposed | Exposed* |
+| Accidental exposure | Exposed | Encrypted ✅ |
+
+*Protected by Redis/network security  
+*Memory exposure is same (decrypted before use)
+
+### Compliance
+
+Encryption mode helps with:
+- **HIPAA**: Encryption at rest
+- **GDPR**: Data protection measures
+- **SOC 2**: Secure data handling
+- **PCI DSS**: Sensitive data protection
+
+### Backward Compatibility
+
+The implementation handles transitions between encryption modes seamlessly:
+
+- ✅ Enable encryption without clearing cache
+- ✅ Disable encryption without clearing cache
+- ✅ Automatic detection of encrypted vs plaintext data
+- ✅ No manual migration needed
+
+```

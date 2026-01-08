@@ -15,6 +15,7 @@ from app.core import get_logger
 from app.core.events import get_event_bus
 from app.services.query_validator_service import get_query_validator
 from app.config.settings import settings
+from app.utils.encryption import encrypt_conversation_message, decrypt_conversation_message
 
 logger = get_logger(__name__)
 
@@ -350,14 +351,50 @@ class ConversationService:
                 "message": None
             }
 
+    def _decrypt_cached_history(self, cached_data: str) -> List[Dict[str, str]]:
+        """
+        Helper to decrypt and parse cached conversation history.
+        
+        Handles both encrypted and plaintext cache data for backward compatibility.
+        Returns empty list if decryption/parsing fails.
+        """
+        if not cached_data:
+            return []
+        
+        # If encryption is enabled, try decrypt first
+        if settings.cache_settings.ENABLE_CACHE_HISTORY_ENCRYPTION:
+            try:
+                decrypted_data = decrypt_conversation_message(cached_data)
+                return json.loads(decrypted_data)
+            except Exception as exc:
+                logger.warning(f"Failed to decrypt history cache: {exc}, trying as plaintext")
+                try:
+                    return json.loads(cached_data)
+                except Exception:
+                    logger.warning(f"Failed to parse cached history as plaintext")
+                    return []
+        else:
+            # Try plaintext first, then try decryption for backward compatibility
+            try:
+                return json.loads(cached_data)
+            except Exception:
+                try:
+                    # Might be encrypted data from previous encryption-enabled session
+                    decrypted_data = decrypt_conversation_message(cached_data)
+                    return json.loads(decrypted_data)
+                except Exception as exc:
+                    logger.warning(f"Failed to parse cached history: {exc}")
+                    return []
+    
     async def get_conversation_history(self, conversation_id: str, user_id: int) -> List[Dict[str, str]]:
         """Return the cached conversation history or fetch the recent conversation context."""
         cache_key = f"conversation:history:{conversation_id}"
         try:
             cached_data = await self.cache.get(cache_key)
             if cached_data:
-                history = json.loads(cached_data)
-                return history
+                history = self._decrypt_cached_history(cached_data)
+                if history:
+                    return history
         except Exception as exc:
             logger.warning(f"Failed to read history cache: {exc}")
 
@@ -393,6 +430,8 @@ class ConversationService:
         
         Cache is updated AFTER successful DB commit to maintain consistency.
         If DB persistence fails, cache remains untouched.
+        
+        History can be optionally encrypted in cache based on settings.ENABLE_CACHE_HISTORY_ENCRYPTION.
         """
         # If persistence to DB is requested, do it FIRST
         if persist_to_db and user_id is not None:
@@ -413,7 +452,7 @@ class ConversationService:
         cache_key = f"conversation:history:{conversation_id}"
         try:
             cached_data = await self.cache.get(cache_key)
-            history = json.loads(cached_data) if cached_data else []
+            history = self._decrypt_cached_history(cached_data) if cached_data else []
         except Exception as exc:
             logger.warning(f"Failed to read history cache before update: {exc}")
             history = []
@@ -430,14 +469,26 @@ class ConversationService:
         logger.info(f"Cached exchange for {conversation_id}")
 
     async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
-        """Helper to persist conversation history to cache with a 24-hour TTL."""
+        """
+        Helper to persist conversation history to cache.
+        
+        Uses configurable TTL from settings.CACHE_TTL_HISTORY.
+        Optionally encrypts history before storing based on settings.ENABLE_CACHE_HISTORY_ENCRYPTION.
+        """
         try:
             cache_key = f"conversation:history:{conversation_id}"
-            await self.cache.set(
-                cache_key,
-                json.dumps(history),
-                ttl=int(timedelta(hours=24).total_seconds())
-            )
+            history_json = json.dumps(history)
+            
+            # Encrypt if enabled
+            if settings.cache_settings.ENABLE_CACHE_HISTORY_ENCRYPTION:
+                cached_data = encrypt_conversation_message(history_json)
+            else:
+                cached_data = history_json
+            
+            # Use configurable TTL from settings (defaults to 1 hour)
+            ttl = settings.cache_settings.CACHE_TTL_HISTORY
+            
+            await self.cache.set(cache_key, cached_data, ttl=ttl)
         except Exception as exc:
             logger.error(f"Failed to cache history for {conversation_id}: {exc}")
 

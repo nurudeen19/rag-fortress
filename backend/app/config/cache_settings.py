@@ -49,6 +49,10 @@ class CacheSettings(BaseSettings):
     CACHE_TTL_CONFIG: int = Field(3600, env="CACHE_TTL_CONFIG")  # 1 hour
     CACHE_TTL_USER_DATA: int = Field(300, env="CACHE_TTL_USER_DATA")  # 5 minutes
     CACHE_TTL_SESSION: int = Field(1800, env="CACHE_TTL_SESSION")  # 30 minutes
+    CACHE_TTL_HISTORY: int = Field(3600, env="CACHE_TTL_HISTORY")  # 1 hour (sensitive data)
+    
+    # Conversation History Caching
+    ENABLE_CACHE_HISTORY_ENCRYPTION: bool = Field(False, env="ENABLE_CACHE_HISTORY_ENCRYPTION")  # Encrypt history in cache
     
     def get_redis_url(self) -> str:
         """
