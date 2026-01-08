@@ -9,14 +9,22 @@ Tests the complete flow:
 """
 import pytest
 import pytest_asyncio
+from cryptography.fernet import Fernet
 from sqlalchemy import select, update, delete
 
 from app.core.database import DatabaseManager
 from app.config.database_settings import DatabaseSettings
 from app.models.application_setting import ApplicationSetting
 from app.core.settings_loader import load_settings_by_category
-from app.config.settings import Settings
+from app.config.settings import Settings, settings
 from app.services.settings_service import SettingsService
+from app.utils.encryption import (
+    encrypt_value,
+    decrypt_value,
+    encrypt_settings_value,
+    decrypt_settings_value,
+    DecryptionError
+)
 
 
 @pytest_asyncio.fixture
@@ -69,7 +77,7 @@ class TestEncryptionSecurity:
         
         assert setting.is_sensitive is True
         assert setting.value != test_api_key  # Should be encrypted
-        assert setting.value.startswith('gAAAAA')  # Fernet encryption marker
+        assert setting.value.startswith('v1:')  # HKDF encryption with version prefix
     
     @pytest.mark.asyncio
     async def test_cache_stores_encrypted(self, db_session, settings_service):
@@ -98,7 +106,7 @@ class TestEncryptionSecurity:
         assert isinstance(cached_data, dict)
         assert cached_data['is_sensitive'] is True
         assert cached_data['value'] != test_api_key  # Still encrypted
-        assert cached_data['value'].startswith('gAAAAA')
+        assert cached_data['value'].startswith('v1:')
     
     @pytest.mark.asyncio
     async def test_memory_stores_encrypted(self, db_session, settings_service):
@@ -127,7 +135,7 @@ class TestEncryptionSecurity:
         
         stored_value = settings_obj._encrypted_settings['LLM_API_KEY']
         assert stored_value != test_api_key  # Still encrypted
-        assert stored_value.startswith('gAAAAA')
+        assert stored_value.startswith('v1:')
     
     @pytest.mark.asyncio
     async def test_decrypts_on_access(self, db_session, settings_service):
@@ -330,7 +338,7 @@ class TestSettingsService:
             
             assert setting.is_sensitive is True  # Auto-detected
             assert setting.value != test_value  # Encrypted
-            assert setting.value.startswith('gAAAAA')
+            assert setting.value.startswith('v1:')
         finally:
             await settings_service.delete(test_key)
     
@@ -361,7 +369,7 @@ class TestSettingsService:
             db_setting = result.scalar_one()
             
             assert db_setting.value != new_value  # Encrypted
-            assert db_setting.value.startswith('gAAAAA')
+            assert db_setting.value.startswith('v1:')
             assert db_setting.value != initial_value  # Different from old encrypted value
         finally:
             await settings_service.delete(test_key)
@@ -545,3 +553,145 @@ class TestSettingsOverrideFlow:
                 delete(ApplicationSetting).where(ApplicationSetting.key == "cors_allow_origins")
             )
             await db_session.commit()
+
+
+class TestHKDFSettingsEncryption:
+    """Test settings encryption with new HKDF approach."""
+    
+    def test_encrypt_value_uses_hkdf(self):
+        """encrypt_value should use new HKDF format with version prefix."""
+        plaintext = "my_api_key_secret"
+        encrypted = encrypt_value(plaintext)
+        
+        # Should have version prefix
+        assert encrypted.startswith("v1:")
+        assert len(encrypted) > len("v1:")
+    
+    def test_decrypt_value_roundtrip(self):
+        """Encrypt then decrypt should return original value."""
+        plaintext = "database_password_123"
+        encrypted = encrypt_value(plaintext)
+        decrypted = decrypt_value(encrypted)
+        
+        assert decrypted == plaintext
+    
+    def test_settings_value_wrappers(self):
+        """Settings-specific wrappers should work correctly."""
+        plaintext = "openai_api_key_sk-123"
+        encrypted = encrypt_settings_value(plaintext)
+        decrypted = decrypt_settings_value(encrypted)
+        
+        assert encrypted.startswith("v1:")
+        assert decrypted == plaintext
+    
+    def test_encrypt_empty_string(self):
+        """Empty strings should be handled gracefully."""
+        encrypted = encrypt_value("")
+        assert encrypted == ""
+    
+    def test_decrypt_empty_string(self):
+        """Empty strings should be handled gracefully."""
+        decrypted = decrypt_value("")
+        assert decrypted == ""
+
+
+class TestLegacyEncryptionCompatibility:
+    """Test backwards compatibility with old SETTINGS_ENCRYPTION_KEY."""
+    
+    def test_decrypt_legacy_format(self):
+        """Should decrypt data encrypted with old SETTINGS_ENCRYPTION_KEY."""
+        # Skip if no legacy key configured
+        legacy_key = getattr(settings, 'SETTINGS_ENCRYPTION_KEY', None)
+        if not legacy_key:
+            pytest.skip("No SETTINGS_ENCRYPTION_KEY configured")
+        
+        # Create legacy encrypted data
+        cipher = Fernet(legacy_key.encode() if isinstance(legacy_key, str) else legacy_key)
+        plaintext = "legacy_encrypted_secret"
+        legacy_encrypted = cipher.encrypt(plaintext.encode()).decode()
+        
+        # Should not have version prefix
+        assert not legacy_encrypted.startswith("v")
+        
+        # decrypt_value should handle it
+        decrypted = decrypt_value(legacy_encrypted)
+        assert decrypted == plaintext
+    
+    def test_new_format_takes_precedence(self):
+        """New HKDF format should be tried first."""
+        plaintext = "new_format_value"
+        new_encrypted = encrypt_value(plaintext)
+        
+        # Should decrypt correctly
+        decrypted = decrypt_value(new_encrypted)
+        assert decrypted == plaintext
+    
+    def test_corrupted_versioned_data_raises_error(self):
+        """Corrupted data with version prefix should raise DecryptionError."""
+        # Create invalid versioned data
+        corrupted = "v1:corrupted_garbage_data"
+        
+        with pytest.raises(DecryptionError):
+            decrypt_value(corrupted)
+
+
+class TestEncryptionVersioning:
+    """Test version-based encryption for future rotation."""
+    
+    def test_different_versions_use_different_keys(self):
+        """v1 and v2 should produce different ciphertexts."""
+        plaintext = "same_value"
+        
+        encrypted_v1 = encrypt_settings_value(plaintext, version=1)
+        encrypted_v2 = encrypt_settings_value(plaintext, version=2)
+        
+        # Should both have correct prefixes
+        assert encrypted_v1.startswith("v1:")
+        assert encrypted_v2.startswith("v2:")
+        
+        # Ciphertexts should be different
+        assert encrypted_v1 != encrypted_v2
+        
+        # Both should decrypt correctly
+        decrypted_v1 = decrypt_settings_value(encrypted_v1)
+        decrypted_v2 = decrypt_settings_value(encrypted_v2)
+        
+        assert decrypted_v1 == plaintext
+        assert decrypted_v2 == plaintext
+
+
+class TestEncryptionEdgeCases:
+    """Test edge cases and error handling."""
+    
+    def test_unicode_characters(self):
+        """Unicode characters should encrypt/decrypt correctly."""
+        plaintext = "API密钥🔑key-with-émojis"
+        encrypted = encrypt_value(plaintext)
+        decrypted = decrypt_value(encrypted)
+        
+        assert decrypted == plaintext
+    
+    def test_long_value(self):
+        """Long values should encrypt correctly."""
+        plaintext = "x" * 10000  # 10KB value
+        encrypted = encrypt_value(plaintext)
+        decrypted = decrypt_value(encrypted)
+        
+        assert decrypted == plaintext
+    
+    def test_special_characters(self):
+        """Special characters should be handled correctly."""
+        plaintext = "key!@#$%^&*()_+-=[]{}|;':\",./<>?"
+        encrypted = encrypt_value(plaintext)
+        decrypted = decrypt_value(encrypted)
+        
+        assert decrypted == plaintext
+    
+    def test_plaintext_fallback(self):
+        """If both encryption formats fail, should return original (plaintext)."""
+        # This simulates unencrypted legacy data or migration scenarios
+        plaintext = "unencrypted_value"
+        decrypted = decrypt_value(plaintext)
+        
+        # Should return as-is with logged warning
+        assert decrypted == plaintext

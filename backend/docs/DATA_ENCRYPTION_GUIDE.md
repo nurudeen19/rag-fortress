@@ -4,7 +4,7 @@
 
 RAG Fortress encrypts sensitive data at rest using **HKDF key derivation** from a single master key. Currently encrypts:
 - Conversation messages (user queries and AI responses)
-- Application settings (future)
+- Application settings (API keys, passwords, sensitive configuration)
 
 ## Architecture
 
@@ -59,14 +59,42 @@ encrypted = encrypt("sensitive data", purpose="custom", version=1)
 plaintext = decrypt(encrypted, purpose="custom")
 ```
 
+**Application Settings (Automatic):**
+```python
+from app.services.settings_service import SettingsService
+
+# Sensitive settings (API keys, passwords) auto-encrypted
+await settings_service.create(
+    key="openai_api_key",
+    value="sk-...",  # Auto-encrypted if key matches sensitive pattern
+    category="llm"
+)
+
+# Auto-decrypted on retrieval
+value = await settings_service.get_value("openai_api_key")
+```
+
 ### 3. Migrate Existing Data
 
+**Messages:**
 ```bash
 # Preview what would be encrypted
 python -m app.utils.migrate_message_encryption --dry-run
 
 # Encrypt unencrypted messages
 python -m app.utils.migrate_message_encryption
+```
+
+**Settings:**
+```bash
+# Preview settings migration
+python -m app.utils.migrate_settings_encryption --dry-run
+
+# Migrate from legacy SETTINGS_ENCRYPTION_KEY to HKDF
+python -m app.utils.migrate_settings_encryption
+
+# Verify all settings encrypted
+python -m app.utils.migrate_settings_encryption --verify
 ```
 
 ## Key Rotation

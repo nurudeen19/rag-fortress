@@ -68,6 +68,11 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         
         # NOW store encrypted metadata for lazy decryption (after Pydantic init)
         self._encrypted_settings = {}
+        self._encrypted_overrides = {}  # Track which attrs have encrypted overrides
+        self._cached_settings = cached_settings or {}
+        
+        if cached_settings:
+            self._apply_cached_settings(cached_settings)
     
     # Validators for empty string fields that should be None or typed conversions
     @field_validator("VECTOR_DB_PORT", "VECTOR_DB_GRPC_PORT", "EMBEDDING_DIMENSIONS", 
@@ -92,11 +97,6 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         if isinstance(v, str):
             return v.lower() in ("true", "1", "yes", "on")
         return bool(v)
-        self._encrypted_overrides = {}  # Track which attrs have encrypted overrides
-        self._cached_settings = cached_settings or {}
-        
-        if cached_settings:
-            self._apply_cached_settings(cached_settings)
     
     def __getattribute__(self, name: str):
         """

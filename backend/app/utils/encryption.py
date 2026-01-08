@@ -250,17 +250,70 @@ def decrypt_settings_value(encrypted_value: str) -> str:
 
 # Legacy compatibility (for existing code using old API)
 def encrypt_value(value: str) -> str:
-    """Legacy wrapper for settings encryption (backwards compatibility)."""
+    """
+    Legacy wrapper for settings encryption (backwards compatibility).
+    
+    Now uses HKDF-derived keys with version prefixes.
+    Old code calling this will automatically get the new encryption format.
+    """
     return encrypt_settings_value(value, version=1)
 
 
 def decrypt_value(encrypted_value: str) -> str:
-    """Legacy wrapper for settings decryption (backwards compatibility)."""
+    """
+    Legacy wrapper for settings decryption with backwards compatibility.
+    
+    Handles three cases:
+    1. New format with version prefix (v1:...) - uses HKDF-derived key
+    2. Old format without prefix - tries legacy SETTINGS_ENCRYPTION_KEY decryption
+    3. Plaintext (no encryption) - returns as-is if both formats fail
+    
+    Returns:
+        Decrypted value or original string if decryption fails
+    """
+    if not encrypted_value:
+        return encrypted_value
+    
+    # Try new HKDF-based format first (has version prefix)
+    if ":" in encrypted_value and encrypted_value.split(":", 1)[0].startswith("v"):
+        try:
+            return decrypt_settings_value(encrypted_value)
+        except (DecryptionError, ValueError) as e:
+            logger.error(
+                f"Failed to decrypt with new HKDF format: {type(e).__name__}: {str(e)}. "
+                f"Data might be corrupted.",
+                exc_info=True
+            )
+            # Don't try legacy format if it has version prefix - corruption issue
+            raise DecryptionError(f"Failed to decrypt versioned data: {str(e)}") from e
+    
+    # Try legacy SETTINGS_ENCRYPTION_KEY format (no version prefix)
     try:
-        return decrypt_settings_value(encrypted_value)
-    except (DecryptionError, ValueError):
-        # If new format fails, might be old format - try legacy decryption
-        logger.warning("Failed to decrypt with new format, returning as-is (legacy data?)")
+        from cryptography.fernet import Fernet
+        
+        # Fallback to old SETTINGS_ENCRYPTION_KEY if available
+        legacy_key = getattr(settings, 'SETTINGS_ENCRYPTION_KEY', None)
+        if not legacy_key:
+            logger.warning(
+                "No SETTINGS_ENCRYPTION_KEY found for legacy decryption. "
+                "Data might be plaintext or requires migration."
+            )
+            return encrypted_value
+        
+        cipher = Fernet(legacy_key.encode() if isinstance(legacy_key, str) else legacy_key)
+        decrypted = cipher.decrypt(encrypted_value.encode())
+        logger.info(
+            "Successfully decrypted using legacy SETTINGS_ENCRYPTION_KEY. "
+            "Consider re-encrypting with new HKDF format."
+        )
+        return decrypted.decode()
+        
+    except Exception as e:
+        # If both formats fail, it might be plaintext or corrupted
+        logger.warning(
+            f"Failed to decrypt with both new and legacy formats: {type(e).__name__}: {str(e)}. "
+            f"Returning value as-is (might be plaintext)."
+        )
         return encrypted_value
 
 

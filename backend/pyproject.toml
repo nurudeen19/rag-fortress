@@ -98,7 +98,7 @@ dependencies = [
     # Jina Rerank (via langchain-community)
 
     # LangChain - Vector Databases
-    # "langchain-chroma==1.0.0",  # Currently incompatible with Python 3.14+ - Use pip + requirements.txt for Python < 3.14
+    "langchain-chroma==1.0.0",  # Currently incompatible with Python 3.14+ - Use pip + requirements.txt for Python < 3.14
     "langchain-community==0.4.1",  # Required for FAISS integration
     "faiss-cpu==1.13.1",  # FAISS vector store (Python 3.14+ compatible)
     "langchain-qdrant==1.1.0",
