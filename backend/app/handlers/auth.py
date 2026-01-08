@@ -12,7 +12,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import create_access_token
+from app.core.security import create_access_token, create_refresh_token
 from app.config.settings import settings
 from app.models.user import User
 from app.models.user_permission import PermissionLevel, UserPermission
@@ -81,8 +81,9 @@ async def handle_login(
                 "user": None
             }
         
-        # Generate JWT token
+        # Generate JWT tokens
         token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
         
         # Calculate token expiry timestamp
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -135,6 +136,7 @@ async def handle_login(
         return {
             "success": True,
             "token": token,
+            "refresh_token": refresh_token,
             "expires_at": expires_at.isoformat(),
             "user": user_response
         }

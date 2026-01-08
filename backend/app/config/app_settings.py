@@ -60,6 +60,7 @@ class AppSettings(BaseSettings):
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")  # 7 days for refresh tokens
     
     # Master encryption key for HKDF key derivation
     # Derives purpose-specific keys: conversations, settings, etc.
