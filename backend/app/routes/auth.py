@@ -87,18 +87,18 @@ async def login(
         key="access_token",
         value=result["token"],
         httponly=True,
-        secure=True,  # HTTPS only
+        secure=settings.COOKIE_SECURE,  # False for HTTP dev, True for HTTPS prod
         samesite="lax",  # CSRF protection
-        max_age=60 * 30,  # 30 minutes
+        max_age=settings.COOKIE_ACCESS_TOKEN_MAX_AGE,
     )
     
     response.set_cookie(
         key="refresh_token",
         value=result["refresh_token"],
         httponly=True,
-        secure=True,
+        secure=settings.COOKIE_SECURE,
         samesite="lax",
-        max_age=60 * 60 * 24 * 7,  # 7 days
+        max_age=settings.COOKIE_REFRESH_TOKEN_MAX_AGE,
     )
     
     return LoginResponse(
@@ -173,7 +173,7 @@ async def refresh_access_token(
             httponly=True,
             secure=True,
             samesite="lax",
-            max_age=60 * 30,  # 30 minutes
+            max_age=settings.COOKIE_ACCESS_TOKEN_MAX_AGE,
         )
         
         response.set_cookie(
@@ -182,7 +182,7 @@ async def refresh_access_token(
             httponly=True,
             secure=True,
             samesite="lax",
-            max_age=60 * 60 * 24 * 7,  # 7 days
+            max_age=settings.COOKIE_REFRESH_TOKEN_MAX_AGE,
         )
         
         # Build user response
