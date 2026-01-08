@@ -33,7 +33,7 @@ export function useChatHistory() {
       const cacheKey = getCacheKey()
       if (!cacheKey) return null
       
-      const cached = localStorage.getItem(cacheKey)
+      const cached = sessionStorage.getItem(cacheKey)
       if (!cached) return null
       
       const { data, timestamp } = JSON.parse(cached)
@@ -41,7 +41,7 @@ export function useChatHistory() {
       
       // Check if cache has expired
       if (now - timestamp > CACHE_TTL) {
-        localStorage.removeItem(cacheKey)
+        sessionStorage.removeItem(cacheKey)
         return null
       }
       
@@ -64,7 +64,7 @@ export function useChatHistory() {
         data,
         timestamp: Date.now()
       }
-      localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+      sessionStorage.setItem(cacheKey, JSON.stringify(cacheData))
     } catch (err) {
       console.error('Error writing cache:', err)
     }
@@ -77,7 +77,7 @@ export function useChatHistory() {
     try {
       const cacheKey = getCacheKey()
       if (cacheKey) {
-        localStorage.removeItem(cacheKey)
+        sessionStorage.removeItem(cacheKey)
       }
     } catch (err) {
       console.error('Error clearing cache:', err)
@@ -167,17 +167,8 @@ export function useChatHistory() {
       // CRITICAL: Update cache with new conversation
       // This ensures that even if page is refreshed immediately after creation,
       // the new conversation will be visible in the sidebar.
-      // Using a longer TTL for fresh data (10 minutes instead of 5)
-      const updatedChats = chats.value
-      try {
-        const cacheData = {
-          data: updatedChats,
-          timestamp: Date.now()
-        }
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData))
-      } catch (err) {
-        console.warn('Failed to update cache with new conversation:', err)
-      }
+      // Note: Using sessionStorage - cache cleared on browser/tab close for security
+      setCache(chats.value)
       
       // Only navigate if explicitly requested
       // For streaming flows, caller should update URL after streaming completes
