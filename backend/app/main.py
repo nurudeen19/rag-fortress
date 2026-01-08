@@ -15,7 +15,7 @@ from app.core.startup import get_startup_controller
 from app.core.exceptions import register_exception_handlers
 from app.middleware import setup_middlewares
 from app.utils.rate_limiter import get_limiter, rate_limit_exceeded_handler
-from app.config.app_settings import AppSettings
+from app.config.settings import settings
 
 # Suppress langchain_core's Pydantic V1 compatibility warning on Python 3.14+
 # This is a known issue with langchain_core that will be fixed in future versions
@@ -140,12 +140,12 @@ def create_app() -> FastAPI:
         """Root endpoint - API information."""
         return {
             "name": "RAG Fortress API",
-            "version": "1.0.0",
+            "version": settings.app_settings.APP_VERSION,
             "status": "operational",
             "documentation": "/docs",
             "health": "/health",
             "api_prefix": "/api/v1",
-            "frontend_url": AppSettings().FRONTEND_URL
+            "frontend_url": settings.app_settings.FRONTEND_URL
         }
     
     # Health check endpoint
@@ -155,7 +155,7 @@ def create_app() -> FastAPI:
         startup_controller = get_startup_controller()
         return {
             "status": "healthy" if startup_controller.is_ready() else "starting",
-            "version": "1.0.0"
+            "version": settings.app_settings.APP_VERSION
         }
     
     return app

@@ -60,6 +60,11 @@ class AppSettings(BaseSettings):
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    
+    # Master encryption key for HKDF key derivation
+    # Derives purpose-specific keys: conversations, settings, etc.
+    MASTER_ENCRYPTION_KEY: str = Field(None, env="MASTER_ENCRYPTION_KEY")
+    # Legacy: kept for backwards compatibility
     SETTINGS_ENCRYPTION_KEY: str = Field(None, env="SETTINGS_ENCRYPTION_KEY")
     
     # CORS Configuration
