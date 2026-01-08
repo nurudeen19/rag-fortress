@@ -122,9 +122,12 @@ def encrypt(plaintext: str, purpose: str, version: int = 1) -> str:
         
         return versioned_ciphertext
         
+    except EncryptionError:
+        raise
     except Exception as e:
-        logger.error(f"Encryption failed for purpose '{purpose}' v{version}: {e}")
-        raise EncryptionError(f"Failed to encrypt data: {e}")
+        error_msg = f"Encryption failed for purpose '{purpose}' v{version}: {type(e).__name__}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise EncryptionError(error_msg) from e
 
 
 def decrypt(versioned_ciphertext: str, purpose: str) -> str:
@@ -166,16 +169,21 @@ def decrypt(versioned_ciphertext: str, purpose: str) -> str:
         
         return plaintext.decode()
         
-    except InvalidToken:
-        logger.error(f"Invalid token for purpose '{purpose}' (wrong key or corrupted data)")
-        raise DecryptionError("Decryption failed: Invalid token or corrupted data")
+    except InvalidToken as e:
+        error_msg = f"Invalid token for purpose '{purpose}' (wrong key or corrupted data): {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise DecryptionError(error_msg) from e
     except ValueError as e:
         # If it's a parse error, might be legacy unencrypted or old format
-        logger.warning(f"Failed to parse versioned data: {e}. Returning as-is (might be legacy data)")
-        return versioned_ciphertext
+        error_msg = f"Failed to parse versioned data: {str(e)}. Data might be unencrypted (legacy format?)"
+        logger.warning(error_msg)
+        raise DecryptionError(error_msg) from e
+    except DecryptionError:
+        raise
     except Exception as e:
-        logger.error(f"Decryption failed for purpose '{purpose}': {e}")
-        raise DecryptionError(f"Failed to decrypt data: {e}")
+        error_msg = f"Decryption failed for purpose '{purpose}': {type(e).__name__}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise DecryptionError(error_msg) from e
 
 
 def parse_versioned_data(versioned_data: str) -> Tuple[int, str]:

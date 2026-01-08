@@ -47,6 +47,7 @@ class Message(Base):
     """
     
     __tablename__ = "messages"
+    __allow_unmapped__ = True  # Allow unmapped instance attributes for encryption cache
     
     # Primary key (stored as CHAR(36) for MySQL compatibility)
     id: Mapped[str] = mapped_column(
@@ -72,6 +73,7 @@ class Message(Base):
     _content: Mapped[str] = mapped_column("content", Text, nullable=False)
     
     # Internal cache for decrypted content (not persisted to DB)
+    # These are unmapped instance attributes (see __allow_unmapped__ above)
     _decrypted_content: Optional[str] = None
     _content_dirty: bool = False  # Track if content needs encryption before save
     
@@ -103,7 +105,11 @@ class Message(Base):
                 self._decrypted_content = decrypt_conversation_message(self._content)
             except (DecryptionError, ValueError) as e:
                 # If decryption fails, content might be unencrypted (legacy data)
-                logger.warning(f"Failed to decrypt message {self.id}: {e}. Using raw content (legacy?)")
+                logger.error(
+                    f"Failed to decrypt message {self.id}: {type(e).__name__}: {str(e)}. "
+                    f"Data might be unencrypted (legacy format). Using raw content.",
+                    exc_info=True
+                )
                 self._decrypted_content = self._content
         
         return self._decrypted_content or ""
@@ -144,10 +150,11 @@ def encrypt_message_content(mapper, connection, target: Message):
         try:
             target._content = encrypt_conversation_message(target._decrypted_content)
             target._content_dirty = False
-            logger.debug(f"Encrypted message {target.id} content before save")
+            logger.debug(f"Encrypted message {target.id} content before {mapper.class_.__name__} save")
         except EncryptionError as e:
-            logger.error(f"Failed to encrypt message {target.id}: {e}")
-            raise
+            error_msg = f"Failed to encrypt message {target.id} before save: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise EncryptionError(error_msg) from e
 
 
 @event.listens_for(Message, "load")
