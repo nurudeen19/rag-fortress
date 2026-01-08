@@ -5,7 +5,7 @@
 !README.md
 
 # Keep demo knowledge base files
-!/knowledge_base/demo_data/**
+!/files/knowledge_base/demo_data/**
 
 # Keep unified files structure (store no actual files, only structure)
 !/files/
