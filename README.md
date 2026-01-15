@@ -30,8 +30,8 @@ uv sync                    # Install dependencies
 cp .env.example .env       # Configure your API keys and database
 
 # Option 1: Using uv run (recommended - no activation needed)
-uv run python setup.py     # Initialize database with migrations and seeders
-uv run python run.py       # Start server on http://localhost:8000
+uv run setup.py     # Initialize database with migrations and seeders
+uv run run.py       # Start server on http://localhost:8000
 
 # Option 2: Activate environment first
 .venv\Scripts\Activate     # Windows
