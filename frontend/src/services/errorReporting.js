@@ -5,8 +5,8 @@
 
 import api from './api'
 
-const ERROR_REPORTS_BASE_URL = '/api/error-reports'
-const ADMIN_ERROR_REPORTS_BASE_URL = '/api/admin/error-reports'
+const ERROR_REPORTS_BASE_URL = '/error-reports'
+const ADMIN_ERROR_REPORTS_BASE_URL = '/admin/error-reports'
 
 /**
  * User error reporting operations
