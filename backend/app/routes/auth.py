@@ -15,7 +15,7 @@ Endpoints:
 - POST /api/v1/auth/password-reset-confirm - Confirm password reset
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from jose import jwt, JWTError
 from datetime import datetime, timezone
@@ -112,7 +112,7 @@ async def login(
 @router.post("/refresh", response_model=LoginResponse, status_code=200)
 async def refresh_access_token(
     response: Response,
-    refresh_token: str = Depends(lambda request: request.cookies.get("refresh_token")),
+    request: Request,
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -120,6 +120,8 @@ async def refresh_access_token(
     
     Returns new access token and updates cookies.
     """
+    refresh_token = request.cookies.get("refresh_token")
+    
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
