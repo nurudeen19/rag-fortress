@@ -24,6 +24,7 @@ from app.services.email import get_email_service
 from app.jobs import get_job_manager
 from app.core import get_logger
 from app.core.sync_db import get_sync_session
+from app.utils.log_sanitizer import sanitize_log_data
 
 
 logger = get_logger(__name__)
@@ -503,7 +504,7 @@ class JobQueueIntegration:
             
             logger.info(
                 f"Processing password reset email: "
-                f"email={recipient_email}, name={recipient_name}, token={reset_token[:10]}..."
+                f"email={recipient_email}, name={recipient_name}"
             )
             
             if not all([recipient_email, recipient_name, reset_token]):
@@ -537,7 +538,6 @@ class JobQueueIntegration:
         """Handle password changed notification email job."""
         try:
             payload = json.loads(job.payload) if job.payload else {}
-            
             logger.info(f"Password changed email job payload: {payload}")
             
             email_service = get_email_service()

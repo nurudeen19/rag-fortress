@@ -136,7 +136,7 @@ class PermissionService:
         Example:
             override = await permission_service.revoke_override(42, db)
             if override:
-                print(f"Revoked override for user {override.user_id}")
+                logger.debug(f"Revoked override for user {override.user_id}")
         """
         override = await db.get(PermissionOverride, override_id)
         if override:
@@ -166,7 +166,7 @@ class PermissionService:
 
         Example:
             count = await permission_service.cleanup_expired_overrides(db)
-            print(f"Cleaned up {count} expired overrides")
+            logger.info(f"Cleaned up {count} expired overrides")
         """
         now = datetime.now(timezone.utc)
 
@@ -217,7 +217,7 @@ class PermissionService:
         Example:
             overrides = await permission_service.get_active_overrides_for_user(42, db)
             for override in overrides:
-                print(f"Override: {override.reason}, expires {override.valid_until}")
+                logger.debug(f"Override: {override.reason}, expires {override.valid_until}")
         """
         now = datetime.now(timezone.utc)
 
