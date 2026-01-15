@@ -541,6 +541,7 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
   const token = authStore.token
   const response = await fetch(`${API_BASE_URL}/v1/conversations/${conversationId}/respond`, {
     method: 'POST',
+    credentials: 'include',  // Send httpOnly cookies with request
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
