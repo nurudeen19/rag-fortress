@@ -62,8 +62,6 @@ class AppSettings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")  # 7 days for refresh tokens
     COOKIE_SECURE: bool = Field(True, env="COOKIE_SECURE")  # Set to False for HTTP development
-    COOKIE_ACCESS_TOKEN_MAX_AGE: int = Field(1800, env="COOKIE_ACCESS_TOKEN_MAX_AGE")  # 30 minutes in seconds
-    COOKIE_REFRESH_TOKEN_MAX_AGE: int = Field(604800, env="COOKIE_REFRESH_TOKEN_MAX_AGE")  # 7 days in seconds
     
     # Master encryption key for HKDF key derivation
     # Derives purpose-specific keys: conversations, settings, etc.

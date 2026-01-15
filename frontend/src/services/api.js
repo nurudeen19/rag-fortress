@@ -1,9 +1,5 @@
 import axios from 'axios'
 
-// Cookie configuration from environment
-const COOKIE_ACCESS_TOKEN_MAX_AGE = parseInt(import.meta.env.VITE_COOKIE_ACCESS_TOKEN_MAX_AGE || '1800')
-const COOKIE_REFRESH_TOKEN_MAX_AGE = parseInt(import.meta.env.VITE_COOKIE_REFRESH_TOKEN_MAX_AGE || '604800')
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api',
   timeout: 30000,

@@ -83,13 +83,17 @@ async def login(
     
     # Set httpOnly cookies for secure token storage
     # These are NOT accessible via JavaScript (XSS protection)
+    # Calculate max_age in seconds from token expiration settings
+    access_token_max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    refresh_token_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    
     response.set_cookie(
         key="access_token",
         value=result["token"],
         httponly=True,
         secure=settings.COOKIE_SECURE,  # False for HTTP dev, True for HTTPS prod
         samesite="lax",  # CSRF protection
-        max_age=settings.COOKIE_ACCESS_TOKEN_MAX_AGE,
+        max_age=access_token_max_age,
     )
     
     response.set_cookie(
@@ -98,7 +102,7 @@ async def login(
         httponly=True,
         secure=settings.COOKIE_SECURE,
         samesite="lax",
-        max_age=settings.COOKIE_REFRESH_TOKEN_MAX_AGE,
+        max_age=refresh_token_max_age,
     )
     
     return LoginResponse(
@@ -169,13 +173,17 @@ async def refresh_access_token(
         expires_at = datetime.now(timezone.utc) + expires_delta
         
         # Update httpOnly cookies
+        # Calculate max_age in seconds from token expiration settings
+        access_token_max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        refresh_token_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        
         response.set_cookie(
             key="access_token",
             value=new_access_token,
             httponly=True,
             secure=True,
             samesite="lax",
-            max_age=settings.COOKIE_ACCESS_TOKEN_MAX_AGE,
+            max_age=access_token_max_age,
         )
         
         response.set_cookie(
@@ -184,7 +192,7 @@ async def refresh_access_token(
             httponly=True,
             secure=True,
             samesite="lax",
-            max_age=settings.COOKIE_REFRESH_TOKEN_MAX_AGE,
+            max_age=refresh_token_max_age,
         )
         
         # Build user response

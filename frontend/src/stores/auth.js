@@ -2,10 +2,6 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '../services/api'
 
-// Cookie configuration from environment
-const COOKIE_ACCESS_TOKEN_MAX_AGE = parseInt(import.meta.env.VITE_COOKIE_ACCESS_TOKEN_MAX_AGE || '1800') // 30 minutes
-const COOKIE_REFRESH_TOKEN_MAX_AGE = parseInt(import.meta.env.VITE_COOKIE_REFRESH_TOKEN_MAX_AGE || '604800') // 7 days
-
 export const useAuthStore = defineStore('auth', () => {
   // State - user data only (no tokens in localStorage)
   // Tokens are stored in httpOnly cookies (secure, XSS-safe)
@@ -278,8 +274,5 @@ export const useAuthStore = defineStore('auth', () => {
     confirmPasswordReset,
     logout,
     clearError,
-    // Configuration
-    COOKIE_ACCESS_TOKEN_MAX_AGE,
-    COOKIE_REFRESH_TOKEN_MAX_AGE,
   }
 })
