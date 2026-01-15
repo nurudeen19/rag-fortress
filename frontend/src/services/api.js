@@ -86,15 +86,17 @@ api.interceptors.response.use(
     
     // Log 403 Forbidden errors (demo mode, permissions, etc.)
     if (error.response?.status === 403) {
-      console.error('403 Forbidden:', error.response.data)
+      console.error('403 Forbidden - Access denied')
     }
     
-    // General error logging
-    console.error('API Error:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    })
+    // General error logging - sanitized
+    if (import.meta.env.DEV) {
+      console.error('API Error:', {
+        status: error.response?.status,
+        message: error.message,
+        url: error.config?.url
+      })
+    }
     
     return Promise.reject(error)
   }

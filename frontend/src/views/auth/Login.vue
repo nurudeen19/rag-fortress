@@ -189,18 +189,12 @@ const getErrorDetails = (errorMessage) => {
 
   // Convert to lowercase for case-insensitive matching
   const message = String(errorMessage).toLowerCase()
-  
-  // Debug logging
-  console.log('Error message received:', errorMessage)
-  console.log('Lowercased message:', message)
 
   // Check for suspended account - includes "account is locked" with optional reason
   if (message.includes('account is locked')) {
     // Extract suspension reason if present (format: "Account is locked (reason)")
     const reasonMatch = errorMessage.match(/\((.*?)\)/)
     const reason = reasonMatch ? reasonMatch[1] : null
-    
-    console.log('Detected suspended account, reason:', reason)
     
     return {
       type: 'suspended',
@@ -223,7 +217,6 @@ const getErrorDetails = (errorMessage) => {
 
   // Check for unverified account
   if (message.includes('not verified') || message.includes('unverified')) {
-    console.log('Detected unverified account')
     return {
       type: 'unverified',
       title: 'Email Not Verified',
@@ -232,7 +225,6 @@ const getErrorDetails = (errorMessage) => {
   }
 
   // Default error
-  console.log('Using default error handling')
   return {
     type: 'generic',
     title: 'Login Failed',
@@ -252,9 +244,10 @@ const handleLogin = async () => {
     // Redirect to dashboard (main entry point)
     router.push('/dashboard')
   } else {
-    console.log('Login result:', result)
+    if (import.meta.env.DEV) {
+      console.log('Login failed')
+    }
     const errorDetails = getErrorDetails(result.error)
-    console.log('Error details parsed:', errorDetails)
     error.value = errorDetails.message
     errorType.value = errorDetails.type
     errorTitle.value = errorDetails.title

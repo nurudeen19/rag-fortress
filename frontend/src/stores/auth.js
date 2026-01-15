@@ -221,11 +221,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
       
       error.value = errorMessage
-      console.error('Password reset error:', {
-        status: err.response?.status,
-        data: err.response?.data,
-        extractedMessage: errorMessage
-      })
+      if (import.meta.env.DEV) {
+        console.error('Password reset error:', {
+          status: err.response?.status,
+          message: errorMessage
+        })
+      }
       throw err
     } finally {
       loading.value = false
