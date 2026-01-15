@@ -13,6 +13,19 @@
         <div class="card-body">
           <h2 class="text-2xl font-semibold text-fortress-100 mb-6">Sign In</h2>
 
+          <!-- Demo Mode Backend Wake-up Notice -->
+          <div v-if="demoModeEnabled" class="mb-4 p-4 rounded-lg text-sm border bg-info/10 border-info/30 text-info">
+            <div class="flex items-start gap-3">
+              <svg class="h-5 w-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+              </svg>
+              <div>
+                <p class="font-semibold mb-1">Demo Mode - Backend Startup Notice</p>
+                <p>If your first login attempt fails, please wait a few minutes before retrying. The backend service may be waking up from sleep due to inactivity.</p>
+              </div>
+            </div>
+          </div>
+
           <!-- Error Message -->
           <div v-if="error" :class="[
             'mb-4 p-4 rounded-lg text-sm border',
