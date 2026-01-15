@@ -198,14 +198,23 @@ export function useChatHistory() {
    * Delete a chat conversation
    */
   const deleteChat = async (chatId) => {
-    const deletedChat = chats.value.find(c => c.id === chatId)
+    if (!chatId) {
+      console.error('Delete called without chatId')
+      return
+    }
+    
+    const deletedChatIndex = chats.value.findIndex(c => c.id === chatId)
     
     try {
       // Send delete request to server first (non-optimistic to ensure proper error handling)
       await api.delete(`/v1/conversations/${chatId}`)
       
-      // Success! Remove from local state and cache
-      chats.value = chats.value.filter(c => c.id !== chatId)
+      // Success! Remove from local state using splice for better reactivity
+      if (deletedChatIndex !== -1) {
+        chats.value.splice(deletedChatIndex, 1)
+      }
+      
+      // Update cache AFTER modifying the array
       setCache(chats.value)
       
       // Clear active chat if it's the one being deleted
@@ -215,7 +224,7 @@ export function useChatHistory() {
       
       // Navigate away if we're deleting the active chat
       if (router.currentRoute.value.params.id === chatId) {
-        await router.push('/chat')
+        await router.push('/chat/new')
       }
     } catch (err) {
       error.value = err.message || 'Failed to delete conversation'
