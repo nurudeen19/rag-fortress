@@ -40,13 +40,10 @@ class ConversationGenerateRequest(BaseModel):
 class ConversationResponse(BaseModel):
     """Response containing conversation details."""
     id: str
-    user_id: int
     title: str
     message_count: int
     last_message_at: Optional[str]
     created_at: Optional[str]
-    updated_at: Optional[str]
-    is_deleted: bool
 
 
 class ConversationListResponse(BaseModel):
@@ -66,7 +63,6 @@ class MessageResponse(BaseModel):
     token_count: Optional[int]
     meta: Optional[dict]
     created_at: Optional[str]
-    updated_at: Optional[str]
 
 
 class MessageListResponse(BaseModel):

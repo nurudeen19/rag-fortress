@@ -40,20 +40,20 @@ class ConversationService:
         return int(len(text.split()) * 1.3)
 
     def _serialize_conversation(self, conversation: Conversation) -> Dict[str, Any]:
-        """Convert Conversation model to dict."""
+        """Convert Conversation model to dict for frontend.        
+        Only includes fields that the frontend needs.
+        """
         return {
             "id": conversation.id,
-            "user_id": conversation.user_id,
             "title": conversation.title,
             "message_count": conversation.message_count,
             "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
             "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
-            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
-            "is_deleted": conversation.is_deleted,
         }
 
     def _serialize_message(self, message: Message) -> Dict[str, Any]:
-        """Convert Message model to dict."""
+        """Convert Message model to dict for frontend.
+        """
         return {
             "id": message.id,
             "conversation_id": message.conversation_id,
@@ -62,7 +62,6 @@ class ConversationService:
             "token_count": message.token_count,
             "meta": message.meta,
             "created_at": message.created_at.isoformat() if message.created_at else None,
-            "updated_at": message.updated_at.isoformat() if message.updated_at else None,
         }
 
     # ==================== Conversation Operations ====================
