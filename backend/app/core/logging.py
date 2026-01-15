@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 from app.config import settings
-from app.utils.log_sanitizer import LogSanitizer
+from app.core.log_sanitizer import LogSanitizer
 
 
 class ColoredFormatter(logging.Formatter):
@@ -33,7 +33,10 @@ class ColoredFormatter(logging.Formatter):
             log_color = self.COLORS.get(record.levelname, self.RESET)
             record.levelname = f"{log_color}{record.levelname}{self.RESET}"
             record.name = f"\033[94m{record.name}{self.RESET}"  # Blue for logger name
-        return super().format(record)
+        
+        # Format the message and sanitize the final output
+        formatted = super().format(record)
+        return LogSanitizer._sanitize_string(formatted)
     
     def _sanitize_record(self, record):
         """Sanitize sensitive data from log record"""
@@ -64,7 +67,10 @@ class PlainFormatter(logging.Formatter):
             record.levelname = record.levelname.replace('\033[32m', '').replace('\033[33m', '').replace('\033[31m', '').replace('\033[35m', '').replace('\033[36m', '').replace('\033[0m', '').replace('\033[94m', '')
         if '\033[' in record.name:
             record.name = record.name.replace('\033[94m', '').replace('\033[0m', '')
-        return super().format(record)
+        
+        # Format the message and sanitize the final output
+        formatted = super().format(record)
+        return LogSanitizer._sanitize_string(formatted)
     
     def _sanitize_record(self, record):
         """Sanitize sensitive data from log record"""

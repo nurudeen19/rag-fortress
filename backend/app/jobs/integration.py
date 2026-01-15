@@ -24,7 +24,6 @@ from app.services.email import get_email_service
 from app.jobs import get_job_manager
 from app.core import get_logger
 from app.core.sync_db import get_sync_session
-from app.utils.log_sanitizer import sanitize_log_data
 
 
 logger = get_logger(__name__)

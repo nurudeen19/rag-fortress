@@ -82,7 +82,7 @@ class ColoredFormatter(logging.Formatter):
         # ... then format normally
     
     def _sanitize_record(self, record):
-        from app.utils.log_sanitizer import LogSanitizer
+        from app.core.log_sanitizer import LogSanitizer
         
         # Sanitize message string
         if isinstance(record.msg, str):

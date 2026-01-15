@@ -27,7 +27,12 @@ class LogSanitizer:
         (re.compile(r'eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'), '[REDACTED_JWT]'),
         # Bearer tokens
         (re.compile(r'Bearer\s+[A-Za-z0-9_\-\.]+', re.IGNORECASE), 'Bearer [REDACTED_TOKEN]'),
-        # API keys (common formats)
+        # Password/token/secret fields in dict/JSON strings (e.g., 'password': 'value' or "password": "value")
+        (re.compile(r"'(password|passwd|pwd|token|access_token|refresh_token|reset_token|secret|api_key|apikey|authorization|auth|bearer|private_key)':\s*'([^']*)'", re.IGNORECASE), r"'\1': '[REDACTED]'"),
+        (re.compile(r'"(password|passwd|pwd|token|access_token|refresh_token|reset_token|secret|api_key|apikey|authorization|auth|bearer|private_key)":\s*"([^"]*)"', re.IGNORECASE), r'"\1": "[REDACTED]"'),
+        # API keys starting with common prefixes (sk-, pk-, etc.) followed by alphanumeric
+        (re.compile(r'\b(sk|pk|api|key)[-_][a-zA-Z0-9]{20,}'), '[REDACTED_API_KEY]'),
+        # API keys (generic format with label)
         (re.compile(r'(?i)api[_-]?key["\s:=]+[A-Za-z0-9_\-]{16,}'), 'api_key=[REDACTED_KEY]'),
         # AWS keys
         (re.compile(r'(?i)(aws_access_key_id|aws_secret_access_key)["\s:=]+[A-Za-z0-9/+=]{16,}'), r'\1=[REDACTED_AWS]'),
@@ -35,6 +40,8 @@ class LogSanitizer:
         (re.compile(r'(?i)secret["\s:=]+[A-Za-z0-9_\-\.]{8,}'), 'secret=[REDACTED_SECRET]'),
         # Password in URLs
         (re.compile(r'://([^:]+):([^@]+)@'), r'://\1:[REDACTED]@'),
+        # Password/Token in log messages (e.g., "Password: xxx" or "Token: xxx") - but NOT format placeholders like %s
+        (re.compile(r'\b(Password|Token|Secret|API[- ]?Key):\s*(?!%[sd])([^\s,]+)', re.IGNORECASE), r'\1: [REDACTED]'),
     ]
     
     REDACTED_TEXT = '[REDACTED]'
