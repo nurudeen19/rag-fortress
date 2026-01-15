@@ -71,9 +71,9 @@ class LLMSettings(BaseSettings):
     # ============================================================================
     # CLASSIFIER/DECOMPOSER CONFIGURATION
     # ============================================================================
+    # LLM-based classifier (advanced, requires explicit provider configuration)
     ENABLE_LLM_CLASSIFIER: bool = Field(False, env="ENABLE_LLM_CLASSIFIER")
-    ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
-    INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
+    # Query decomposer (breaks complex queries into sub-queries using LLM)
     ENABLE_QUERY_DECOMPOSER: bool = Field(False, env="ENABLE_QUERY_DECOMPOSER")
     
     # Classifier requires explicit configuration when enabled

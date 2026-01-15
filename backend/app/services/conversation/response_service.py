@@ -77,13 +77,10 @@ class ConversationResponseService:
         )
         self.error_handler = ErrorResponseHandler(self.conversation_service)
         
-        # Initialize heuristic intent classifier if enabled
-        intent_classifier = None
-        if settings.llm_settings.ENABLE_INTENT_CLASSIFIER:
-            intent_classifier = get_intent_classifier(
-                confidence_threshold=settings.llm_settings.INTENT_CONFIDENCE_THRESHOLD
-            )
-            logger.info("Heuristic intent classifier enabled")
+        # Initialize heuristic intent classifier (always enabled as default/fallback)
+        # Uses pattern matching and rules for fast intent classification
+        intent_classifier = get_intent_classifier()
+        logger.info("Heuristic intent classifier initialized")
         
         # Initialize intent handler with both classifiers
         self.intent_handler = IntentHandler(

@@ -63,31 +63,11 @@ Only matches above the configured threshold use template responses.
 
 ## Configuration
 
-### Environment Variables
+### Configuration
 
-Add to your `.env` file:
+The heuristic intent classifier is **always enabled** as the default fast classifier. It cannot be disabled and has no configuration options.
 
-```env
-# Intent Classifier Settings
-ENABLE_INTENT_CLASSIFIER=true              # Enable/disable feature
-INTENT_CONFIDENCE_THRESHOLD=0.7            # Minimum confidence (0.0-1.0)
-```
-
-### Settings
-
-Defined in `app/config/app_settings.py`:
-
-```python
-class AppSettings(BaseSettings):
-    # Intent Classifier Configuration
-    ENABLE_INTENT_CLASSIFIER: bool = Field(True, env="ENABLE_INTENT_CLASSIFIER")
-    INTENT_CONFIDENCE_THRESHOLD: float = Field(0.7, env="INTENT_CONFIDENCE_THRESHOLD")
-```
-
-### Adjusting Threshold
-
-- **Higher threshold (0.8-0.9)**: More conservative, fewer template responses
-- **Lower threshold (0.5-0.6)**: More aggressive, more template responses
+For advanced intent classification with LLM-based approaches, see the separate `ENABLE_LLM_CLASSIFIER` feature.
 - **Recommended**: 0.7 provides good balance
 
 ## Template Responses
@@ -395,25 +375,9 @@ if 0.65 <= confidence < threshold:
     logger.warning(f"Borderline classification: '{query}' → {intent}")
 ```
 
-## Disabling the Feature
+## Architecture Notes
 
-To disable intent classification:
-
-```env
-# In .env
-ENABLE_INTENT_CLASSIFIER=false
-```
-
-Or at runtime:
-
-```python
-from app.config.settings import get_settings
-
-settings = get_settings()
-settings.app.ENABLE_INTENT_CLASSIFIER = False
-```
-
-When disabled, all queries go through the full RAG pipeline.
+The heuristic classifier is always active as a fast, lightweight fallback. When `ENABLE_LLM_CLASSIFIER` is enabled, it provides an alternative classification method but doesn't replace the heuristic classifier.
 
 ## Troubleshooting
 
@@ -432,10 +396,10 @@ When disabled, all queries go through the full RAG pipeline.
 **Symptom**: Simple greetings go through RAG pipeline
 
 **Solution**:
-1. Verify `ENABLE_INTENT_CLASSIFIER=true`
-2. Check confidence threshold (try lowering to 0.6)
-3. Add more greeting patterns if needed
-4. Check logs to see classification results
+1. Check confidence threshold (try lowering to 0.6)
+2. Add more greeting patterns if needed
+3. Check logs to see classification results
+4. Review pattern matching rules in `intent_classifier.py`
 
 ### Issue: Inconsistent Template Responses
 

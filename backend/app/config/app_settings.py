@@ -232,10 +232,6 @@ class AppSettings(BaseSettings):
         if not (0.0 <= self.RETRIEVAL_SCORE_THRESHOLD <= 1.0):
             raise ValueError("RETRIEVAL_SCORE_THRESHOLD must be between 0.0 and 1.0")
         
-        # Intent classifier validation
-        if not (0.0 <= self.INTENT_CONFIDENCE_THRESHOLD <= 1.0):
-            raise ValueError("INTENT_CONFIDENCE_THRESHOLD must be between 0.0 and 1.0")
-        
         # Rate limiting validation
         if self.RATE_LIMIT_PER_MINUTE < 1:
             raise ValueError("RATE_LIMIT_PER_MINUTE must be at least 1")
