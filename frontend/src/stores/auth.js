@@ -110,12 +110,15 @@ export const useAuthStore = defineStore('auth', () => {
         ...user.value,
         ...response,
       }
+      return { success: true }
     } catch (err) {
       console.error('Failed to fetch profile:', err)
-      // Token might be invalid, logout
-      if (err.response?.status === 401) {
-        logout()
+      // If 401 during manual refresh (not initialization), clear state
+      // During initialization, let router handle redirect
+      if (err.response?.status === 401 && initialized.value) {
+        user.value = null
       }
+      return { success: false, error: err }
     }
   }
 

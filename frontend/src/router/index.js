@@ -192,7 +192,7 @@ const router = createRouter({
 })
 
 // Navigation guard for role-based access control
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
   const requiresRoles = to.matched.find(record => record.meta.requiresRoles)?.meta?.requiresRoles
@@ -209,13 +209,17 @@ router.beforeEach((to, from, next) => {
     })
   }
 
-  // Wait for auth initialization
+  // Wait for auth initialization to complete
   if (!authStore.initialized) {
-    if (authStore.token && authStore.user) {
-      authStore.initialized = true
-    } else if (!authStore.token) {
-      authStore.initialized = true
-    }
+    // Wait for fetchProfile to complete
+    await new Promise(resolve => {
+      const unwatch = authStore.$subscribe(() => {
+        if (authStore.initialized) {
+          unwatch()
+          resolve()
+        }
+      })
+    })
   }
 
   // Check if route requires authentication
