@@ -31,16 +31,6 @@ class QueryDecomposer:
         except Exception as e:
             logger.warning(f"Structured output not supported, falling back to JSON mode: {e}")
             self.structured_llm = self.llm
-        
-        # Create prompt from settings
-        
-        system_template = SystemMessagePromptTemplate.from_template(
-            settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT
-        )
-        user_template = HumanMessagePromptTemplate.from_template(
-            settings.prompt_settings.DECOMPOSER_USER_PROMPT
-        )
-        self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
     
     async def decompose(self, query: str) -> Optional[QueryDecompositionResult]:
         """
@@ -57,8 +47,12 @@ class QueryDecomposer:
         
         try:
             # Build and invoke chain with structured output
-            chain = self.prompt | self.structured_llm
-            result = await chain.ainvoke({"query": query.strip()})
+            system_prompt = settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query.strip()}
+            ]
+            result = await self.structured_llm.ainvoke(messages)
             
             # If structured output returned the model directly, use it
             if isinstance(result, QueryDecompositionResult):

@@ -47,10 +47,7 @@ class LLMIntentClassifier:
         
         try:
             # Get system prompt directly from settings (Settings class inherits from PromptSettings)
-            system_prompt = settings.CLASSIFIER_SYSTEM_PROMPT
-            
-            logger.debug(f"[CLASSIFIER] System prompt length: {len(system_prompt) if system_prompt else 0}")
-            logger.debug(f"[CLASSIFIER] System prompt preview: {system_prompt[:100] if system_prompt else 'EMPTY'}")
+            system_prompt = settings.prompt_settings.CLASSIFIER_SYSTEM_PROMPT
             
             # Send query with system prompt using structured output
             messages = [
@@ -59,11 +56,6 @@ class LLMIntentClassifier:
             ]
             
             result = await self.structured_llm.ainvoke(messages)
-            
-            logger.info(
-                f"[CLASSIFIER] Query: '{query}' -> "
-                f"requires_rag={result.requires_rag}, confidence={result.confidence:.2f}"
-            )
             
             # If structured output returned the model directly, use it
             if isinstance(result, LLMClassificationResult):
