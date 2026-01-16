@@ -100,17 +100,22 @@ class RetrieverService:
             
             # Check security clearance level
             doc_security_level = metadata.get("security_level", "GENERAL")
-            try:
-                # Handle both string enum names and integer values
-                if isinstance(doc_security_level, int):
-                    doc_level_value = doc_security_level
-                elif isinstance(doc_security_level, str) and doc_security_level.isdigit():
-                    doc_level_value = int(doc_security_level)
-                else:
-                    doc_level_value = PermissionLevel[doc_security_level].value
-            except (KeyError, ValueError):
-                logger.warning(f"Invalid security level '{doc_security_level}' in document metadata")
-                continue
+            
+            # Handle None or 0 as public/no clearance required
+            if doc_security_level is None or doc_security_level == 0:
+                doc_level_value = 0  # Public document, accessible to all
+            else:
+                try:
+                    # Handle both string enum names and integer values
+                    if isinstance(doc_security_level, int):
+                        doc_level_value = doc_security_level
+                    elif isinstance(doc_security_level, str) and doc_security_level.isdigit():
+                        doc_level_value = int(doc_security_level)
+                    else:
+                        doc_level_value = PermissionLevel[doc_security_level].value
+                except (KeyError, ValueError):
+                    logger.warning(f"Invalid security level '{doc_security_level}' in document metadata, defaulting to GENERAL")
+                    doc_level_value = PermissionLevel.GENERAL.value  # Default to GENERAL instead of skipping
             
             # Check department access first
             is_department_only = metadata.get("is_department_only", False)
@@ -294,11 +299,35 @@ class RetrieverService:
                     details={"k": max_k}
                 )
             
-            # Step 2: Rerank ALL candidates to identify truly relevant documents
+            # Step 2: Check quality of initial results and rerank only if needed
             relevant_docs = []
+            score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
             reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
             
+            # First, check if we have high-quality results from initial retrieval
+            high_quality_docs = []
+            for doc, score in results[:top_k]:  # Only check top_k results
+                if score >= score_threshold:
+                    high_quality_docs.append(doc)
+            
+            # Determine if reranking is needed
+            needs_reranking = False
             if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
+                if len(high_quality_docs) >= top_k:
+                    # We have enough high-quality results, no need to rerank
+                    logger.info(f"Skipping reranking: {len(high_quality_docs)} high-quality results already found (threshold={score_threshold})")
+                    relevant_docs = high_quality_docs[:top_k]
+                else:
+                    # Not enough high-quality results, rerank to find better ones
+                    needs_reranking = True
+                    logger.info(f"Reranking needed: only {len(high_quality_docs)}/{top_k} high-quality results found")
+            else:
+                # No reranker available - use similarity scores
+                relevant_docs = high_quality_docs
+                logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
+            
+            # Perform reranking if needed
+            if needs_reranking:
                 docs_to_rerank = [doc for doc, _ in results]
                 
                 logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {top_k})")
@@ -314,13 +343,6 @@ class RetrieverService:
                         relevant_docs.append(doc)
                 
                 logger.info(f"Reranker identified {len(relevant_docs)} relevant documents (threshold={reranker_threshold})")
-            else:
-                # No reranker - use similarity scores
-                score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
-                for doc, score in results:
-                    if score >= score_threshold:
-                        relevant_docs.append(doc)
-                logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
             
             # Step 3: Apply security filtering to relevant documents (unless skipped for multi-query)
             if not relevant_docs:

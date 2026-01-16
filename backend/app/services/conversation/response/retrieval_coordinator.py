@@ -42,10 +42,7 @@ class RetrievalCoordinator:
         2. Combine and deduplicate all results  
         3. Rerank combined results against original query (for relevance to original)
         4. Apply security filtering ONCE to final results
-        5. Analyze which subqueries were satisfied/blocked/unsatisfied for partial context tracking
-        
-        This avoids double-filtering, ensures reranker sees full candidate pool, and enables
-        specialized prompting based on which aspects of a decomposed query succeeded vs failed.
+        5. Analyze which subqueries were satisfied/blocked/unsatisfied for partial context tracking        
         
         Args:
             user_query: User's original question (used for reranking)
@@ -63,9 +60,7 @@ class RetrievalCoordinator:
             - max_security_level: Optional[int]
             - partial_context: Optional[Dict] with subquery satisfaction tracking
         """
-        dept_level_str = f", dept_level={user_dept_clearance.name}" if user_dept_clearance else ""
-        logger.info(f"Retrieving context for user_id={user_id}, org_level={user_clearance.name}{dept_level_str}")
-        
+                
         # If no decomposition or only single query, use standard retrieval
         if not decomposed_queries or len(decomposed_queries) <= 1:
             query_to_use = decomposed_queries[0] if decomposed_queries else user_query
@@ -86,7 +81,8 @@ class RetrievalCoordinator:
         all_documents = []
         subquery_document_map = {}  # Track which documents came from which subquery
         
-        # Retrieve for each subquery WITHOUT security filtering (defer to end)
+        # Retrieve for each subquery using full single-query flow (quality check + reranking if needed)
+        # BUT skip security filtering (defer to end)
         for idx, subquery in enumerate(decomposed_queries):
             logger.debug(f"Retrieving subquery {idx+1}/{len(decomposed_queries)}: '{subquery[:50]}...'")
             
@@ -99,7 +95,7 @@ class RetrievalCoordinator:
                 skip_security_filter=True  # Defer security filtering to the end
             )
             
-            # Collect all documents (no filtering yet) and tag with source subquery
+            # Collect all documents (no security filtering yet) and tag with source subquery
             if subquery_result["success"] and subquery_result.get("count", 0) > 0:
                 docs = subquery_result["context"]
                 all_documents.extend(docs)
@@ -133,24 +129,37 @@ class RetrievalCoordinator:
                 "message": "No relevant documents found for any aspect of your query."
             }
         
-        # Rerank combined results against original query (for relevance to original question)
+        # Rerank combined results against original query (second reranking pass)
+        # Each individual query already went through quality check + potential reranking
+        # Now rerank the combined unique docs against the ORIGINAL query for relevance
         final_documents = unique_documents
+        reranker_enabled = self.retriever.settings.app_settings.ENABLE_RERANKER
         
-        if self.retriever.reranker and len(decomposed_queries) > 1:
-            logger.info(f"Reranking {len(unique_documents)} documents against original query for relevance")
+        if self.retriever.reranker and reranker_enabled and len(decomposed_queries) > 1:
+            logger.info(f"Second reranking: {len(unique_documents)} combined documents against original query (no new docs)")
             try:
+                top_k = self.retriever.settings.app_settings.TOP_K
                 reranked_docs, scores = self.retriever.reranker.rerank(
                     query=user_query,  # Use original query for reranking
-                    documents=unique_documents
+                    documents=unique_documents,
+                    top_k=top_k
                 )
-                if reranked_docs:
-                    final_documents = reranked_docs
-                    logger.info(f"Reranking complete: {len(final_documents)} documents")
+                
+                # Filter by threshold
+                reranker_threshold = self.retriever.settings.app_settings.RERANKER_SCORE_THRESHOLD
+                final_documents = []
+                for doc, score in zip(reranked_docs, scores):
+                    if score >= reranker_threshold:
+                        final_documents.append(doc)
+                
+                logger.info(f"Second reranking complete: {len(final_documents)} relevant documents (threshold={reranker_threshold})")
             except Exception as e:
-                logger.warning(f"Reranking failed: {e}, using unranked results")
+                logger.warning(f"Second reranking failed: {e}, using unranked results")
         else:
             if len(decomposed_queries) == 1:
-                logger.info("Skipping coordinator reranking for single query (already reranked in retriever)")
+                logger.info("Single query: using results from single-query flow")
+            elif not reranker_enabled:
+                logger.info("Reranker disabled: using combined similarity-based results")
         
         # NOW apply security filtering ONCE to final results
         logger.info(f"Applying security filtering to {len(final_documents)} final documents")
