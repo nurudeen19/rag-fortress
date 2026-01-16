@@ -47,16 +47,25 @@ class ConversationResponseService:
         retriever = get_retriever_service()
         llm_router = get_llm_router()
         
-        # Initialize LLM-based classifier if enabled
-        llm_classifier = None
+        # Determine which classifier to use
+        classifier = None
+        classifier_type = "heuristic"  # default
+        
+        # Try LLM classifier first if enabled
         if settings.llm_settings.ENABLE_LLM_CLASSIFIER:
-
             llm_classifier = get_llm_intent_classifier()
             if llm_classifier and llm_classifier.llm:
+                classifier = llm_classifier
+                classifier_type = "llm"
                 logger.info("LLM intent classifier enabled")
             else:
-                logger.warning("LLM intent classifier initialization failed")
-                llm_classifier = None
+                logger.warning("LLM classifier initialization failed, falling back to heuristic")
+        
+        # Fall back to heuristic classifier if LLM not available
+        if classifier is None:
+            classifier = get_intent_classifier()
+            classifier_type = "heuristic"
+            logger.info("Heuristic intent classifier enabled")
         
         # Initialize query decomposer if enabled
         query_decomposer = None
@@ -77,21 +86,16 @@ class ConversationResponseService:
         )
         self.error_handler = ErrorResponseHandler(self.conversation_service)
         
-        # Initialize heuristic intent classifier (always enabled as default/fallback)
-        # Uses pattern matching and rules for fast intent classification
-        intent_classifier = get_intent_classifier()
-        logger.info("Heuristic intent classifier initialized")
-        
-        # Initialize intent handler with both classifiers
+        # Initialize intent handler with single classifier
         self.intent_handler = IntentHandler(
-            intent_classifier,
+            classifier_type,
             self.conversation_service,
-            llm_classifier
+            classifier
         )
         
         logger.info(
             f"ConversationResponseService initialized "
-            f"(llm_classifier={'on' if llm_classifier else 'off'}, "
+            f"(classifier={classifier_type}, "
             f"decomposer={'on' if query_decomposer else 'off'})"
         )
     
@@ -137,30 +141,26 @@ class ConversationResponseService:
             user_department_id = user_info.get("department_id")
             user_dept_clearance = user_info.get("department_security_level")
             
-            # Step 1: Intent Classification Interceptor (hybrid approach)
+            # Step 1: Intent Classification
             # Check if this is a simple query that doesn't need RAG pipeline
-            intent_result = await self.intent_handler.should_use_template(
-                user_query,
-                user_clearance_level
+            intent_result = await self.intent_handler.should_use_template(user_query)
+            
+            logger.info(
+                f"Intent classification: requires_rag={intent_result['requires_rag']}, "
+                f"source={intent_result['source']}, confidence={intent_result['confidence']:.2f}"
             )
             
-            if intent_result:
-                # Extract response or intent from result
-                if "response" in intent_result:
-                    # LLM-generated direct response
-                    response_or_intent = intent_result["response"]
-                    logger.info(f"Using LLM-generated response (confidence={intent_result['confidence']:.2f})")
-                else:
-                    # Heuristic intent - use template
-                    response_or_intent = intent_result["intent"]
-                    logger.info(f"Using template response for intent: {intent_result['intent'].value}")
+            # If classifier says no RAG needed, use the generated response
+            if not intent_result["requires_rag"]:
+                response_text = intent_result["response"]
+                logger.info(f"Using direct response from {intent_result['source']} classifier")
                 
                 if stream:
                     return {
                         "success": True,
                         "streaming": True,
                         "generator": self.intent_handler.generate_template_response_streaming(
-                            response_or_intent=response_or_intent,
+                            response_or_intent=response_text,
                             conversation_id=conversation_id,
                             user_id=user_id,
                             user_query=user_query
@@ -168,7 +168,7 @@ class ConversationResponseService:
                     }
                 else:
                     response_text = await self.intent_handler.generate_template_response(
-                        response_or_intent=response_or_intent,
+                        response_or_intent=response_text,
                         conversation_id=conversation_id,
                         user_id=user_id,
                         user_query=user_query
@@ -180,7 +180,9 @@ class ConversationResponseService:
                         "response": response_text
                     }
             
-            # Step 2: Query Processing and Decomposition
+            # Step 2: Proceed with RAG pipeline
+            
+            # Query Processing and Decomposition
             query_info = await self.pipeline.process_query(
                 user_query,
                 user_clearance_level

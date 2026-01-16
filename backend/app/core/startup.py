@@ -27,9 +27,9 @@ from app.core.embedding_factory import get_embedding_provider
 from app.core.llm_factory import (
     get_internal_llm_provider,
     get_llm_provider,
-    get_fallback_llm_provider
+    get_fallback_llm_provider,
+    get_classifier_llm
 )
-from app.services.llm.classifier_llm import get_classifier_llm
 from app.core.vector_store_factory import get_vector_store, get_retriever
 from app.core.database import DatabaseManager
 from app.core.settings_loader import load_settings_by_category

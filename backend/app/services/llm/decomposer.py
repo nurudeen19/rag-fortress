@@ -8,7 +8,7 @@ from typing import Optional, List
 from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 from app.core import get_logger
-from app.services.llm.classifier_llm import get_classifier_llm
+from app.core.llm_factory import get_classifier_llm
 from app.schemas.llm_classifier import QueryDecompositionResult
 from app.config.settings import settings
 

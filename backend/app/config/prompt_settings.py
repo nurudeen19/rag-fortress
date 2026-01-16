@@ -103,7 +103,7 @@ Answer strictly within these constraints.""",
     )
     
     CLASSIFIER_USER_PROMPT: str = Field(
-        default="Query: {query}\n\nClassify and return JSON:",
+        default="{query}",
         env="CLASSIFIER_USER_PROMPT"
     )
     

@@ -5,10 +5,9 @@ Uses structured output to classify queries as RAG or non-RAG.
 """
 
 from typing import Optional
-from langchain_core.prompts import ChatPromptTemplate
 
 from app.core import get_logger
-from app.services.llm.classifier_llm import get_classifier_llm
+from app.core.llm_factory import get_classifier_llm
 from app.schemas.llm_classifier import LLMClassificationResult
 from app.config.settings import settings
 
@@ -28,20 +27,10 @@ class LLMIntentClassifier:
         # Use structured output with the schema
         try:
             self.structured_llm = self.llm.with_structured_output(LLMClassificationResult)
+            logger.info("Classifier initialized with structured output")
         except Exception as e:
             logger.warning(f"Structured output not supported, falling back to JSON mode: {e}")
             self.structured_llm = self.llm
-        
-        # Create prompt from settings
-        from langchain_core.prompts import SystemMessagePromptTemplate, HumanMessagePromptTemplate
-        
-        system_template = SystemMessagePromptTemplate.from_template(
-            settings.prompt_settings.CLASSIFIER_SYSTEM_PROMPT
-        )
-        user_template = HumanMessagePromptTemplate.from_template(
-            settings.prompt_settings.CLASSIFIER_USER_PROMPT
-        )
-        self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
     
     async def classify(self, query: str) -> Optional[LLMClassificationResult]:
         """
@@ -57,16 +46,27 @@ class LLMIntentClassifier:
             return None
         
         try:
-            # Build and invoke chain with structured output
-            chain = self.prompt | self.structured_llm
-            result = await chain.ainvoke({"query": query.strip()})
+            # Get system prompt directly from settings (Settings class inherits from PromptSettings)
+            system_prompt = settings.CLASSIFIER_SYSTEM_PROMPT
+            
+            logger.debug(f"[CLASSIFIER] System prompt length: {len(system_prompt) if system_prompt else 0}")
+            logger.debug(f"[CLASSIFIER] System prompt preview: {system_prompt[:100] if system_prompt else 'EMPTY'}")
+            
+            # Send query with system prompt using structured output
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query.strip()}
+            ]
+            
+            result = await self.structured_llm.ainvoke(messages)
+            
+            logger.info(
+                f"[CLASSIFIER] Query: '{query}' -> "
+                f"requires_rag={result.requires_rag}, confidence={result.confidence:.2f}"
+            )
             
             # If structured output returned the model directly, use it
             if isinstance(result, LLMClassificationResult):
-                logger.info(
-                    f"Classified: requires_rag={result.requires_rag}, "
-                    f"confidence={result.confidence:.2f}"
-                )
                 return result
             
             # Fallback: parse from dict/JSON if needed

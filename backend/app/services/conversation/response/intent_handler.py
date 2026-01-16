@@ -2,17 +2,12 @@
 Intent Handler for Template Responses
 
 Handles classification and routing of simple intents that don't require RAG pipeline.
-Uses template responses for pleasantries, greetings, and simple queries.
-
-Supports hybrid classification:
-- Uses heuristic (rule-based) classifier first for fast pattern matching
-- Falls back to LLM-based classifier when heuristic confidence is low
+Uses either LLM-based or heuristic (rule-based) classifier.
 """
 
-from typing import Dict, Any, AsyncGenerator, Optional
+from typing import Dict, Any, AsyncGenerator, Literal
 import asyncio
 
-from app.utils.intent_classifier import IntentClassifier
 from app.config.response_templates import get_template_response
 from app.services.conversation.service import ConversationService
 from app.models.message import MessageRole
@@ -20,119 +15,122 @@ from app.core import get_logger
 
 logger = get_logger(__name__)
 
+ClassifierType = Literal["llm", "heuristic"]
+
 
 class IntentHandler:
-    """Handles intent classification and template responses with hybrid approach."""
+    """Handles intent classification and template responses."""
     
     def __init__(
         self,
-        intent_classifier: Optional[IntentClassifier],
+        classifier_type: ClassifierType,
         conversation_service: ConversationService,
-        llm_classifier=None
+        classifier
     ):
         """
-        Initialize intent handler.
+        Initialize intent handler with a single classifier.
         
         Args:
-            intent_classifier: Heuristic intent classifier instance (or None if disabled)
+            classifier_type: Type of classifier ("llm" or "heuristic")
             conversation_service: Conversation service for persistence
-            llm_classifier: LLM-based classifier for fallback (or None if disabled)
+            classifier: Either LLMIntentClassifier or IntentClassifier instance
         """
-        self.intent_classifier = intent_classifier
+        self.classifier_type = classifier_type
         self.conversation_service = conversation_service
-        self.llm_classifier = llm_classifier
+        self.classifier = classifier
         
-        logger.info(
-            f"IntentHandler initialized "
-            f"(heuristic={'enabled' if intent_classifier else 'disabled'}, "
-            f"llm={'enabled' if llm_classifier else 'disabled'})"
-        )
+        logger.info(f"IntentHandler initialized with {classifier_type} classifier")
     
-    async def should_use_template(
-        self,
-        user_query: str,
-        user_clearance_level: Optional[int] = None
-    ) -> Optional[Dict[str, Any]]:
+    async def should_use_template(self, user_query: str) -> Dict[str, Any]:
         """
-        Determine if query should use template/direct response using hybrid classification.
-        
-        Strategy:
-        1. Try LLM classifier first if enabled (generates its own responses)
-        2. Fall back to heuristic classifier for pattern matching
-        3. Return result with response or intent if template should be used, None otherwise
+        Determine if query should use template/direct response.
         
         Args:
             user_query: User's query
-            user_clearance_level: User's security clearance level
             
         Returns:
-            Dict with 'response' (str) or 'intent' (IntentType), or None if RAG needed
+            Dict with:
+                - requires_rag: bool (whether RAG pipeline is needed)
+                - response: str (generated response if requires_rag=False)
+                - confidence: float
+                - source: str (classifier type used)
         """
-        # Try LLM classifier first if enabled
-        if self.llm_classifier:
+        if self.classifier_type == "llm":
+            # Use LLM classifier
             try:
-                llm_result = await self.llm_classifier.classify(user_query)
+                result = await self.classifier.classify(user_query)
+
+                logger.debug(f"LLM classifier result: {result} for query: {user_query}")
                 
-                if llm_result and not llm_result.requires_rag:
-                    # LLM says no RAG needed - use its generated response
-                    logger.info(
-                        f"LLM classifier: requires_rag=false "
-                        f"(confidence={llm_result.confidence:.2f})"
-                    )
-                    
+                if not result:
+                    logger.warning("LLM classifier returned None, defaulting to RAG")
                     return {
-                        "response": llm_result.response,
-                        "confidence": llm_result.confidence,
-                        "source": "llm_classifier"
+                        "requires_rag": True,
+                        "response": "",
+                        "confidence": 0.0,
+                        "source": "llm_fallback"
                     }
-                elif llm_result and llm_result.requires_rag:
-                    # LLM says RAG is needed
-                    logger.debug(
-                        f"LLM classifier: requires_rag=true "
-                        f"(confidence={llm_result.confidence:.2f})"
-                    )
-                    return None  # Proceed to RAG pipeline
-                    
-            except Exception as e:
-                logger.warning(
-                    f"LLM classifier failed: {e}. Falling back to heuristic classifier.",
-                    exc_info=False
-                )
-                # Continue to heuristic classifier fallback
-        
-        # Fall back to heuristic classifier
-        if self.intent_classifier:
-            try:
-                heuristic_result = self.intent_classifier.classify(user_query)
                 
-                # If high confidence from heuristic, use template
-                if self.intent_classifier.should_use_template(heuristic_result):
+                logger.info(
+                    f"LLM classifier: requires_rag={result.requires_rag}, "
+                    f"confidence={result.confidence:.2f}"
+                )
+                
+                return {
+                    "requires_rag": result.requires_rag,
+                    "response": result.response,
+                    "confidence": result.confidence,
+                    "source": "llm"
+                }
+                
+            except Exception as e:
+                logger.error(f"LLM classifier failed: {e}", exc_info=True)
+                return {
+                    "requires_rag": True,
+                    "response": "",
+                    "confidence": 0.0,
+                    "source": "llm_error"
+                }
+        
+        else:
+            # Use heuristic classifier
+            try:
+                result = self.classifier.classify(user_query)
+                
+                # Check if high confidence template match
+                if self.classifier.should_use_template(result):
                     logger.debug(
-                        f"Heuristic classifier: {heuristic_result.intent.value} "
-                        f"(confidence={heuristic_result.confidence:.2f})"
+                        f"Heuristic classifier: {result.intent.value} "
+                        f"(confidence={result.confidence:.2f})"
                     )
                     
                     return {
-                        "intent": heuristic_result.intent,
-                        "confidence": heuristic_result.confidence,
-                        "source": "heuristic"
+                        "requires_rag": False,
+                        "response": get_template_response(result.intent),
+                        "confidence": result.confidence,
+                        "source": "heuristic",
+                        "intent": result.intent
                     }
                 else:
-                    # Heuristic says RAG is needed
                     logger.debug(
                         f"Heuristic classifier: needs RAG "
-                        f"(confidence={heuristic_result.confidence:.2f})"
+                        f"(confidence={result.confidence:.2f})"
                     )
-                    return None  # Proceed to RAG pipeline
+                    return {
+                        "requires_rag": True,
+                        "response": "",
+                        "confidence": result.confidence,
+                        "source": "heuristic"
+                    }
                     
             except Exception as e:
-                logger.error(
-                    f"Heuristic classifier failed: {e}",
-                    exc_info=True
-                )
-        
-        # No classifiers available or both failed - default to RAG pipeline
-        return None
+                logger.error(f"Heuristic classifier failed: {e}", exc_info=True)
+                return {
+                    "requires_rag": True,
+                    "response": "",
+                    "confidence": 0.0,
+                    "source": "heuristic_error"
+                }
     
     async def generate_template_response_streaming(
         self,

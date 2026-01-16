@@ -16,20 +16,25 @@ class LLMClassificationResult(BaseModel):
     """
     requires_rag: bool = Field(
         ..., 
-        description="Whether the query needs document retrieval (RAG pipeline). "
-                    "True for knowledge questions, policies, facts. "
-                    "False for greetings, thanks, small talk."
+        description=(
+            "TRUE if query asks for specific information, facts, policies, procedures, "
+            "people (who/what/when/where/why/how questions), or domain knowledge. "
+            "FALSE ONLY for simple greetings (hi/hello) or thanks (thank you/thanks). "
+            "When uncertain, ALWAYS set to TRUE."
+        )
     )
     confidence: float = Field(
         ..., 
         ge=0.0, 
         le=1.0, 
-        description="Confidence score from 0.0 to 1.0 indicating certainty of classification"
+        description="Confidence score from 0.0 to 1.0"
     )
     response: str = Field(
         default="", 
-        description="Direct response for non-RAG queries (greetings, pleasantries). "
-                    "Empty string for RAG queries - system will retrieve documents instead."
+        description=(
+            "Empty string if requires_rag is TRUE. "
+            "Brief friendly response (1-2 sentences) ONLY if requires_rag is FALSE."
+        )
     )
 
 
