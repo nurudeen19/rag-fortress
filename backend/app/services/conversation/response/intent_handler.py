@@ -5,7 +5,7 @@ Handles classification and template response generation.
 Uses either LLM-based or heuristic (rule-based) classifier.
 """
 
-from typing import Any, AsyncGenerator, Literal, Union
+from typing import Any, AsyncGenerator, Literal, Union, Dict
 import asyncio
 
 from app.services.conversation.service import ConversationService
@@ -46,9 +46,6 @@ class IntentHandler:
         
         Returns the raw result object from either LLM or heuristic classifier.
         Response service will handle decision logic based on result.
-        
-        Args:
-            user_query: User's query
             
         Returns:
             LLMClassificationResult or UnifiedClassificationResult (from heuristic)
@@ -86,20 +83,13 @@ class IntentHandler:
         conversation_id: str,
         user_id: int,
         user_query: str,
-        meta: dict
+        meta: Dict[str, Any]
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream a template or classifier-generated response.
         
         Simulates streaming behavior to maintain consistent UX with RAG responses.
         Streams character-by-character with small delays for natural feel.
-        
-        Args:
-            response_text: The response text to stream
-            conversation_id: Conversation ID
-            user_id: User ID
-            user_query: User's original query
-            meta: Metadata dict for the response
             
         Yields:
             Stream chunks with token content
@@ -110,26 +100,16 @@ class IntentHandler:
             # Small delay to simulate streaming (adjust as needed)
             await asyncio.sleep(0.01)
         
-        # Cache and persist the response
-        await self.conversation_service.cache_conversation_exchange(
-            conversation_id,
-            user_query,
-            response_text,
+        # Save response (cache + persist)
+        await self.conversation_service.save_assistant_response(
+            conversation_id=conversation_id,
             user_id=user_id,
-            persist_to_db=False,
+            user_query=user_query,
+            response_text=response_text,
             assistant_meta=meta
         )
         
-        await self.conversation_service.add_message(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            token_count=None,
-            meta=meta
-        )
-        
-        logger.info(f"Response streamed: {meta}")
+        logger.debug(f"Response streamed: {meta}")
     
     async def generate_template_response(
         self,
@@ -137,38 +117,21 @@ class IntentHandler:
         conversation_id: str,
         user_id: int,
         user_query: str,
-        meta: dict
+        meta: Dict[str, Any]
     ) -> str:
         """
         Generate complete template or classifier-generated response (non-streaming).
-        
-        Args:
-            response_text: The response text
-            conversation_id: Conversation ID
-            user_id: User ID
-            user_query: User's original query
-            meta: Metadata dict for the response
             
         Returns:
             Response text
         """
-        # Cache and persist the response
-        await self.conversation_service.cache_conversation_exchange(
-            conversation_id,
-            user_query,
-            response_text,
-            user_id=user_id,
-            persist_to_db=False,
-            assistant_meta=meta
-        )
-        
-        await self.conversation_service.add_message(
+        # Save response (cache + persist)
+        await self.conversation_service.save_assistant_response(
             conversation_id=conversation_id,
             user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            token_count=None,
-            meta=meta
+            user_query=user_query,
+            response_text=response_text,
+            assistant_meta=meta
         )
         
         return response_text

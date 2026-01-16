@@ -270,23 +270,13 @@ class ConversationResponseService:
                 
                 sources = self.pipeline._build_sources_payload(documents)
                 
-                # Cache and persist response
-                await self.conversation_service.cache_conversation_exchange(
-                    conversation_id,
-                    user_query,
-                    response_text,
-                    user_id=user_id,
-                    persist_to_db=False,
-                    assistant_meta={"sources": sources} if sources else None
-                )
-                
-                await self.conversation_service.add_message(
+                # Save response (cache + persist)
+                await self.conversation_service.save_assistant_response(
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    role=MessageRole.ASSISTANT,
-                    content=response_text,
-                    token_count=None,
-                    meta={"sources": sources} if sources else None
+                    user_query=user_query,
+                    response_text=response_text,
+                    assistant_meta={"sources": sources} if sources else None
                 )
                 
                 return {

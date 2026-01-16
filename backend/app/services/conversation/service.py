@@ -38,6 +38,51 @@ class ConversationService:
         if not text:
             return 0
         return int(len(text.split()) * 1.3)
+    
+    async def _emit_malicious_query_blocked_event(
+        self,
+        user_id: int,
+        conversation_id: str,
+        content: str,
+        threat_type: str,
+        confidence: float,
+        reason: str
+    ) -> None:
+        """
+        Emit activity log event for blocked malicious query.
+                """
+        logger.warning(
+            f"Malicious query blocked: user_id={user_id}, "
+            f"conversation_id={conversation_id}, "
+            f"threat={threat_type}, "
+            f"confidence={confidence:.2f}"
+        )
+        
+        bus = get_event_bus()
+        await bus.emit("activity_log", {
+            "user_id": user_id,
+            "incident_type": "malicious_query_blocked",
+            "severity": "critical",
+            "description": f"Malicious query blocked: {threat_type}",
+            "details": {
+                "threat_type": threat_type,
+                "confidence": confidence,
+                "reason": reason,
+                "conversation_id": conversation_id
+            },
+            "user_query": content,
+            "threat_type": threat_type
+        })
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Simple token estimation based on word count.
+        
+        Uses approximation: tokens ≈ words * 1.3
+        For accurate token counts, use tiktoken or similar.
+        """
+        if not text:
+            return 0
+        return int(len(text.split()) * 1.3)
 
     def _serialize_conversation(self, conversation: Conversation) -> Dict[str, Any]:
         """Convert Conversation model to dict for frontend.        
@@ -277,29 +322,15 @@ class ConversationService:
                 validation = await validator.validate_query(content, user_id)
                 
                 if not validation["valid"]:
-                    logger.warning(
-                        f"Malicious query blocked: user_id={user_id}, "
-                        f"conversation_id={conversation_id}, "
-                        f"threat={validation['threat_type']}, "
-                        f"confidence={validation['confidence']:.2f}"
+                    # Emit activity log event for blocked query
+                    await self._emit_malicious_query_blocked_event(
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        content=content,
+                        threat_type=validation["threat_type"],
+                        confidence=validation["confidence"],
+                        reason=validation["reason"]
                     )
-                    
-                    # Emit activity log event (non-blocking)
-                    bus = get_event_bus()
-                    await bus.emit("activity_log", {
-                        "user_id": user_id,
-                        "incident_type": "malicious_query_blocked",
-                        "severity": "critical",
-                        "description": f"Malicious query blocked: {validation['threat_type']}",
-                        "details": {
-                            "threat_type": validation["threat_type"],
-                            "confidence": validation["confidence"],
-                            "reason": validation["reason"],
-                            "conversation_id": conversation_id
-                        },
-                        "user_query": content,
-                        "threat_type": validation["threat_type"]
-                    })
                     
                     return {
                         "success": False,
@@ -466,6 +497,40 @@ class ConversationService:
 
         await self._cache_history(conversation_id, history)
         logger.info(f"Cached exchange for {conversation_id}")
+    
+    async def save_assistant_response(
+        self,
+        conversation_id: str,
+        user_id: int,
+        user_query: str,
+        response_text: str,
+        assistant_meta: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Save assistant response with caching and persistence.
+        
+        This is the standard method for saving assistant responses throughout the system.
+        It handles both cache update and database persistence in a consistent way.
+        """
+        # Cache the exchange (updates cache with both messages)
+        await self.cache_conversation_exchange(
+            conversation_id,
+            user_query,
+            response_text,
+            user_id=user_id,
+            persist_to_db=False,
+            assistant_meta=assistant_meta
+        )
+        
+        # Persist assistant message to database
+        await self.add_message(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=MessageRole.ASSISTANT,
+            content=response_text,
+            token_count=None,
+            meta=assistant_meta
+        )
 
     async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
         """

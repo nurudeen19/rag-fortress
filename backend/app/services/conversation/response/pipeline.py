@@ -405,30 +405,20 @@ class ResponsePipeline:
         
         sources = self._build_sources_payload(documents)
         
-        # Cache the exchange (updates cache with both messages)
-        await self.conversation_service.cache_conversation_exchange(
-            conversation_id,
-            user_query,
-            full_response,
-            user_id=user_id,
-            persist_to_db=False,  # Don't persist user message again
-            assistant_meta={"sources": sources} if sources else None
-        )
-        
-        # Persist only the assistant message to DB
+        # Build metadata
         meta = {"sources": sources} if sources else {}
         if is_fallback:
             meta["used_fallback_llm"] = True
         if partial_context:
             meta["partial_context"] = partial_context
         
-        await self.conversation_service.add_message(
+        # Save response (cache + persist)
+        await self.conversation_service.save_assistant_response(
             conversation_id=conversation_id,
             user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=full_response,
-            token_count=None,
-            meta=meta
+            user_query=user_query,
+            response_text=full_response,
+            assistant_meta=meta if meta else None
         )
         
         if sources:
