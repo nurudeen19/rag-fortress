@@ -44,11 +44,16 @@ class QueryDecompositionResult(BaseModel):
     
     Used with structured output to restructure/break down queries.
     """
+    decomposed: bool = Field(
+        ...,
+        description="TRUE if query was decomposed into multiple sub-queries. "
+                    "FALSE if original query is simple/clear enough and returned as-is."
+    )
     queries: List[str] = Field(
         ..., 
         max_length=5, 
-        description="List of optimized search queries. "
-                    "For simple queries: 1 expanded/clarified query. "
-                    "For complex queries: 2-5 focused sub-queries. "
-                    "Each query should be self-contained and searchable."
+        description="List of search queries. "
+                    "If decomposed=FALSE: Return the original query (1 query). "
+                    "If decomposed=TRUE: Return 2-5 focused sub-queries. "
+                    "Each query must be self-contained and searchable."
     )
