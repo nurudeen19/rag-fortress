@@ -1,14 +1,13 @@
 """
 Intent Handler for Template Responses
 
-Handles classification and routing of simple intents that don't require RAG pipeline.
+Handles classification and template response generation.
 Uses either LLM-based or heuristic (rule-based) classifier.
 """
 
-from typing import Dict, Any, AsyncGenerator, Literal
+from typing import Any, AsyncGenerator, Literal, Union
 import asyncio
 
-from app.config.response_templates import get_template_response
 from app.services.conversation.service import ConversationService
 from app.models.message import MessageRole
 from app.core import get_logger
@@ -41,130 +40,70 @@ class IntentHandler:
         
         logger.info(f"IntentHandler initialized with {classifier_type} classifier")
     
-    async def should_use_template(self, user_query: str) -> Dict[str, Any]:
+    async def classify(self, user_query: str) -> Union[Any, None]:
         """
-        Determine if query should use template/direct response.
+        Classify user query and return raw classifier result.
+        
+        Returns the raw result object from either LLM or heuristic classifier.
+        Response service will handle decision logic based on result.
         
         Args:
             user_query: User's query
             
         Returns:
-            Dict with:
-                - requires_rag: bool (whether RAG pipeline is needed)
-                - response: str (generated response if requires_rag=False)
-                - confidence: float
-                - source: str (classifier type used)
+            LLMClassificationResult or UnifiedClassificationResult (from heuristic)
+            Returns None on failure (caller should handle fallback)
         """
         if self.classifier_type == "llm":
-            # Use LLM classifier
+            # Use LLM classifier - returns LLMClassificationResult
             try:
                 result = await self.classifier.classify(user_query)
-
-                logger.debug(f"LLM classifier result: {result} for query: {user_query}")
                 
                 if not result:
-                    logger.warning("LLM classifier returned None, defaulting to RAG")
-                    return {
-                        "requires_rag": True,
-                        "response": "",
-                        "confidence": 0.0,
-                        "source": "llm_fallback"
-                    }
+                    logger.warning("LLM classifier returned None")
+                    return None
                 
-                logger.info(
-                    f"LLM classifier: requires_rag={result.requires_rag}, "
-                    f"confidence={result.confidence:.2f}"
-                )
-                
-                return {
-                    "requires_rag": result.requires_rag,
-                    "response": result.response,
-                    "confidence": result.confidence,
-                    "source": "llm"
-                }
+                return result
                 
             except Exception as e:
                 logger.error(f"LLM classifier failed: {e}", exc_info=True)
-                return {
-                    "requires_rag": True,
-                    "response": "",
-                    "confidence": 0.0,
-                    "source": "llm_error"
-                }
+                return None
         
         else:
-            # Use heuristic classifier
+            # Use heuristic classifier - returns UnifiedClassificationResult
             try:
-                result = self.classifier.classify(user_query)
+                result = self.classifier.classify_heuristic(user_query)                
                 
-                # Check if high confidence template match
-                if self.classifier.should_use_template(result):
-                    logger.debug(
-                        f"Heuristic classifier: {result.intent.value} "
-                        f"(confidence={result.confidence:.2f})"
-                    )
-                    
-                    return {
-                        "requires_rag": False,
-                        "response": get_template_response(result.intent),
-                        "confidence": result.confidence,
-                        "source": "heuristic",
-                        "intent": result.intent
-                    }
-                else:
-                    logger.debug(
-                        f"Heuristic classifier: needs RAG "
-                        f"(confidence={result.confidence:.2f})"
-                    )
-                    return {
-                        "requires_rag": True,
-                        "response": "",
-                        "confidence": result.confidence,
-                        "source": "heuristic"
-                    }
+                return result
                     
             except Exception as e:
                 logger.error(f"Heuristic classifier failed: {e}", exc_info=True)
-                return {
-                    "requires_rag": True,
-                    "response": "",
-                    "confidence": 0.0,
-                    "source": "heuristic_error"
-                }
+                return None
     
     async def generate_template_response_streaming(
         self,
-        response_or_intent: Any,
+        response_text: str,
         conversation_id: str,
         user_id: int,
-        user_query: str
+        user_query: str,
+        meta: dict
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Stream a template or LLM-generated response for simple intents.
+        Stream a template or classifier-generated response.
         
         Simulates streaming behavior to maintain consistent UX with RAG responses.
         Streams character-by-character with small delays for natural feel.
         
         Args:
-            response_or_intent: Either str (LLM response) or IntentType (for template)
+            response_text: The response text to stream
             conversation_id: Conversation ID
             user_id: User ID
             user_query: User's original query
+            meta: Metadata dict for the response
             
         Yields:
             Stream chunks with token content
         """
-        # Determine if we have direct response or need template
-        if isinstance(response_or_intent, str):
-            # Direct response from LLM classifier
-            response_text = response_or_intent
-            meta = {"llm_classifier": True}
-        else:
-            # Intent type - use template
-            intent = response_or_intent
-            response_text = get_template_response(intent)
-            meta = {"intent": intent.value, "template_response": True}
-        
         # Stream character by character for natural feel
         for char in response_text:
             yield {"type": "token", "content": char}
@@ -194,34 +133,25 @@ class IntentHandler:
     
     async def generate_template_response(
         self,
-        response_or_intent: Any,
+        response_text: str,
         conversation_id: str,
         user_id: int,
-        user_query: str
+        user_query: str,
+        meta: dict
     ) -> str:
         """
-        Generate complete template or LLM-generated response (non-streaming).
+        Generate complete template or classifier-generated response (non-streaming).
         
         Args:
-            response_or_intent: Either str (LLM response) or IntentType (for template)
+            response_text: The response text
             conversation_id: Conversation ID
             user_id: User ID
             user_query: User's original query
+            meta: Metadata dict for the response
             
         Returns:
             Response text
         """
-        # Determine if we have direct response or need template
-        if isinstance(response_or_intent, str):
-            # Direct response from LLM classifier
-            response_text = response_or_intent
-            meta = {"llm_classifier": True}
-        else:
-            # Intent type - use template
-            intent = response_or_intent
-            response_text = get_template_response(intent)
-            meta = {"intent": intent.value, "template_response": True}
-        
         # Cache and persist the response
         await self.conversation_service.cache_conversation_exchange(
             conversation_id,

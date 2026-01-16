@@ -9,6 +9,7 @@ import re
 from typing import Optional
 from enum import Enum
 from dataclasses import dataclass
+from app.config.response_templates import get_template_response
 
 from app.core import get_logger
 
@@ -31,6 +32,17 @@ class IntentResult:
     """Result of intent classification."""
     intent: IntentType
     confidence: float  # 0.0 to 1.0
+    matched_pattern: Optional[str] = None
+
+
+@dataclass
+class ClassificationResult:
+    """Classification result matching LLM classifier format."""
+    requires_rag: bool
+    confidence: float
+    response: str = ""
+    source: str = "heuristic"
+    intent: Optional[IntentType] = None
     matched_pattern: Optional[str] = None
 
 
@@ -107,7 +119,7 @@ class IntentClassifier:
         ],
     }
     
-    def __init__(self, confidence_threshold: float = 0.7):
+    def __init__(self, confidence_threshold: float = 0.8):
         """
         Initialize intent classifier.
         
@@ -192,6 +204,36 @@ class IntentClassifier:
         
         # Use template if confidence is above threshold
         return result.confidence >= self.confidence_threshold
+    
+    def classify_heuristic(self, query: str) -> ClassificationResult:
+        """
+        Classify query and return unified result format.
+        
+        Args:
+            query: User query text
+            
+        Returns:
+            ClassificationResult compatible with LLM classifier format
+        """
+        # Get classification result
+        result = self.classify(query)
+        
+        # Determine if RAG is required
+        requires_rag = result.intent == IntentType.KNOWLEDGE_QUERY or result.confidence < self.confidence_threshold
+
+        # Get response if template should be used
+        response = ""
+        if not requires_rag:
+            response = get_template_response(result.intent)
+        
+        return ClassificationResult(
+            requires_rag=requires_rag,
+            confidence=result.confidence,
+            response=response,
+            source="heuristic",
+            intent=result.intent,
+            matched_pattern=result.matched_pattern
+        )
 
 
 # Global instance

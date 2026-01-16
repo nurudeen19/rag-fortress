@@ -142,36 +142,44 @@ class ConversationResponseService:
             user_dept_clearance = user_info.get("department_security_level")
             
             # Step 1: Intent Classification
-            # Check if this is a simple query that doesn't need RAG pipeline
-            intent_result = await self.intent_handler.should_use_template(user_query)
+            # Get raw classification result from classifier
+            classification_result = await self.intent_handler.classify(user_query)
             
-            logger.info(
-                f"Intent classification: requires_rag={intent_result['requires_rag']}, "
-                f"source={intent_result['source']}, confidence={intent_result['confidence']:.2f}"
-            )
-            
-            # If classifier says no RAG needed, use the generated response
-            if not intent_result["requires_rag"]:
-                response_text = intent_result["response"]
-                logger.info(f"Using direct response from {intent_result['source']} classifier")
+            # Check if RAG is required (main decision point)
+            if classification_result and not classification_result.requires_rag:
+                # Template/direct response - no RAG needed
+                confidence = classification_result.confidence
+                response_text = classification_result.response
                 
+                logger.info(
+                    f"Intent classification: requires_rag={classification_result.requires_rag}, "
+                    f"confidence={confidence:.2f}, source={self.intent_handler.classifier_type}"
+                )
+                
+                # Build metadata
+                meta = {"classifier": self.intent_handler.classifier_type}
+                if hasattr(classification_result, 'intent') and classification_result.intent:
+                    meta["intent"] = classification_result.intent.value
+                                
                 if stream:
                     return {
                         "success": True,
                         "streaming": True,
                         "generator": self.intent_handler.generate_template_response_streaming(
-                            response_or_intent=response_text,
+                            response_text=response_text,
                             conversation_id=conversation_id,
                             user_id=user_id,
-                            user_query=user_query
+                            user_query=user_query,
+                            meta=meta
                         )
                     }
                 else:
                     response_text = await self.intent_handler.generate_template_response(
-                        response_or_intent=response_text,
+                        response_text=response_text,
                         conversation_id=conversation_id,
                         user_id=user_id,
-                        user_query=user_query
+                        user_query=user_query,
+                        meta=meta
                     )
                     
                     return {
@@ -181,6 +189,9 @@ class ConversationResponseService:
                     }
             
             # Step 2: Proceed with RAG pipeline
+            # Either classifier failed or requires_rag=True
+            if not classification_result:
+                logger.warning("Classification failed, defaulting to RAG pipeline")            
             
             # Query Processing and Decomposition
             query_info = await self.pipeline.process_query(
