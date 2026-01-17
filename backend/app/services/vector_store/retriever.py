@@ -220,6 +220,146 @@ class RetrieverService:
         
         return filtered_docs, max_security_level, list(blocked_departments) if blocked_departments else None
     
+    def _get_high_quality_docs(
+        self,
+        results: List[Tuple[Document, float]],
+        score_threshold: float
+    ) -> List[Document]:
+        """
+        Extract documents that meet the quality threshold from similarity results.
+        
+        Returns:
+            List of documents that passed the threshold
+        """
+        high_quality_docs = []
+        for doc, score in results:
+            if score >= score_threshold:
+                high_quality_docs.append(doc)
+        
+        return high_quality_docs
+    
+    def _perform_reranking(
+        self,
+        query_text: str,
+        results: List[Tuple[Document, float]],
+        top_k: int,
+        reranker_threshold: float
+    ) -> List[Document]:
+        """
+        Rerank candidates and filter by threshold.
+        
+        Args:
+            query_text: Query to rerank against
+            results: List of (document, score) tuples to rerank
+            top_k: Number of top results to return
+            reranker_threshold: Minimum score required after reranking
+        
+        Returns:
+            List of relevant documents after reranking
+        """
+        docs_to_rerank = [doc for doc, _ in results]
+        
+        logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {top_k})")
+        reranked_docs, reranked_scores = self.reranker.rerank(
+            query_text,
+            docs_to_rerank,
+            top_k=top_k
+        )
+        
+        # Filter by reranker threshold
+        relevant_docs = []
+        for doc, score in zip(reranked_docs, reranked_scores):
+            if score >= reranker_threshold:
+                relevant_docs.append(doc)
+        
+        logger.info(f"Reranker identified {len(relevant_docs)} relevant documents (threshold={reranker_threshold})")
+        return relevant_docs
+    
+    def _select_relevant_documents(
+        self,
+        results: List[Tuple[Document, float]],
+        query_text: str,
+        top_k: int
+    ) -> List[Document]:
+        """
+        Select relevant documents using quality threshold and optional reranking.
+        
+        Strategy:
+        - If high-quality docs exist: Use them directly (no reranking needed)
+        - If no high-quality docs: Attempt reranking (if enabled)
+        - If no reranker: Use quality docs or empty list
+        
+        Returns:
+            List of relevant documents
+        """
+        score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
+        reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
+        
+        # Check for high-quality results from similarity
+        high_quality_docs = self._get_high_quality_docs(results, score_threshold)
+        
+        # Decide on retrieval strategy
+        if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
+            if len(high_quality_docs) > 0:
+                # Have quality results - use them directly
+                logger.info(f"Using {len(high_quality_docs)} high-quality results (threshold={score_threshold})")
+                return high_quality_docs[:top_k]
+            else:
+                # No quality results - try reranking
+                logger.info(f"No high-quality results found (threshold={score_threshold}), attempting reranking")
+                return self._perform_reranking(query_text, results, top_k, reranker_threshold)
+        else:
+            # No reranker - use quality docs only
+            relevant_docs = high_quality_docs[:top_k] if high_quality_docs else []
+            logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
+            return relevant_docs
+    
+    def _build_retrieval_outcome(
+        self,
+        filtered_docs: List[Document],
+        relevant_docs: List[Document],
+        max_security_level: Optional[int],
+        blocked_depts: Optional[List[str]]
+    ) -> Dict[str, Any]:
+        """
+        Build final retrieval outcome based on security filtering results.
+        
+        Args:
+            filtered_docs: Documents that passed security filtering
+            relevant_docs: All relevant documents before filtering
+            max_security_level: Highest security level accessed
+            blocked_depts: List of department names that blocked access
+        
+        Returns:
+            Success response with documents or error response with blocking reason
+        """
+        if filtered_docs:
+            return {
+                "success": True,
+                "context": filtered_docs,
+                "count": len(filtered_docs),
+                "max_security_level": max_security_level,
+            }
+        
+        # Determine error type based on blocking reason
+        if blocked_depts:
+            dept_list = ", ".join(blocked_depts)
+            error_msg = self.settings.prompt_settings.RETRIEVAL_DEPT_BLOCKED_MESSAGE.format(dept_list=dept_list)
+            error_type = "no_clearance"
+        else:
+            error_msg = self.settings.prompt_settings.RETRIEVAL_SECURITY_BLOCKED_MESSAGE
+            error_type = "insufficient_clearance"
+        
+        logger.info(f"All {len(relevant_docs)} relevant documents blocked by security ({error_type}): {blocked_depts}")
+        return {
+            "success": False,
+            "error": error_type,
+            "message": error_msg,
+            "count": 0,
+            "max_security_level": max_security_level,
+            "blocked_departments": blocked_depts
+        }
+    
     async def query(
         self,
         query_text: str,
@@ -295,7 +435,7 @@ class RetrieverService:
         3. Apply security filtering to relevant results (unless skip_security_filter=True)
         4. Decide outcome:
            - Relevant + allowed → return context
-           - Relevant + blocked → insufficient clearance with dept names
+           - Relevant + blocked → insufficient clearance
            - Nothing relevant → no context found
         
         Hybrid Search Details:
@@ -319,7 +459,7 @@ class RetrieverService:
                 results = vector_store.similarity_search_with_score(query_text, k=max_k)
             except (AttributeError, NotImplementedError):
                 logger.warning("Vector store doesn't support scores, falling back")
-                return await self._fallback_query(query_text, max_k, user_security_level, user_department_id, user_department_security_level)
+                return await self._fallback_query(query_text, max_k, top_k, user_security_level, user_department_id, user_department_security_level)
             
             if not results:
                 logger.warning("No documents retrieved from vector store")
@@ -330,52 +470,10 @@ class RetrieverService:
                     details={"k": max_k}
                 )
             
-            # Step 2: Check quality of initial results and rerank only if needed
-            relevant_docs = []
-            score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
-            reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
+            # Step 2: Select relevant documents (quality check + optional reranking)
+            relevant_docs = self._select_relevant_documents(results, query_text, top_k)
             
-            # First, check if we have high-quality results from initial retrieval
-            high_quality_docs = []
-            for doc, score in results[:top_k]:  # Only check top_k results
-                if score >= score_threshold:
-                    high_quality_docs.append(doc)
-            
-            # Determine if reranking is needed
-            needs_reranking = False
-            if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
-                if len(high_quality_docs) >= top_k:
-                    # We have enough high-quality results, no need to rerank
-                    logger.info(f"Skipping reranking: {len(high_quality_docs)} high-quality results already found (threshold={score_threshold})")
-                    relevant_docs = high_quality_docs[:top_k]
-                else:
-                    # Not enough high-quality results, rerank to find better ones
-                    needs_reranking = True
-                    logger.info(f"Reranking needed: only {len(high_quality_docs)}/{top_k} high-quality results found")
-            else:
-                # No reranker available - use similarity scores
-                relevant_docs = high_quality_docs
-                logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
-            
-            # Perform reranking if needed
-            if needs_reranking:
-                docs_to_rerank = [doc for doc, _ in results]
-                
-                logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {top_k})")
-                reranked_docs, reranked_scores = self.reranker.rerank(
-                    query_text,
-                    docs_to_rerank,
-                    top_k=top_k
-                )
-                
-                # Filter by reranker threshold to get truly relevant docs
-                for doc, score in zip(reranked_docs, reranked_scores):
-                    if score >= reranker_threshold:
-                        relevant_docs.append(doc)
-                
-                logger.info(f"Reranker identified {len(relevant_docs)} relevant documents (threshold={reranker_threshold})")
-            
-            # Step 3: Apply security filtering to relevant documents (unless skipped for multi-query)
+            # Step 3: Check if any relevant documents found
             if not relevant_docs:
                 # No relevant documents found at all
                 logger.info("No relevant documents found (before security filtering)")
@@ -403,38 +501,10 @@ class RetrieverService:
             
             logger.info(f"Security filtering: {len(filtered_docs)}/{len(relevant_docs)} documents accessible")
             
-            # Step 4: Decide outcome based on filtering results
-            if filtered_docs:
-                # SUCCESS: Have relevant documents that user can access
-                logger.info(f"Returning {len(filtered_docs)} relevant and accessible documents")
-                return {
-                    "success": True,
-                    "context": filtered_docs,
-                    "count": len(filtered_docs),
-                    "max_security_level": max_security_level,
-                }
-            else:
-                # BLOCKED: Relevant documents exist but user lacks clearance
-                # Determine error type based on blocking reason
-                if blocked_depts:
-                    # Department access issue
-                    dept_list = ", ".join(blocked_depts)
-                    error_msg = self.settings.prompt_settings.RETRIEVAL_DEPT_BLOCKED_MESSAGE.format(dept_list=dept_list)
-                    error_type = "no_clearance"
-                else:
-                    # General security clearance issue
-                    error_msg = self.settings.prompt_settings.RETRIEVAL_SECURITY_BLOCKED_MESSAGE
-                    error_type = "insufficient_clearance"
-                
-                logger.info(f"All {len(relevant_docs)} relevant documents blocked by security ({error_type}): {blocked_depts}")
-                return {
-                    "success": False,
-                    "error": error_type,
-                    "message": error_msg,
-                    "count": 0,
-                    "max_security_level": max_security_level,
-                    "blocked_departments": blocked_depts
-                }
+            # Step 4: Build and return outcome
+            return self._build_retrieval_outcome(
+                filtered_docs, relevant_docs, max_security_level, blocked_depts
+            )
         
         except Exception as e:
             logger.error(f"Error during retrieval: {e}", exc_info=True)
@@ -449,6 +519,7 @@ class RetrieverService:
         self,
         query_text: str,
         k: int,
+        top_k: int,
         user_security_level: Optional[int],
         user_department_id: Optional[int],
         user_department_security_level: Optional[int] = None
@@ -457,39 +528,27 @@ class RetrieverService:
         self.retriever.search_kwargs = {"k": k}
         docs = self.retriever.invoke(query_text)
         
-        max_security_level = None
-        if user_security_level is not None:
-            filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
-                docs, user_security_level, user_department_id, user_department_security_level
-            )
-            
-            if len(docs) > 0 and len(filtered_docs) == 0:
-                # Determine error type based on blocking reason
-                if blocked_depts:
-                    # Department access issue
-                    dept_list = ",".join(blocked_depts)
-                    error_msg = self.settings.prompt_settings.RETRIEVAL_DEPT_BLOCKED_MESSAGE.format(dept_list=dept_list)
-                    error_type = "no_clearance"
-                else:
-                    # General security clearance issue
-                    error_msg = self.settings.prompt_settings.RETRIEVAL_SECURITY_BLOCKED_MESSAGE
-                    error_type = "insufficient_clearance"
-                
-                return {
-                    "success": False,
-                    "error": error_type,
-                    "message": error_msg,
-                    "count": 0,
-                    "blocked_departments": blocked_depts
-                }
-            docs = filtered_docs
+        if user_security_level is None:
+            # No security filtering needed for public data
+            return {
+                "success": True,
+                "context": docs[:top_k],
+                "count": len(docs[:top_k]),
+                "max_security_level": None,
+            }
         
-        return {
-            "success": True,
-            "context": docs,
-            "count": len(docs),
-            "max_security_level": max_security_level,
-        }
+        # Apply security filtering
+        filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
+            docs, user_security_level, user_department_id, user_department_security_level
+        )
+        
+        # Limit to top_k
+        filtered_docs = filtered_docs[:top_k]
+        
+        # Build outcome using shared method
+        return self._build_retrieval_outcome(
+            filtered_docs, docs, max_security_level, blocked_depts
+        )
 
 
     def _log_no_retrieval(
@@ -532,40 +591,6 @@ class RetrieverService:
             "query": query_text,
             "details": details
         }
-    
-    def format_results(
-        self,
-        documents: List[Document],
-        include_metadata: bool = True
-    ) -> List[Dict[str, Any]]:
-        """
-        Format retrieved documents for API responses.
-        
-        Args:
-            documents: Retrieved documents
-            include_metadata: Whether to include full metadata
-            
-        Returns:
-            List of formatted document dictionaries
-        """
-        results = []
-        
-        for doc in documents:
-            result = {
-                "content": doc.page_content,
-            }
-            
-            if include_metadata:
-                result["metadata"] = doc.metadata
-            else:
-                # Include only essential metadata
-                result["source"] = doc.metadata.get("source")
-                result["chunk_index"] = doc.metadata.get("chunk_index")
-            
-            results.append(result)
-        
-        return results
-
 
 # Singleton instance
 _retriever_service: Optional[RetrieverService] = None
