@@ -15,6 +15,7 @@ from app.services.conversation.response.retrieval_coordinator import RetrievalCo
 from app.services.llm import LLMRouter, LLMType
 from app.services.conversation.service import ConversationService
 from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
+from app.utils.text_processing import preprocess_query
 from app.config.prompt_settings import get_prompt_settings
 from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
@@ -48,6 +49,23 @@ class ResponsePipeline:
             f"ResponsePipeline initialized "
             f"(decomposer={'enabled' if query_decomposer else 'disabled'})"
         )
+
+    def _preprocess_query(self, query: str) -> Dict[Any]:
+        """
+        Preprocess query using simple preprocessing and stop-word removal.
+
+        returns Dict with preprocessed query info
+        """
+        preprocessing_result = preprocess_query(query)
+        optimized_query = preprocessing_result.queries[0]
+        
+        return {
+            "primary_query": optimized_query,
+            "all_queries": [optimized_query],
+            "decomposition_result": preprocessing_result,
+            "strategy": "preprocessed"
+        }
+
     
     async def process_query(
         self,
@@ -55,28 +73,25 @@ class ResponsePipeline:
     ) -> Dict[str, Any]:
         """
         Process and potentially decompose a query.
-                    
+        
+        If LLM decomposer is enabled: Use LLM to decompose query
+        If decomposer is disabled: Use preprocessing for query optimization
+        
         Returns:
             Dict with processed query info:
             - 'primary_query': Main query to use for retrieval
-            - 'all_queries': List of all decomposed queries (if applicable)
-            - 'decomposition_result': Full decomposition result (if applicable)
+            - 'all_queries': List of all queries (decomposed or single optimized)
+            - 'decomposition_result': Full result (from decomposer or preprocessor)
             - 'strategy': Processing strategy used
         """
-        query = {
-            "primary_query": user_query,
-            "all_queries": [user_query],
-            "decomposition_result": None,
-            "strategy": "no_decomposition"
-        }
         # Check if decomposer is available and enabled in settings
         if not self.query_decomposer or not settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
-            # No decomposer or disabled - use original query           
-
-            return query
+            # No decomposer - use preprocessing instead
+            logger.debug("LLM decomposer disabled, using query preprocessing")
+            return self._preprocess_query(user_query)
         
         try:
-            # Attempt query decomposition
+            # Attempt LLM query decomposition
             decomposition_result = await self.query_decomposer.decompose(user_query)
             
             if decomposition_result and decomposition_result.queries:
@@ -84,28 +99,27 @@ class ResponsePipeline:
                 primary = all_queries[0]
                 
                 logger.info(
-                    f"Query decomposed: {len(all_queries)} queries"
+                    f"Query decomposed: {len(all_queries)} queries "
+                    f"(decomposed={decomposition_result.decomposed})"
                 )
                 
                 return {
                     "primary_query": primary,
                     "all_queries": all_queries,
                     "decomposition_result": decomposition_result,
-                    "strategy": "decomposed"
+                    "strategy": "decomposed" if decomposition_result.decomposed else "llm_optimized"
                 }
             else:
-                # Decomposition failed or returned empty - use original
-                logger.warning("Query decomposition failed or returned empty, using original query")
-
-                query["strategy"] = "decomposition_failed"
-                return query
+                # Decomposition failed - fallback to preprocessing
+                logger.warning("Query decomposition returned empty, falling back to preprocessing")
+                
+                return self._preprocess_query(user_query)
         
         except Exception as e:
-            logger.error(f"Error in query processing: {e}", exc_info=True)
-
-            # Fallback to original query on error
-            query["strategy"] = "decomposition_error"
-            return query
+            logger.error(f"Error in query decomposition: {e}, falling back to preprocessing", exc_info=True)
+            
+            # Fallback to preprocessing on error
+            return self._preprocess_query(user_query)
     
     async def retrieve_context(
         self,

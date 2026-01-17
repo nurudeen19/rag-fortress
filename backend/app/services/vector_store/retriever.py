@@ -15,7 +15,6 @@ from app.core.cache import get_cache
 from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.services.vector_store.reranker import get_reranker_service
-from app.utils.text_processing import preprocess_query
 
 
 logger = get_logger(__name__)
@@ -47,7 +46,7 @@ class RetrieverService:
     ) -> str:
         """
         Generate cache key for a query based on:
-        - The cleaned query
+        - The query text (should be preprocessed by caller)
         - User security level (org-wide)
         - Department context (whether query is dept-scoped or org-wide)
         
@@ -57,7 +56,7 @@ class RetrieverService:
         scope = "dept" if (user_department_id and user_department_security_level) else "org"
         
         key_data = {
-            "query": query_text,  # Already preprocessed by caller
+            "query": query_text,  # Should be preprocessed by caller if needed
             "scope": scope,
             "org_level": user_security_level,
             "dept_id": user_department_id if scope == "dept" else None,
@@ -235,31 +234,18 @@ class RetrieverService:
         Adaptive document retrieval with quality-based top-k adjustment.
         
         Process:
-        1. Preprocess query (remove stop words, normalize)
-        2. Check cache for existing results
-        3. Retrieve max_k candidates from vector store
-        4. Rerank candidates if reranker is enabled
-        5. Filter by threshold to get relevant documents
-        6. Return top_k final results
-        
-        Args:
-            query_text: The search query (will be preprocessed internally)
-            top_k: Optional override (uses TOP_K from settings by default)
-            user_security_level: User's org-wide clearance level
-            user_department_id: User's department ID
-            user_department_security_level: User's department-specific clearance level
-            user_id: User ID for activity logging (optional)
-            skip_security_filter: If True, skip security filtering (for multi-query coordination)
+        1. Check cache for existing results
+        2. Retrieve max_k candidates from vector store
+        3. Rerank candidates if reranker is enabled
+        4. Filter by threshold to get relevant documents
+        5. Return top_k final results
             
         Returns:
             Dict with success, context (documents), count, error, message
         """
-        # Step 1: Preprocess query
-        cleaned_query = preprocess_query(query_text)
-        
-        # Step 2: Check cache
+        # Step 1: Check cache
         cache_key = self._generate_cache_key(
-            cleaned_query,
+            query_text,
             user_security_level,
             user_department_id,
             user_department_security_level
@@ -270,9 +256,9 @@ class RetrieverService:
             logger.info(f"Cache hit for query (key={cache_key[:8]}...)")
             return cached_result
         
-        # Step 3-7: Perform actual retrieval
+        # Step 2-6: Perform actual retrieval
         retrieval_result = await self._perform_retrieval(
-            cleaned_query,
+            query_text,
             top_k,
             user_security_level,
             user_department_id,
