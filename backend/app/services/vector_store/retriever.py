@@ -67,6 +67,101 @@ class RetrieverService:
         serialized = json.dumps(key_data, sort_keys=True, default=str)
         return f"retrieval:{hashlib.md5(serialized.encode()).hexdigest()}"
     
+    def _get_document_security_level(self, doc_security_level: Any) -> int:
+        """
+        Get numeric security level value from document metadata.
+        
+        Handles:
+        - None or 0 as public/no clearance (returns 0)
+        - Integer values (returns as-is)
+        - String integers (parses to int)
+        - Enum names (looks up value)
+        - Invalid values (defaults to GENERAL)
+        
+        Returns:
+            Integer security level value
+        """
+        # Handle None or 0 as public/no clearance required
+        if doc_security_level is None or doc_security_level == 0:
+            return 0  # Public document, accessible to all
+        
+        try:
+            # Handle both string enum names and integer values
+            if isinstance(doc_security_level, int):
+                return doc_security_level
+            elif isinstance(doc_security_level, str) and doc_security_level.isdigit():
+                return int(doc_security_level)
+            else:
+                return PermissionLevel[doc_security_level].value
+        except (KeyError, ValueError):
+            logger.warning(f"Invalid security level '{doc_security_level}' in document metadata, defaulting to GENERAL")
+            return PermissionLevel.GENERAL.value  # Default to GENERAL instead of skipping
+    
+    def _check_department_membership(
+        self,
+        metadata: Dict[str, Any],
+        user_department_id: Optional[int],
+        blocked_departments: set
+    ) -> bool:
+        """
+        Check if user belongs to the document's department.
+        
+        Returns:
+            True if user has department access, False otherwise
+        """
+        doc_department_id = metadata.get("department_id")
+        
+        # User has no department assignment
+        if user_department_id is None:
+            dept_name = metadata.get("department", "Unknown Department")
+            blocked_departments.add(dept_name)
+            logger.info(f"BLOCKED: Dept-only doc (source={metadata.get('source')}) - user has no department")
+            return False
+        
+        # User belongs to different department
+        if doc_department_id != user_department_id:
+            dept_name = metadata.get("department", "Unknown Department")
+            blocked_departments.add(dept_name)
+            logger.info(
+                f"BLOCKED: Dept mismatch - doc_dept={doc_department_id}, user_dept={user_department_id} "
+                f"(source={metadata.get('source')})"
+            )
+            return False
+        
+        return True
+    
+    def _check_department_clearance(
+        self,
+        doc_level_value: int,
+        user_department_security_level: Optional[int],
+        metadata: Dict[str, Any],
+        blocked_departments: set
+    ) -> bool:
+        """
+        Check if user has sufficient department clearance for document.
+        
+        Returns:
+            True if user has sufficient clearance, False otherwise
+        """
+        # User has no department clearance
+        if user_department_security_level is None:
+            dept_name = metadata.get("department", "Unknown Department")
+            blocked_departments.add(dept_name)
+            logger.debug(f"BLOCKED: Dept-only doc but user has no dept clearance (source={metadata.get('source')})")
+            return False
+        
+        # User's clearance is insufficient
+        if user_department_security_level < doc_level_value:
+            dept_name = metadata.get("department", "Unknown Department")
+            blocked_departments.add(dept_name)
+            logger.debug(
+                f"BLOCKED: Insufficient dept clearance - user_level={user_department_security_level}, "
+                f"doc_level={doc_level_value} (source={metadata.get('source')})"
+            )
+            return False
+        
+        return True
+    
     def _filter_by_security(
         self,
         documents: List[Document],
@@ -81,12 +176,6 @@ class RetrieverService:
         1. For org-wide documents: User can access at their org clearance level or below
         2. For department-only documents: User must be in that department AND meet department security level
         3. If user has no department, they can only access non-department documents
-        
-        Args:
-            documents: Retrieved documents from vector store
-            user_security_level: User's org-wide clearance level (PermissionLevel enum value)
-            user_department_id: User's department ID (None if not assigned)
-            user_department_security_level: User's department-specific clearance level (None if not assigned)
             
         Returns:
             Tuple of (filtered documents, max security level accessed, blocked department names)
@@ -98,66 +187,22 @@ class RetrieverService:
         for doc in documents:
             metadata = doc.metadata
             
-            # Check security clearance level
+            # Get document security level
             doc_security_level = metadata.get("security_level", "GENERAL")
+            doc_level_value = self._get_document_security_level(doc_security_level)
             
-            # Handle None or 0 as public/no clearance required
-            if doc_security_level is None or doc_security_level == 0:
-                doc_level_value = 0  # Public document, accessible to all
-            else:
-                try:
-                    # Handle both string enum names and integer values
-                    if isinstance(doc_security_level, int):
-                        doc_level_value = doc_security_level
-                    elif isinstance(doc_security_level, str) and doc_security_level.isdigit():
-                        doc_level_value = int(doc_security_level)
-                    else:
-                        doc_level_value = PermissionLevel[doc_security_level].value
-                except (KeyError, ValueError):
-                    logger.warning(f"Invalid security level '{doc_security_level}' in document metadata, defaulting to GENERAL")
-                    doc_level_value = PermissionLevel.GENERAL.value  # Default to GENERAL instead of skipping
-            
-            # Check department access first
+            # Check department access
             is_department_only = metadata.get("is_department_only", False)
-            doc_department_id = metadata.get("department_id")
-            
-            # Enhanced logging for department filtering
+                        
             if is_department_only:
-                logger.debug(
-                    f"Checking dept-only doc: source={metadata.get('source', 'unknown')}, "
-                    f"doc_dept_id={doc_department_id}, user_dept_id={user_department_id}, "
-                    f"doc_level={doc_level_value}, user_dept_level={user_department_security_level}"
-                )
-            
-            if is_department_only:
-                # Department-only document - user must be in the same department
-                if user_department_id is None:
-                    dept_name = metadata.get("department", "Unknown Department")
-                    blocked_departments.add(dept_name)
-                    logger.info(f"BLOCKED: Dept-only doc (source={metadata.get('source')}) - user has no department")
-                    continue
-                if doc_department_id != user_department_id:
-                    dept_name = metadata.get("department", "Unknown Department")
-                    blocked_departments.add(dept_name)
-                    logger.info(
-                        f"BLOCKED: Dept mismatch - doc_dept={doc_department_id}, user_dept={user_department_id} "
-                        f"(source={metadata.get('source')})"
-                    )
+                # Check department membership
+                if not self._check_department_membership(metadata, user_department_id, blocked_departments):
                     continue
                 
-                # For department-only docs, use department security level
-                if user_department_security_level is None:
-                    dept_name = metadata.get("department", "Unknown Department")
-                    blocked_departments.add(dept_name)
-                    logger.info(f"BLOCKED: Dept-only doc but user has no dept clearance (source={metadata.get('source')})")
-                    continue
-                if user_department_security_level < doc_level_value:
-                    dept_name = metadata.get("department", "Unknown Department")
-                    blocked_departments.add(dept_name)
-                    logger.info(
-                        f"BLOCKED: Insufficient dept clearance - user_level={user_department_security_level}, "
-                        f"doc_level={doc_level_value} (source={metadata.get('source')})"
-                    )
+                # Check department clearance level
+                if not self._check_department_clearance(
+                    doc_level_value, user_department_security_level, metadata, blocked_departments
+                ):
                     continue
             else:
                 # For org-wide documents, use org security level

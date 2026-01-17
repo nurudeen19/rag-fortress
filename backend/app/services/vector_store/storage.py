@@ -16,6 +16,7 @@ from app.services.vector_store.loader import DocumentLoader
 from app.services.vector_store.chunker import DocumentChunker
 from app.core.vector_store_factory import get_vector_store
 from app.core.embedding_factory import get_embedding_provider
+from app.core.vector_store_factory import save_vector_store
 from app.models.file_upload import FileUpload, FileStatus
 from app.config.settings import settings
 from app.core import get_logger
@@ -123,8 +124,7 @@ class DocumentStorageService:
     async def _store_and_track(self, chunks: List[Document], batch_size: int) -> Tuple[set, Dict]:
         """
         Store chunks in vector DB with batching and track results.
-        Includes hybrid search support for compatible providers.
-        
+        Includes hybrid search support for compatible providers.        
         
         Returns:
             Tuple of (set of successful file_ids, dict of error file_ids)
@@ -152,8 +152,7 @@ class DocumentStorageService:
             try:
                 self.vector_store.add_documents(batch)
                 
-                # Persist to disk if using FAISS or other local providers
-                from app.core.vector_store_factory import save_vector_store
+                # Persist to disk if using FAISS or other local providers                
                 save_vector_store(self.vector_store)
                 
                 # Mark files in this batch as successful
