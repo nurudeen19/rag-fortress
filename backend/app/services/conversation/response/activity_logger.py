@@ -24,12 +24,6 @@ class ConversationActivityLogger:
     ) -> None:
         """
         Log retrieval errors from the retriever service.
-        
-        Args:
-            user_id: User ID
-            error_type: Error type from retriever (insufficient_clearance, no_documents, low_quality_results, etc.)
-            user_query: User's original query
-            details: Additional error details from retriever
         """
         try:
             bus = get_event_bus()

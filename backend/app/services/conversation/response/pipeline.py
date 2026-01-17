@@ -36,12 +36,6 @@ class ResponsePipeline:
     ):
         """
         Initialize response pipeline.
-        
-        Args:
-            retriever: Vector store retriever service
-            llm_router: LLM router service
-            conversation_service: Conversation service for history/persistence
-            query_decomposer: Optional query decomposer for query optimization
         """
         self.retriever = retriever
         self.retrieval_coordinator = RetrievalCoordinator(retriever)
@@ -57,16 +51,11 @@ class ResponsePipeline:
     
     async def process_query(
         self,
-        user_query: str,
-        user_clearance_level: Optional[int] = None
+        user_query: str
     ) -> Dict[str, Any]:
         """
         Process and potentially decompose a query.
-        
-        Args:
-            user_query: Original user query
-            user_clearance_level: User's security clearance level (not currently used)
-            
+                    
         Returns:
             Dict with processed query info:
             - 'primary_query': Main query to use for retrieval
@@ -74,15 +63,17 @@ class ResponsePipeline:
             - 'decomposition_result': Full decomposition result (if applicable)
             - 'strategy': Processing strategy used
         """
+        query = {
+            "primary_query": user_query,
+            "all_queries": [user_query],
+            "decomposition_result": None,
+            "strategy": "no_decomposition"
+        }
         # Check if decomposer is available and enabled in settings
         if not self.query_decomposer or not settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
-            # No decomposer or disabled - use original query
-            return {
-                "primary_query": user_query,
-                "all_queries": [user_query],
-                "decomposition_result": None,
-                "strategy": "no_decomposition"
-            }
+            # No decomposer or disabled - use original query           
+
+            return query
         
         try:
             # Attempt query decomposition
@@ -105,22 +96,16 @@ class ResponsePipeline:
             else:
                 # Decomposition failed or returned empty - use original
                 logger.warning("Query decomposition failed or returned empty, using original query")
-                return {
-                    "primary_query": user_query,
-                    "all_queries": [user_query],
-                    "decomposition_result": None,
-                    "strategy": "decomposition_failed"
-                }
+
+                query["strategy"] = "decomposition_failed"
+                return query
         
         except Exception as e:
             logger.error(f"Error in query processing: {e}", exc_info=True)
+
             # Fallback to original query on error
-            return {
-                "primary_query": user_query,
-                "all_queries": [user_query],
-                "decomposition_result": None,
-                "strategy": "error_fallback"
-            }
+            query["strategy"] = "decomposition_error"
+            return query
     
     async def retrieve_context(
         self,
@@ -281,15 +266,6 @@ class ResponsePipeline:
     ) -> str:
         """
         Generate complete RAG response (non-streaming) with fallback.
-        
-        Args:
-            llm: Primary LLM instance
-            llm_type: Primary LLM type
-            user_query: User's question
-            documents: Retrieved context documents
-            conversation_id: Conversation ID
-            user_id: User ID
-            partial_context: Optional partial context metadata for specialized prompting
             
         Returns:
             Generated response text

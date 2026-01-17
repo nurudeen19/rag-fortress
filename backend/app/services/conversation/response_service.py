@@ -47,7 +47,34 @@ class ConversationResponseService:
         retriever = get_retriever_service()
         llm_router = get_llm_router()
         
-        # Determine which classifier to use
+        # Initialize classifier (LLM or heuristic)
+        classifier, classifier_type = self._initialize_classifier()
+        
+        # Initialize query decomposer if enabled
+        query_decomposer = self._initialize_decomposer()
+        
+        # Initialize specialized components
+        self._initialize_components(
+            retriever,
+            llm_router,
+            query_decomposer,
+            classifier,
+            classifier_type
+        )
+        
+        logger.debug(
+            f"ConversationResponseService initialized "
+            f"(classifier={classifier_type}, "
+            f"decomposer={'on' if query_decomposer else 'off'})"
+        )
+    
+    def _initialize_classifier(self) -> tuple[Any, str]:
+        """
+        Initialize intent classifier (LLM or heuristic).
+        
+        Returns:
+            Tuple of (classifier instance, classifier_type string)
+        """
         classifier = None
         classifier_type = "heuristic"  # default
         
@@ -67,36 +94,312 @@ class ConversationResponseService:
             classifier_type = "heuristic"
             logger.info("Heuristic intent classifier enabled")
         
-        # Initialize query decomposer if enabled
-        query_decomposer = None
-        if settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
-            query_decomposer = get_query_decomposer()
-            if query_decomposer and query_decomposer.llm:
-                logger.info("Query decomposer enabled")
-            else:
-                logger.warning("Query decomposer initialization failed")
-                query_decomposer = None
+        return classifier, classifier_type
+    
+    def _initialize_decomposer(self) -> Any:
+        """
+        Initialize query decomposer if enabled.
         
-        # Initialize specialized components
+        Returns:
+            Query decomposer instance or None if disabled/failed
+        """
+        if not settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
+            return None
+        
+        query_decomposer = get_query_decomposer()
+        if query_decomposer and query_decomposer.llm:
+            logger.debug("Query decomposer enabled")
+            return query_decomposer
+        else:
+            logger.warning("Query decomposer initialization failed")
+            return None
+    
+    def _initialize_components(
+        self,
+        retriever: Any,
+        llm_router: Any,
+        query_decomposer: Any,
+        classifier: Any,
+        classifier_type: str
+    ) -> None:
+        """
+        Initialize specialized components (pipeline, handlers).
+        
+        """
+        # Initialize response pipeline
         self.pipeline = ResponsePipeline(
             retriever,
             llm_router,
             self.conversation_service,
             query_decomposer
         )
+        
+        # Initialize error handler
         self.error_handler = ErrorResponseHandler(self.conversation_service)
         
-        # Initialize intent handler with single classifier
+        # Initialize intent handler with classifier
         self.intent_handler = IntentHandler(
             classifier_type,
             self.conversation_service,
             classifier
         )
+    
+    async def get_classification_result(self, user_query: str) -> Any:
+        """
+        Get classification result for user query.
+        """
+        classification_result = await self.intent_handler.classify(user_query)
         
-        logger.info(
-            f"ConversationResponseService initialized "
-            f"(classifier={classifier_type}, "
-            f"decomposer={'on' if query_decomposer else 'off'})"
+        if classification_result:
+            logger.debug(
+                f"Intent classification: requires_rag={classification_result.requires_rag}, "
+                f"confidence={classification_result.confidence:.2f}, "
+                f"source={self.intent_handler.classifier_type}"
+            )
+        else:
+            logger.warning("Classification failed, will default to RAG pipeline")
+        
+        return classification_result
+    
+    async def _generate_static_response(
+        self,
+        handler_method_streaming: Any,
+        handler_method_non_streaming: Any,
+        stream: bool,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        Unified static response generation for both streaming and non-streaming modes.
+        
+        Handles template responses and error responses (non-RAG static text).
+        Routes to appropriate streaming or non-streaming handlers.
+                    
+        Returns:
+            Response dict with success status and either generator or text
+        """
+        if stream:
+            return {
+                "success": True,
+                "streaming": True,
+                "generator": handler_method_streaming(**kwargs)
+            }
+        else:
+            response_text = await handler_method_non_streaming(**kwargs)
+            return {
+                "success": True,
+                "streaming": False,
+                "response": response_text
+            }
+    
+    async def _handle_template_response(
+        self,
+        classification_result: Any,
+        conversation_id: str,
+        user_id: int,
+        user_query: str,
+        stream: bool
+    ) -> Dict[str, Any]:
+        """
+        Handle template/direct response without RAG.
+            
+        Returns:
+            Response dict with success status and either generator or text
+        """
+        response_text = classification_result.response
+        
+        # Build metadata
+        meta = {"classifier": self.intent_handler.classifier_type}
+        if hasattr(classification_result, 'intent') and classification_result.intent:
+            meta["intent"] = classification_result.intent.value
+        
+        return await self._generate_static_response(
+            handler_method_streaming=self.intent_handler.generate_template_response_streaming,
+            handler_method_non_streaming=self.intent_handler.generate_template_response,
+            stream=stream,
+            response_text=response_text,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            user_query=user_query,
+            meta=meta
+        )
+    
+    async def _retrieve_context(
+        self,
+        user_query: str,
+        all_queries: list[str],
+        user_clearance: Any,
+        user_department_id: int,
+        user_dept_clearance: Any,
+        user_id: int,
+        conversation_id: str,
+        stream: bool
+    ) -> Dict[str, Any]:
+        """
+        Retrieve context documents with security filtering.
+        
+        Handles retrieval, error checking, and metadata extraction.
+        
+        Returns:
+            Dict with either:
+            - success=True: documents, max_doc_level, partial_context
+            - success=False: error response (already handled)
+        """
+        # Retrieve context with user credentials
+        retrieval_result = await self.pipeline.retrieve_context(
+            user_query=user_query,
+            user_clearance=user_clearance,
+            user_department_id=user_department_id,
+            user_dept_clearance=user_dept_clearance,
+            user_id=user_id,
+            decomposed_queries=all_queries
+        )
+        
+        # Handle retrieval errors
+        if not retrieval_result["success"]:
+            error_response = await self._handle_retrieval_error(
+                retrieval_result=retrieval_result,
+                user_query=user_query,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                stream=stream
+            )
+            return {"success": False, "error_response": error_response}
+        
+        # Extract documents and metadata
+        documents = retrieval_result["context"]
+        max_doc_level = retrieval_result.get("max_security_level")
+        partial_context = retrieval_result.get("partial_context")
+        
+        logger.info(f"Retrieved {len(documents)} documents")
+        if partial_context:
+            logger.info(
+                f"Partial context: {partial_context['type']}, "
+                f"{partial_context['satisfied_count']}/{partial_context['total_queries']} satisfied"
+            )
+        
+        return {
+            "success": True,
+            "documents": documents,
+            "max_doc_level": max_doc_level,
+            "partial_context": partial_context
+        }
+    
+    async def _generate_llm_response(
+        self,
+        documents: list[Any],
+        max_doc_level: Any,
+        partial_context: Dict[str, Any],
+        user_query: str,
+        conversation_id: str,
+        user_id: int,
+        stream: bool
+    ) -> Dict[str, Any]:
+        """
+        Generate LLM response from retrieved documents.
+        
+        Handles LLM selection and both streaming/non-streaming generation.
+        
+        Returns:
+            Response dict with success status and either generator or text
+        """
+        # Select appropriate LLM
+        llm, llm_type = self.pipeline.select_llm(max_doc_level)
+        
+        if stream:
+            return {
+                "success": True,
+                "streaming": True,
+                "generator": self.pipeline.stream_rag_response(
+                    llm=llm,
+                    llm_type=llm_type,
+                    user_query=user_query,
+                    documents=documents,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    partial_context=partial_context
+                )
+            }
+        else:
+            # Non-streaming response
+            response_text = await self.pipeline.generate_rag_response(
+                llm=llm,
+                llm_type=llm_type,
+                user_query=user_query,
+                documents=documents,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                partial_context=partial_context
+            )
+            
+            sources = self.pipeline._build_sources_payload(documents)
+            
+            # Save response (cache + persist)
+            await self.conversation_service.save_assistant_response(
+                conversation_id=conversation_id,
+                user_id=user_id,
+                user_query=user_query,
+                response_text=response_text,
+                assistant_meta={"sources": sources} if sources else None
+            )
+            
+            return {
+                "success": True,
+                "streaming": False,
+                "response": response_text
+            }
+    
+    async def _handle_rag_pipeline(
+        self,
+        user_query: str,
+        user_clearance: Any,
+        user_department_id: int,
+        user_dept_clearance: Any,
+        user_id: int,
+        conversation_id: str,
+        stream: bool
+    ) -> Dict[str, Any]:
+        """
+        Handle RAG pipeline: query processing, retrieval, and response generation.
+        
+        Returns:
+            Response dict with success status and either generator or text
+        """
+        # Step 1: Query Processing and Decomposition
+        query_info = await self.pipeline.process_query(user_query)
+        
+        all_queries = query_info.get("all_queries", [user_query])
+        decomposition_strategy = query_info["strategy"]
+        
+        logger.debug(
+            f"Query processed (strategy={decomposition_strategy}, {len(all_queries)} queries): "
+            f"'{user_query[:50]}...'"
+        )
+        
+        # Step 2: Retrieve context with security filtering
+        context_result = await self._retrieve_context(
+            user_query=user_query,
+            all_queries=all_queries,
+            user_clearance=user_clearance,
+            user_department_id=user_department_id,
+            user_dept_clearance=user_dept_clearance,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            stream=stream
+        )
+        
+        # Return error response if retrieval failed
+        if not context_result["success"]:
+            return context_result["error_response"]
+        
+        # Step 3: Generate LLM response from documents
+        return await self._generate_llm_response(
+            documents=context_result["documents"],
+            max_doc_level=context_result["max_doc_level"],
+            partial_context=context_result["partial_context"],
+            user_query=user_query,
+            conversation_id=conversation_id,
+            user_id=user_id,
+            stream=stream
         )
     
     async def generate_response(
@@ -107,27 +410,20 @@ class ConversationResponseService:
         stream: bool = True
     ) -> Dict[str, Any]:
         """
-        Generate AI response with security filtering.
+        Orchestrate AI response generation workflow.
+        
+        High-level orchestrator that routes requests to appropriate handlers.
         
         Flow:
-        1. Check for template intent (hybrid heuristic + LLM classification)
-        2. Get user info (clearance, department)
-        3. Process/decompose query if enabled
-        4. Retrieve context with security filtering (using processed query)
-        5. Handle retrieval errors (no context, insufficient clearance)
-        6. Select appropriate LLM and generate response
-        
-        Args:
-            conversation_id: Conversation ID
-            user_id: User ID
-            user_query: User's question
-            stream: Whether to return streaming response
-            
+        1. Get user clearance info
+        2. Classify user intent (template vs RAG)
+        3. Route to template handler or RAG pipeline
+                    
         Returns:
             Dict with success status and either generator or error
         """
         try:
-            # Get user info early for clearance-based operations
+            # Get user info for clearance-based operations
             user_info = await self.user_service.get_user_clearance_info(user_id)
             if not user_info:
                 return {
@@ -137,153 +433,33 @@ class ConversationResponseService:
                 }
             
             user_clearance = user_info["clearance"]
-            user_clearance_level = user_clearance.value
             user_department_id = user_info.get("department_id")
             user_dept_clearance = user_info.get("department_security_level")
             
-            # Step 1: Intent Classification
-            # Get raw classification result from classifier
-            classification_result = await self.intent_handler.classify(user_query)
+            # Step 1: Classify intent
+            classification_result = await self.get_classification_result(user_query)
             
-            # Check if RAG is required (main decision point)
+            # Step 2: Route to appropriate handler
             if classification_result and not classification_result.requires_rag:
-                # Template/direct response - no RAG needed
-                confidence = classification_result.confidence
-                response_text = classification_result.response
-                
-                logger.info(
-                    f"Intent classification: requires_rag={classification_result.requires_rag}, "
-                    f"confidence={confidence:.2f}, source={self.intent_handler.classifier_type}"
+                # Template response path
+                return await self._handle_template_response(
+                    classification_result=classification_result,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    user_query=user_query,
+                    stream=stream
                 )
-                
-                # Build metadata
-                meta = {"classifier": self.intent_handler.classifier_type}
-                if hasattr(classification_result, 'intent') and classification_result.intent:
-                    meta["intent"] = classification_result.intent.value
-                                
-                if stream:
-                    return {
-                        "success": True,
-                        "streaming": True,
-                        "generator": self.intent_handler.generate_template_response_streaming(
-                            response_text=response_text,
-                            conversation_id=conversation_id,
-                            user_id=user_id,
-                            user_query=user_query,
-                            meta=meta
-                        )
-                    }
-                else:
-                    response_text = await self.intent_handler.generate_template_response(
-                        response_text=response_text,
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        user_query=user_query,
-                        meta=meta
-                    )
-                    
-                    return {
-                        "success": True,
-                        "streaming": False,
-                        "response": response_text
-                    }
             
-            # Step 2: Proceed with RAG pipeline
-            # Either classifier failed or requires_rag=True
-            if not classification_result:
-                logger.warning("Classification failed, defaulting to RAG pipeline")            
-            
-            # Query Processing and Decomposition
-            query_info = await self.pipeline.process_query(
-                user_query,
-                user_clearance_level
-            )
-            
-            processed_query = query_info["primary_query"]
-            all_queries = query_info.get("all_queries", [user_query])
-            decomposition_strategy = query_info["strategy"]
-            
-            logger.info(
-                f"Query processed (strategy={decomposition_strategy}, {len(all_queries)} queries): "
-                f"'{user_query[:50]}...'"
-            )
-            
-            # Step 3: Retrieve context with user credentials
-            # Pass all decomposed queries for multi-query retrieval
-            retrieval_result = await self.pipeline.retrieve_context(
-                user_query=user_query,  # Original query for reranking
+            # Step 3: RAG pipeline path
+            return await self._handle_rag_pipeline(
+                user_query=user_query,
                 user_clearance=user_clearance,
                 user_department_id=user_department_id,
                 user_dept_clearance=user_dept_clearance,
                 user_id=user_id,
-                decomposed_queries=all_queries  # Pass decomposed queries
+                conversation_id=conversation_id,
+                stream=stream
             )
-            
-            # Step 4: Handle retrieval errors
-            if not retrieval_result["success"]:
-                return await self._handle_retrieval_error(
-                    retrieval_result=retrieval_result,
-                    user_query=user_query,  # Use original query for error messages
-                    conversation_id=conversation_id,
-                    user_id=user_id,
-                    stream=stream
-                )
-            
-            # Extract documents and their max security level
-            documents = retrieval_result["context"]
-            max_doc_level = retrieval_result.get("max_security_level")
-            partial_context = retrieval_result.get("partial_context")
-            
-            logger.info(f"Retrieved {len(documents)} documents")
-            if partial_context:
-                logger.info(f"Partial context: {partial_context['type']}, {partial_context['satisfied_count']}/{partial_context['total_queries']} satisfied")
-
-            # Step 5: Route to appropriate LLM and generate response
-            # Use original query for LLM prompt (more natural for user)
-            llm, llm_type = self.pipeline.select_llm(max_doc_level)
-            
-            if stream:
-                return {
-                    "success": True,
-                    "streaming": True,
-                    "generator": self.pipeline.stream_rag_response(
-                        llm=llm,
-                        llm_type=llm_type,
-                        user_query=user_query,  # Original query for natural response
-                        documents=documents,
-                        conversation_id=conversation_id,
-                        user_id=user_id,
-                        partial_context=partial_context
-                    )
-                }
-            else:
-                # Non-streaming response
-                response_text = await self.pipeline.generate_rag_response(
-                    llm=llm,
-                    llm_type=llm_type,
-                    user_query=user_query,
-                    documents=documents,
-                    conversation_id=conversation_id,
-                    user_id=user_id,
-                    partial_context=partial_context
-                )
-                
-                sources = self.pipeline._build_sources_payload(documents)
-                
-                # Save response (cache + persist)
-                await self.conversation_service.save_assistant_response(
-                    conversation_id=conversation_id,
-                    user_id=user_id,
-                    user_query=user_query,
-                    response_text=response_text,
-                    assistant_meta={"sources": sources} if sources else None
-                )
-                
-                return {
-                    "success": True,
-                    "streaming": False,
-                    "response": response_text
-                }
         
         except Exception as e:
             logger.error(f"Response generation failed: {e}", exc_info=True)
@@ -303,13 +479,6 @@ class ConversationResponseService:
     ) -> Dict[str, Any]:
         """
         Handle retrieval errors with appropriate logging and responses.
-        
-        Args:
-            retrieval_result: Failed retrieval result
-            user_query: User's original query
-            conversation_id: Conversation ID
-            user_id: User ID
-            stream: Whether streaming is enabled
             
         Returns:
             Response dict
@@ -329,30 +498,16 @@ class ConversationResponseService:
             details=details
         )
         
-        # Generate appropriate response
-        if stream:
-            return {
-                "success": True,
-                "streaming": True,
-                "generator": self.error_handler.stream_no_context_response(
-                    error_type=error_type,
-                    user_query=user_query,
-                    conversation_id=conversation_id,
-                    user_id=user_id
-                )
-            }
-        else:
-            response_text = await self.error_handler.generate_no_context_response(
-                error_type=error_type,
-                user_query=user_query,
-                conversation_id=conversation_id,
-                user_id=user_id
-            )
-            return {
-                "success": True,
-                "streaming": False,
-                "response": response_text
-            }
+        # Generate error response
+        return await self._generate_static_response(
+            handler_method_streaming=self.error_handler.stream_no_context_response,
+            handler_method_non_streaming=self.error_handler.generate_no_context_response,
+            stream=stream,
+            error_type=error_type,
+            user_query=user_query,
+            conversation_id=conversation_id,
+            user_id=user_id
+        )
     
 
 def get_conversation_response_service(session) -> ConversationResponseService:

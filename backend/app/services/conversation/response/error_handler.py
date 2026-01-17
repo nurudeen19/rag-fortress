@@ -20,10 +20,7 @@ class ErrorResponseHandler:
     
     def __init__(self, conversation_service: ConversationService):
         """
-        Initialize error response handler.
-        
-        Args:
-            conversation_service: Conversation service for persistence
+        Initialize error response handler.        
         """
         self.conversation_service = conversation_service
         self.prompt_settings = get_prompt_settings()
@@ -31,10 +28,7 @@ class ErrorResponseHandler:
     def get_no_context_response_text(self, error_type: str) -> str:
         """
         Get response text when no context is available.
-        
-        Args:
-            error_type: Type of retrieval error
-            
+                    
         Returns:
             Response text based on error type
         """
@@ -55,13 +49,7 @@ class ErrorResponseHandler:
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream a response when no relevant context is found.
-        
-        Args:
-            error_type: Type of retrieval error
-            user_query: User's original query
-            conversation_id: Conversation ID
-            user_id: User ID
-            
+                    
         Yields:
             Stream chunks with token content
         """
@@ -94,12 +82,6 @@ class ErrorResponseHandler:
     ) -> str:
         """
         Generate complete no-context response (non-streaming).
-        
-        Args:
-            error_type: Type of retrieval error
-            user_query: User's original query
-            conversation_id: Conversation ID
-            user_id: User ID
             
         Returns:
             Response text
