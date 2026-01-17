@@ -67,10 +67,8 @@ class RerankerService:
             # Provider-specific reranking
             if self._provider == "huggingface":
                 return self._rerank_huggingface(reranker, query, documents, top_k)
-            elif self._provider == "cohere":
-                return self._rerank_cohere(reranker, query, documents, top_k)
-            elif self._provider == "jina":
-                return self._rerank_jina(reranker, query, documents, top_k)
+            elif self._provider in ["cohere", "jina"]:
+                return self._rerank_compressor(reranker, query, documents, top_k)
             else:
                 logger.error(f"Unknown reranker provider: {self._provider}")
                 return documents[:top_k], [0.0] * min(top_k, len(documents))
@@ -100,44 +98,33 @@ class RerankerService:
         
         return reranked_docs, reranked_scores
     
-    def _rerank_cohere(self, compressor, query: str, documents: List[Document], top_k: int) -> Tuple[List[Document], List[float]]:
-        """Rerank using LangChain CohereRerank wrapper."""
+    def _rerank_compressor(
+        self,
+        compressor,
+        query: str,
+        documents: List[Document],
+        top_k: int
+    ) -> Tuple[List[Document], List[float]]:
+        """
+        Rerank using LangChain DocumentCompressor interface.
+        
+        Works for both Cohere and Jina rerankers as they use the same interface.
+        """
         try:
-            # CohereRerank is a document compressor that needs invoke() call
-            # It returns reranked documents with relevance_score in metadata
+            # Compress documents (rerank) - returns documents with relevance_score in metadata
             reranked_docs = compressor.compress_documents(documents, query)
             
-            # Extract scores from metadata (CohereRerank adds relevance_score)
-            reranked_scores = []
-            for doc in reranked_docs:
-                score = doc.metadata.get("relevance_score", 0.0)
-                reranked_scores.append(float(score))
+            # Extract scores from metadata
+            reranked_scores = [
+                float(doc.metadata.get("relevance_score", 0.0))
+                for doc in reranked_docs
+            ]
             
             # Limit to top_k
             return reranked_docs[:top_k], reranked_scores[:top_k]
         
         except Exception as e:
-            logger.error(f"Error in Cohere reranking: {e}")
-            raise
-    
-    def _rerank_jina(self, compressor, query: str, documents: List[Document], top_k: int) -> Tuple[List[Document], List[float]]:
-        """Rerank using LangChain JinaRerank wrapper."""
-        try:
-            # JinaRerank is a document compressor that needs compress_documents() call
-            # It returns reranked documents with relevance_score in metadata
-            reranked_docs = compressor.compress_documents(documents, query)
-            
-            # Extract scores from metadata (JinaRerank adds relevance_score)
-            reranked_scores = []
-            for doc in reranked_docs:
-                score = doc.metadata.get("relevance_score", 0.0)
-                reranked_scores.append(float(score))
-            
-            # Limit to top_k
-            return reranked_docs[:top_k], reranked_scores[:top_k]
-        
-        except Exception as e:
-            logger.error(f"Error in Jina reranking: {e}")
+            logger.error(f"Error in {self._provider} reranking: {e}")
             raise
 
 # Singleton instance
