@@ -1,17 +1,15 @@
 """
 Retriever service for querying the vector store.
 Handles adaptive document retrieval with quality-based top-k adjustment and reranking.
-Includes caching and query preprocessing.
+Includes semantic caching with vector similarity.
 """
 
 from typing import List, Optional, Dict, Any, Tuple
 from langchain_core.documents import Document
-import hashlib
-import json
 
 from app.core.vector_store_factory import get_retriever
 from app.core import get_logger
-from app.core.cache import get_cache
+from app.core.semantic_cache import get_semantic_cache
 from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.services.vector_store.reranker import get_reranker_service
@@ -35,36 +33,7 @@ class RetrieverService:
         self.reranker = None
         if self.settings.app_settings.ENABLE_RERANKER:
             self.reranker = get_reranker_service()
-        self.cache = get_cache()
-    
-    def _generate_cache_key(
-        self,
-        query_text: str,
-        user_security_level: Optional[int],
-        user_department_id: Optional[int],
-        user_department_security_level: Optional[int]
-    ) -> str:
-        """
-        Generate cache key for a query based on:
-        - The query text (should be preprocessed by caller)
-        - User security level (org-wide)
-        - Department context (whether query is dept-scoped or org-wide)
-        
-        This ensures different users with different clearances don't share cached results.
-        """
-        # Determine scope: if user has department restrictions, include dept_id; otherwise org-wide
-        scope = "dept" if (user_department_id and user_department_security_level) else "org"
-        
-        key_data = {
-            "query": query_text,  # Should be preprocessed by caller if needed
-            "scope": scope,
-            "org_level": user_security_level,
-            "dept_id": user_department_id if scope == "dept" else None,
-            "dept_level": user_department_security_level if scope == "dept" else None,
-        }
-        
-        serialized = json.dumps(key_data, sort_keys=True, default=str)
-        return f"retrieval:{hashlib.md5(serialized.encode()).hexdigest()}"
+        self.semantic_cache = get_semantic_cache()
     
     def _get_document_security_level(self, doc_security_level: Any) -> int:
         """
@@ -383,20 +352,18 @@ class RetrieverService:
         Returns:
             Dict with success, context (documents), count, error, message
         """
-        # Step 1: Check cache
-        cache_key = self._generate_cache_key(
-            query_text,
-            user_security_level,
-            user_department_id,
-            user_department_security_level
+        # Check context-level semantic cache
+        cached_context = await self.semantic_cache.get(
+            cache_type="context",
+            query=query_text,
+            user_security_level=user_security_level or 0,
+            user_department_id=user_department_id
         )
         
-        cached_result = await self.cache.get(cache_key)
-        if cached_result:
-            logger.info(f"Cache hit for query (key={cache_key[:8]}...)")
-            return cached_result
+        if cached_context:
+            return cached_context
         
-        # Step 2-6: Perform actual retrieval
+        # Perform retrieval
         retrieval_result = await self._perform_retrieval(
             query_text,
             top_k,
@@ -407,10 +374,32 @@ class RetrieverService:
             skip_security_filter
         )
         
-        # Note: Caching disabled - Document objects are not JSON serializable
-        # TODO: Implement custom serialization for Document objects if caching is needed
-        # if retrieval_result["success"]:
-        #     await self.cache.set(cache_key, retrieval_result, ttl=300)
+        # Cache successful retrieval in context cache
+        if retrieval_result["success"] and retrieval_result.get("context"):
+            # Analyze security metadata from documents
+            documents = retrieval_result["context"]
+            max_security = retrieval_result.get("max_security_level")
+            
+            # Check if any docs are department-only
+            is_departmental = any(
+                doc.metadata.get("is_department_only", False) for doc in documents
+            )
+            
+            # Collect department IDs
+            dept_ids = list(set(
+                doc.metadata.get("department_id")
+                for doc in documents
+                if doc.metadata.get("is_department_only") and doc.metadata.get("department_id")
+            ))
+            
+            await self.semantic_cache.set(
+                cache_type="context",
+                query=query_text,
+                entry=retrieval_result,
+                min_security_level=max_security,
+                is_departmental=is_departmental,
+                department_ids=dept_ids if is_departmental else None
+            )
         
         return retrieval_result
     
