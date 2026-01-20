@@ -229,8 +229,9 @@ class SemanticCache:
         cache_type: CacheType,
         query: str,
         user_security_level: int,
-        user_department_id: Optional[int] = None
-    ) -> Optional[Any]:
+        user_department_id: Optional[int] = None,
+        user_department_security_level: Optional[int] = None
+    ) -> tuple[Optional[Any], bool]:
         """
         Get random entry from semantically similar cluster.
         
@@ -238,37 +239,47 @@ class SemanticCache:
         1. Check if cache type is enabled
         2. Generate query embedding
         3. Search for similar cluster with matching security
-        4. If found, return random entry
+        4. If found, return random entry and whether to continue pipeline
         
         Args:
             cache_type: "response" or "context"
             query: Query text
-            user_security_level: User's security clearance
+            user_security_level: User's organization-level security clearance
             user_department_id: User's department ID
+            user_department_security_level: User's department-level security clearance
         
         Returns:
-            Random entry from matching cluster, or None if no suitable cache hit
+            Tuple of (entry, should_continue_pipeline)
+            - entry: Random entry from cluster, or None if no cache hit
+            - should_continue_pipeline: True if cluster below max_entries (to add variation)
         """
         if cache_type == "response" and not self.response_enabled:
-            return None
+            return None, False
         if cache_type == "context" and not self.context_enabled:
-            return None
+            return None, False
         
         try:
             # Generate query embedding
             query_embedding = await self._get_embedding(query)
             if not query_embedding:
-                return None
+                return None, False
             
             # Search for similar cluster
             cluster = await self._find_similar(
                 cache_type,
                 query_embedding,
                 user_security_level,
-                user_department_id
+                user_department_id,
+                user_department_security_level
             )
             
             if cluster:
+                # Check if cluster can accept more variations
+                max_entries = (
+                    self.response_max_entries if cache_type == "response" else self.context_max_entries
+                )
+                should_continue = cluster.can_add_more(max_entries)
+                
                 # Get random entry from cluster
                 entry = cluster.get_random_entry()
                 if entry:
@@ -281,16 +292,17 @@ class SemanticCache:
                     
                     logger.info(
                         f"{cache_type.capitalize()} cache HIT for query: '{query[:50]}...' "
-                        f"(cluster has {len(cluster.entries)} variations)"
+                        f"(cluster has {len(cluster.entries)}/{max_entries} variations, "
+                        f"continue_pipeline={should_continue})"
                     )
-                    return entry
+                    return entry, should_continue
             
             logger.debug(f"{cache_type.capitalize()} cache MISS for query: '{query[:50]}...'")
-            return None
+            return None, False
         
         except Exception as e:
             logger.error(f"Error retrieving from {cache_type} cache: {e}", exc_info=True)
-            return None
+            return None, False
     
     async def set(
         self,
@@ -403,7 +415,8 @@ class SemanticCache:
         cache_type: CacheType,
         query_embedding: List[float],
         user_security_level: int,
-        user_department_id: Optional[int]
+        user_department_id: Optional[int],
+        user_department_security_level: Optional[int] = None
     ) -> Optional[SemanticCacheCluster]:
         """
         Find semantically similar cluster that user can access.
@@ -411,8 +424,9 @@ class SemanticCache:
         Args:
             cache_type: "response" or "context"
             query_embedding: Query vector
-            user_security_level: User's security clearance
+            user_security_level: User's organization-level security clearance
             user_department_id: User's department ID
+            user_department_security_level: User's department-level security clearance
         
         Returns:
             Cluster if found and accessible, None otherwise
@@ -449,15 +463,33 @@ class SemanticCache:
                 if score < threshold:
                     continue
                 
-                # Check security clearance
-                min_security = doc.min_security_level
-                if min_security and int(min_security) > user_security_level:
-                    logger.debug(f"Cache hit rejected: insufficient clearance ({user_security_level} < {min_security})")
-                    continue
+                # Validate security access based on whether cluster is departmental
+                cluster_min_security = int(doc.min_security_level) if doc.min_security_level else 0
+                cluster_is_departmental = doc.is_departmental == "true"
+                
+                # Use appropriate security level based on whether cluster is departmental
+                if cluster_is_departmental:
+                    # For departmental clusters, validate against department security level
+                    if user_department_security_level is None:
+                        logger.debug("Skipping departmental cluster - user has no department clearance")
+                        continue
+                    if user_department_security_level < cluster_min_security:
+                        logger.debug(
+                            f"Skipping cluster - user dept clearance {user_department_security_level} < "
+                            f"required {cluster_min_security}"
+                        )
+                        continue
+                else:
+                    # For organization-level clusters, validate against org security level
+                    if user_security_level < cluster_min_security:
+                        logger.debug(
+                            f"Skipping cluster - user org clearance {user_security_level} < "
+                            f"required {cluster_min_security}"
+                        )
+                        continue
                 
                 # Check department access
-                is_dept = doc.is_departmental == "true"
-                if is_dept:
+                if cluster_is_departmental:
                     if not user_department_id:
                         logger.debug("Cache hit rejected: dept-only but user has no department")
                         continue
@@ -490,9 +522,9 @@ class SemanticCache:
                     "query": cluster_data.get(b"query", b"").decode("utf-8"),
                     "entries": entries,
                     "is_encrypted": cluster_data.get(b"is_encrypted", b"false").decode("utf-8") == "true",
-                    "min_security_level": int(min_security) if min_security else None,
-                    "is_departmental": is_dept,
-                    "department_ids": dept_ids if is_dept else [],
+                    "min_security_level": cluster_min_security,
+                    "is_departmental": cluster_is_departmental,
+                    "department_ids": dept_ids if cluster_is_departmental and dept_ids_str else [],
                     "timestamp": datetime.fromtimestamp(float(doc.timestamp))
                 }
                 

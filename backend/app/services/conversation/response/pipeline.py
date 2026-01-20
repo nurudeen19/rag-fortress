@@ -21,6 +21,7 @@ from app.models.user_permission import PermissionLevel
 from app.models.message import MessageRole
 from app.config.settings import settings
 from app.core import get_logger
+from app.core.semantic_cache import get_semantic_cache
 
 logger = get_logger(__name__)
 
@@ -44,6 +45,7 @@ class ResponsePipeline:
         self.conversation_service = conversation_service
         self.query_decomposer = query_decomposer
         self.prompt_settings = get_prompt_settings()
+        self.semantic_cache = get_semantic_cache()
         
         logger.info(
             f"ResponsePipeline initialized "
@@ -154,6 +156,62 @@ class ResponsePipeline:
             user_id=user_id,
             decomposed_queries=decomposed_queries
         )
+    
+    async def _cache_response(
+        self,
+        user_query: str,
+        response_text: str,
+        documents: List[Any]
+    ):
+        """
+        Cache the generated response with security metadata from documents.
+        
+        Args:
+            user_query: Original user query
+            response_text: Generated response to cache
+            documents: Context documents used (for security metadata)
+        """
+        try:
+            # Extract security metadata from documents
+            min_security_level = None
+            is_departmental = False
+            department_ids = set()
+            
+            for doc in documents:
+                metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+                
+                # Track max security level
+                sec_level = metadata.get('min_security_level')
+                if sec_level is not None:
+                    if min_security_level is None:
+                        min_security_level = sec_level
+                    else:
+                        min_security_level = max(min_security_level, sec_level)
+                
+                # Track departmental status
+                if metadata.get('is_departmental'):
+                    is_departmental = True
+                    dept_id = metadata.get('department_id')
+                    if dept_id:
+                        department_ids.add(dept_id)
+            
+            # Store in response cache
+            await self.semantic_cache.set(
+                cache_type="response",
+                query=user_query,
+                entry=response_text,
+                min_security_level=min_security_level,
+                is_departmental=is_departmental,
+                department_ids=list(department_ids) if department_ids else None
+            )
+            
+            logger.debug(
+                f"Cached response (sec_level={min_security_level}, "
+                f"dept={is_departmental}, query='{user_query[:50]}...')"
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to cache response: {e}", exc_info=True)
     
     def select_llm(self, max_doc_level: Optional[int]) -> Tuple[Any, LLMType]:
         """
@@ -402,6 +460,9 @@ class ResponsePipeline:
         if partial_context:
             meta["partial_context"] = partial_context
         
+        # Cache the complete response after streaming
+        await self._cache_response(user_query, full_response, documents)
+        
         # Save response (cache + persist)
         await self.conversation_service.save_assistant_response(
             conversation_id=conversation_id,
@@ -453,7 +514,12 @@ class ResponsePipeline:
             "history": history_messages
         })
         
-        return response.content if hasattr(response, 'content') else str(response)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        # Cache the response
+        await self._cache_response(user_query, response_text, documents)
+        
+        return response_text
     
     def _convert_history_to_messages(self, history: List[Dict[str, str]]) -> List[Any]:
         """Convert history dicts to LangChain message objects."""

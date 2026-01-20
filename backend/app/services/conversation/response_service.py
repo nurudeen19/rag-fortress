@@ -14,6 +14,7 @@ from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm import get_llm_router
 from app.services.conversation.service import ConversationService
 from app.services.user.user_service import UserAccountService
+from app.core.semantic_cache import get_semantic_cache
 from app.services.conversation.response import (
     IntentHandler,
     ResponsePipeline,
@@ -46,6 +47,7 @@ class ConversationResponseService:
         self.user_service = UserAccountService(session)
         retriever = get_retriever_service()
         llm_router = get_llm_router()
+        self.semantic_cache = get_semantic_cache()
         
         # Initialize classifier (LLM or heuristic)
         classifier, classifier_type = self._initialize_classifier()
@@ -348,6 +350,70 @@ class ConversationResponseService:
                 "response": response_text
             }
     
+    async def _check_response_cache(
+        self,
+        user_query: str,
+        user_clearance: Any,
+        user_department_id: int,
+        user_dept_clearance: Any,
+        stream: bool
+    ) -> tuple[Dict[str, Any] | None, bool]:
+        """
+        Check response cache and return formatted response if found.
+        
+        Args:
+            user_query: User's query
+            user_clearance: User's organization-level security clearance
+            user_department_id: User's department ID
+            user_dept_clearance: User's department-level security clearance
+            stream: Whether response should be streamed
+            
+        Returns:
+            Tuple of (response_dict, should_continue_pipeline)
+            - response_dict: Formatted response if cache hit, None if miss
+            - should_continue_pipeline: True if should continue to add variation
+        """
+        cached_response, should_continue = await self.semantic_cache.get(
+            cache_type="response",
+            query=user_query,
+            user_security_level=user_clearance.value if user_clearance else None,
+            user_department_id=user_department_id,
+            user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
+        )
+        
+        if not cached_response:
+            logger.debug(f"Response cache MISS for query: '{user_query[:50]}...'")
+            return None, False
+        
+        logger.info(
+            f"Response cache HIT for query: '{user_query[:50]}...' "
+            f"(continue_for_variation={should_continue})"
+        )
+        
+        # If we should continue pipeline to add variation, return None to trigger pipeline
+        if should_continue:
+            logger.debug("Cluster below max_entries, continuing pipeline to add variation")
+            return None, True  # Signal that we have cached response but should continue
+        
+        # Cluster at capacity, return cached response immediately
+        if stream:
+            # For streaming, wrap cached response in async generator
+            async def cached_response_generator():
+                yield {"type": "content", "content": cached_response}
+                yield {"type": "end"}
+            
+            return {
+                "success": True,
+                "streaming": True,
+                "generator": cached_response_generator()
+            }, False
+        else:
+            return {
+                "success": True,
+                "streaming": False,
+                "response": cached_response
+            }, False
+    
     async def _handle_rag_pipeline(
         self,
         user_query: str,
@@ -364,6 +430,23 @@ class ConversationResponseService:
         Returns:
             Response dict with success status and either generator or text
         """
+        # Step 0: Check response cache (before entire pipeline)
+        cached_result, should_continue = await self._check_response_cache(
+            user_query=user_query,
+            user_clearance=user_clearance,
+            user_department_id=user_department_id,
+            user_dept_clearance=user_dept_clearance,
+            stream=stream
+        )
+        
+        # If cache hit and cluster at capacity, return cached response immediately
+        if cached_result and not should_continue:
+            return cached_result
+        
+        # If cache hit but cluster below max_entries, log and continue to add variation
+        if should_continue:
+            logger.debug("Cache hit but continuing pipeline to generate variation")
+        
         # Step 1: Query Processing and Decomposition
         query_info = await self.pipeline.process_query(user_query)
         

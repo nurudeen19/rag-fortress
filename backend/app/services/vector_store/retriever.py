@@ -353,15 +353,20 @@ class RetrieverService:
             Dict with success, context (documents), count, error, message
         """
         # Check context-level semantic cache
-        cached_context = await self.semantic_cache.get(
+        cached_context, should_continue = await self.semantic_cache.get(
             cache_type="context",
             query=query_text,
             user_security_level=user_security_level or 0,
-            user_department_id=user_department_id
+            user_department_id=user_department_id,
+            user_department_security_level=user_department_security_level
         )
         
-        if cached_context:
+        if cached_context and not should_continue:
+            # Cluster at capacity, return cached immediately
             return cached_context
+        
+        if should_continue:
+            logger.debug("Context cache hit but continuing retrieval to add variation")
         
         # Perform retrieval
         retrieval_result = await self._perform_retrieval(
