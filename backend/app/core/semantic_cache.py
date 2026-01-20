@@ -13,11 +13,13 @@ import json
 import hashlib
 import random
 from datetime import datetime
-from langchain_core.documents import Document
+from app.core.cache import get_cache
 
 from app.core import get_logger
 from app.config.settings import settings
 from app.core.security import encrypt_data, decrypt_data
+from redis.commands.search.field import VectorField, TextField, TagField, NumericField
+from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 
 logger = get_logger(__name__)
 
@@ -112,41 +114,23 @@ class SemanticCache:
     
     def __init__(self):
         """Initialize semantic cache."""
-        # Response cache config
-        self.response_enabled = settings.cache_settings.ENABLE_RESPONSE_CACHE
-        self.response_ttl = settings.cache_settings.RESPONSE_CACHE_TTL_MINUTES * 60  # Convert to seconds
-        self.response_max_entries = settings.cache_settings.RESPONSE_CACHE_MAX_ENTRIES
-        self.response_threshold = settings.cache_settings.RESPONSE_CACHE_SIMILARITY_THRESHOLD
-        self.response_encrypt = settings.cache_settings.RESPONSE_CACHE_ENCRYPT
-        
-        # Context cache config
-        self.context_enabled = settings.cache_settings.ENABLE_CONTEXT_CACHE
-        self.context_ttl = settings.cache_settings.CONTEXT_CACHE_TTL_MINUTES * 60  # Convert to seconds
-        self.context_max_entries = settings.cache_settings.CONTEXT_CACHE_MAX_ENTRIES
-        self.context_threshold = settings.cache_settings.CONTEXT_CACHE_SIMILARITY_THRESHOLD
-        self.context_encrypt = settings.cache_settings.CONTEXT_CACHE_ENCRYPT
-        
+        self.config = settings.cache_settings.get_semantic_cache_config()
         self.redis_client = None
         self.embedding_client = None
         
         # Initialize if at least one tier is enabled
-        if self.response_enabled or self.context_enabled:
+        if self.config["response"]["enabled"] or self.config["context"]["enabled"]:
             self._initialize()
     
     def _initialize(self):
         """Initialize Redis VL connection and embedding client."""
         try:
-            import redis
-            from redis.commands.search.field import VectorField, TextField, NumericField, TagField
-            from redis.commands.search.indexDefinition import IndexDefinition, IndexType
-            
             # Get Redis connection
             from app.core.cache import get_cache
             base_cache = get_cache()
             
             if not hasattr(base_cache, 'redis_client') or base_cache.redis_client is None:
                 logger.warning("Redis not available, semantic cache disabled")
-                self.enabled = False
                 return
             
             self.redis_client = base_cache.redis_client
@@ -157,28 +141,22 @@ class SemanticCache:
             
             if not self.embedding_client:
                 logger.warning("Embedding client not available, semantic cache disabled")
-                self.enabled = False
                 return
             
             # Create semantic cache index
             self._create_index()
             
-            logger.info(
-                f"Semantic cache initialized "
-                f"(response={self.response_enabled}, context={self.context_enabled})"
-            )
+            
         
         except Exception as e:
             logger.error(f"Failed to initialize semantic cache: {e}", exc_info=True)
-            self.enabled = False
     
     def _create_index(self):
         """Create Redis search index for semantic cache."""
         try:
-            from redis.commands.search.field import VectorField, TextField, TagField, NumericField
-            from redis.commands.search.indexDefinition import IndexDefinition, IndexType
             
-            index_name = settings.cache_settings.SEMANTIC_CACHE_INDEX_NAME
+            
+            index_name = self.config["index_name"]
             
             # Check if index exists
             try:
@@ -195,7 +173,7 @@ class SemanticCache:
                     "FLAT",
                     {
                         "TYPE": "FLOAT32",
-                        "DIM": settings.cache_settings.SEMANTIC_CACHE_VECTOR_DIM,
+                        "DIM": self.config["vector_dim"],
                         "DISTANCE_METRIC": "COSINE"
                     }
                 ),
@@ -253,9 +231,9 @@ class SemanticCache:
             - entry: Random entry from cluster, or None if no cache hit
             - should_continue_pipeline: True if cluster below max_entries (to add variation)
         """
-        if cache_type == "response" and not self.response_enabled:
+        if cache_type == "response" and not self.config["response"]["enabled"]:
             return None, False
-        if cache_type == "context" and not self.context_enabled:
+        if cache_type == "context" and not self.config["context"]["enabled"]:
             return None, False
         
         try:
@@ -275,9 +253,7 @@ class SemanticCache:
             
             if cluster:
                 # Check if cluster can accept more variations
-                max_entries = (
-                    self.response_max_entries if cache_type == "response" else self.context_max_entries
-                )
+                max_entries = self.config[cache_type]["max_entries"]
                 should_continue = cluster.can_add_more(max_entries)
                 
                 # Get random entry from cluster
@@ -332,9 +308,9 @@ class SemanticCache:
             is_departmental: Whether this is department-specific
             department_ids: List of department IDs (if departmental)
         """
-        if cache_type == "response" and not self.response_enabled:
+        if cache_type == "response" and not self.config["response"]["enabled"]:
             return
-        if cache_type == "context" and not self.context_enabled:
+        if cache_type == "context" and not self.config["context"]["enabled"]:
             return
         
         try:
@@ -344,9 +320,7 @@ class SemanticCache:
                 return
             
             # Determine encryption for this entry
-            should_encrypt = (
-                self.response_encrypt if cache_type == "response" else self.context_encrypt
-            )
+            should_encrypt = self.config[cache_type]["encrypt"]
             
             # Encrypt entry if needed
             encrypted_entry = entry
@@ -365,9 +339,7 @@ class SemanticCache:
                 department_ids or []
             )
             
-            max_entries = (
-                self.response_max_entries if cache_type == "response" else self.context_max_entries
-            )
+            max_entries = self.config[cache_type]["max_entries"]
             
             if existing_cluster:
                 # Check if cluster can accept more entries
@@ -657,7 +629,7 @@ class SemanticCache:
                 "timestamp": cluster.timestamp.timestamp(),
             }
             
-            ttl = self.response_ttl if cache_type == "response" else self.context_ttl
+            ttl = self.config[cache_type]["ttl_seconds"]
             
             self.redis_client.hset(cache_key, mapping=data)
             self.redis_client.expire(cache_key, ttl)
@@ -684,7 +656,11 @@ class SemanticCache:
             self.redis_client.hset(cache_key, "timestamp", cluster.timestamp.timestamp())
             
             # Refresh TTL
-            ttl = self.response_ttl if cache_type == "response" else self.context_ttl
+            ttl = self.config[cache_type]["ttl_seconds"]
+            self.redis_client.expire(cache_key, ttl)
+            
+            # Refresh TTL
+            ttl = self.config[cache_type]["ttl_seconds"]
             self.redis_client.expire(cache_key, ttl)
             
         except Exception as e:
@@ -719,6 +695,54 @@ class SemanticCache:
 
 # Singleton instance
 _semantic_cache: Optional[SemanticCache] = None
+
+
+def verify_redis_vl_support() -> bool:
+    """
+    Verify Redis supports RediSearch module for vector operations.
+    
+    This should be called explicitly during startup before initializing semantic cache.
+    
+    Returns:
+        True if RediSearch module is available, False otherwise
+    """
+    try:
+        cache = get_cache()
+        if not hasattr(cache, 'redis_client') or cache.redis_client is None:
+            logger.warning("✗ Redis not available")
+            return False
+        
+        redis_client = cache.redis_client
+        
+        # Check for RediSearch module
+        modules = redis_client.module_list()
+        has_search = any(
+            module.get(b'name') == b'search' or module.get('name') == 'search'
+            for module in modules
+        )
+        
+        if has_search:
+            logger.info("✓ Redis VL supported (RediSearch module detected)")
+            return True
+        else:
+            logger.warning(
+                "✗ RediSearch module not loaded. "
+                "Semantic cache requires Redis Stack or Redis with RediSearch. "
+                "See: https://redis.io/docs/stack/"
+            )
+            return False
+    
+    except AttributeError:
+        # module_list() not available - old Redis version
+        logger.warning(
+            "✗ Cannot verify RediSearch module (Redis version too old). "
+            "Semantic cache disabled. Upgrade to Redis Stack."
+        )
+        return False
+    
+    except Exception as e:
+        logger.warning(f"✗ Failed to verify Redis VL support: {e}")
+        return False
 
 
 def get_semantic_cache() -> SemanticCache:

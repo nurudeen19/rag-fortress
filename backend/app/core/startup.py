@@ -31,6 +31,7 @@ from app.core.llm_factory import (
     get_classifier_llm
 )
 from app.core.vector_store_factory import get_vector_store, get_retriever
+from app.core.semantic_cache import verify_redis_vl_support, get_semantic_cache
 from app.core.database import DatabaseManager
 from app.core.settings_loader import load_settings_by_category
 from app.config import (
@@ -142,10 +143,15 @@ class StartupController:
             # ========== STEP 10: Event Bus (OPTIONAL) ==========
             # Initialize event handlers for background task processing
             init_event_handlers()
+
+            # ========== STEP 11: Semantic Cache (OPTIONAL) ==========
+            # Initialize semantic cache once at startup
+            await self._initialize_semantic_cache()
             
-            # ========== STEP 11: Job Queue (OPTIONAL, at end) ==========
+            # ========== STEP 12: Job Queue (OPTIONAL, at end) ==========
             # Jobs scheduled last to ensure all dependencies are ready
-            await self._initialize_job_queue()
+            await self._initialize_job_queue()            
+            
 
             self.initialized = True
             logger.info("✓ Application initialization completed successfully")
@@ -396,6 +402,34 @@ class StartupController:
                 logger.error(f"✗ Critical: Even memory cache failed: {fallback_error}")
                 # This should never happen, but log it clearly if it does
     
+    async def _initialize_semantic_cache(self):
+        """Initialize semantic cache if enabled."""
+        try:            
+            config = settings.cache_settings.get_semantic_cache_config()
+            
+            # Check if either tier is enabled
+            if not (config["response"]["enabled"] or config["context"]["enabled"]):
+                logger.info("○ Semantic Cache: DISABLED")
+                return
+            
+            # Verify Redis VL support
+            if not verify_redis_vl_support():
+                logger.warning("⚠ Semantic Cache: DISABLED (Redis VL not supported)")
+                return
+            
+            # Initialize cache
+            cache = get_semantic_cache()
+            
+            if cache.redis_client and cache.embedding_client:
+                logger.info(
+                    f"✓ Semantic Cache: Response={config['response']['enabled']}, "
+                    f"Context={config['context']['enabled']}"
+                )
+            else:
+                logger.info("○ Semantic Cache: DISABLED (initialization failed)")
+        
+        except Exception as e:
+            logger.warning(f"⚠ Semantic Cache initialization failed: {e}")
 
     
     async def shutdown(self):

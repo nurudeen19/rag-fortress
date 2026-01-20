@@ -221,6 +221,20 @@ redis-cli MODULE LIST
 # Should show "search" module
 ```
 
+**Important:** The application automatically detects RediSearch support at startup. If the module is not available, semantic cache will be gracefully disabled without blocking the application. Check startup logs for:
+
+```
+✓ Redis VL supported (RediSearch module detected)
+✓ Semantic Cache ENABLED: Response (...), Context (...)
+```
+
+or
+
+```
+✗ RediSearch module not loaded. Semantic cache disabled.
+○ Semantic Cache DISABLED
+```
+
 ## Troubleshooting
 
 **Cache not initializing:**

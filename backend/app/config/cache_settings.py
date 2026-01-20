@@ -105,6 +105,32 @@ class CacheSettings(BaseSettings):
             "retry_on_timeout": self.CACHE_REDIS_RETRY_ON_TIMEOUT,
             "health_check_interval": self.CACHE_REDIS_HEALTH_CHECK_INTERVAL,
         }
+    
+    def get_semantic_cache_config(self) -> dict:
+        """Get semantic cache configuration as dict."""
+        return {
+            # Global
+            "index_name": self.SEMANTIC_CACHE_INDEX_NAME,
+            "vector_dim": self.SEMANTIC_CACHE_VECTOR_DIM,
+            
+            # Response cache
+            "response": {
+                "enabled": self.ENABLE_RESPONSE_CACHE,
+                "ttl_seconds": self.RESPONSE_CACHE_TTL_MINUTES * 60,
+                "max_entries": self.RESPONSE_CACHE_MAX_ENTRIES,
+                "similarity_threshold": self.RESPONSE_CACHE_SIMILARITY_THRESHOLD,
+                "encrypt": self.RESPONSE_CACHE_ENCRYPT,
+            },
+            
+            # Context cache
+            "context": {
+                "enabled": self.ENABLE_CONTEXT_CACHE,
+                "ttl_seconds": self.CONTEXT_CACHE_TTL_MINUTES * 60,
+                "max_entries": self.CONTEXT_CACHE_MAX_ENTRIES,
+                "similarity_threshold": self.CONTEXT_CACHE_SIMILARITY_THRESHOLD,
+                "encrypt": self.CONTEXT_CACHE_ENCRYPT,
+            }
+        }
 
 
 # Global cache settings instance
