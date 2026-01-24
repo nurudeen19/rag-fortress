@@ -18,7 +18,7 @@ class RerankerSettings(BaseSettings):
     
     # Reranker Provider (huggingface, cohere, jina)
     RERANKER_PROVIDER: str = Field("huggingface", env="RERANKER_PROVIDER")
-    RERANKER_MODEL: str = Field("cross-encoder/ms-marco-MiniLM-L-6-v2", env="RERANKER_MODEL")
+    RERANKER_MODEL: Optional[str] = Field(None, env="RERANKER_MODEL")
     RERANKER_API_KEY: Optional[str] = Field(None, env="RERANKER_API_KEY")
     
     # Reranker Behavior
@@ -34,20 +34,41 @@ class RerankerSettings(BaseSettings):
         provider = self.RERANKER_PROVIDER.lower()
         
         if provider == "huggingface":
+            model = self.RERANKER_MODEL or "cross-encoder/ms-marco-MiniLM-L-6-v2"
             return {
                 "provider": "huggingface",
-                "model": self.RERANKER_MODEL
+                "model": model
             }
         
-        elif provider in ("cohere", "jina"):
+        elif provider == "cohere":
             if not self.RERANKER_API_KEY:
-                raise ValueError(f"RERANKER_API_KEY is required for {provider} reranker")
+                raise ValueError("RERANKER_API_KEY is required for cohere reranker")
+            if not self.RERANKER_MODEL:
+                raise ValueError(
+                    "RERANKER_MODEL is required for cohere reranker. "
+                    "Options: rerank-v4.0-pro, rerank-v4.0-fast, rerank-v3.5, rerank-english-v3.0"
+                )
             
             return {
-                "provider": provider,
+                "provider": "cohere",
                 "api_key": self.RERANKER_API_KEY,
                 "model": self.RERANKER_MODEL
             }
+        
+        elif provider == "jina":
+            if not self.RERANKER_API_KEY:
+                raise ValueError("RERANKER_API_KEY is required for jina reranker")
+            
+            config = {
+                "provider": "jina",
+                "api_key": self.RERANKER_API_KEY
+            }
+            
+            # Jina has default model, only include if specified
+            if self.RERANKER_MODEL:
+                config["model"] = self.RERANKER_MODEL
+            
+            return config
         
         else:
             raise ValueError(

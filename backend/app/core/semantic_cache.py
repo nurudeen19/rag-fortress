@@ -13,11 +13,12 @@ import json
 import hashlib
 import random
 from datetime import datetime
+from app.core.embedding_factory import get_embedding_provider
 from app.core.cache import get_cache
 
 from app.core import get_logger
 from app.config.settings import settings
-from app.core.security import encrypt_data, decrypt_data
+from app.utils.encryption import encrypt, decrypt
 from redis.commands.search.field import VectorField, TextField, TagField, NumericField
 from redis.commands.search.indexDefinition import IndexDefinition, IndexType
 
@@ -125,8 +126,6 @@ class SemanticCache:
     def _initialize(self):
         """Initialize Redis VL connection and embedding client."""
         try:
-            # Get Redis connection
-            from app.core.cache import get_cache
             base_cache = get_cache()
             
             if not hasattr(base_cache, 'redis_client') or base_cache.redis_client is None:
@@ -136,8 +135,7 @@ class SemanticCache:
             self.redis_client = base_cache.redis_client
             
             # Initialize embedding client
-            from app.core.embedding_factory import get_embedding_client
-            self.embedding_client = get_embedding_client()
+            self.embedding_client = get_embedding_provider()
             
             if not self.embedding_client:
                 logger.warning("Embedding client not available, semantic cache disabled")
@@ -262,9 +260,9 @@ class SemanticCache:
                     # Decrypt if needed
                     if cluster.is_encrypted:
                         if isinstance(entry, str):
-                            entry = json.loads(decrypt_data(entry))
+                            entry = json.loads(decrypt(entry))
                         elif isinstance(entry, dict) and "data" in entry:
-                            entry["data"] = json.loads(decrypt_data(entry["data"]))
+                            entry["data"] = json.loads(decrypt(entry["data"]))
                     
                     logger.info(
                         f"{cache_type.capitalize()} cache HIT for query: '{query[:50]}...' "
@@ -326,9 +324,9 @@ class SemanticCache:
             encrypted_entry = entry
             if should_encrypt:
                 if isinstance(entry, (dict, list)):
-                    encrypted_entry = encrypt_data(json.dumps(entry))
+                    encrypted_entry = encrypt(json.dumps(entry))
                 elif isinstance(entry, str):
-                    encrypted_entry = encrypt_data(entry)
+                    encrypted_entry = encrypt(entry)
             
             # Check if similar cluster exists
             existing_cluster = await self._find_cluster_for_new_entry(

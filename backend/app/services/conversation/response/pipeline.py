@@ -52,7 +52,7 @@ class ResponsePipeline:
             f"(decomposer={'enabled' if query_decomposer else 'disabled'})"
         )
 
-    def _preprocess_query(self, query: str) -> Dict[Any]:
+    def _preprocess_query(self, query: str) -> Dict[str, Any]:
         """
         Preprocess query using simple preprocessing and stop-word removal.
 

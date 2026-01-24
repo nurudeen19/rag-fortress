@@ -2,7 +2,7 @@
 Cache configuration settings for RAG Fortress.
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -106,7 +106,7 @@ class CacheSettings(BaseSettings):
             "health_check_interval": self.CACHE_REDIS_HEALTH_CHECK_INTERVAL,
         }
     
-    def get_semantic_cache_config(self) -> dict:
+    def get_semantic_cache_config(self) -> Dict[str, Any]:
         """Get semantic cache configuration as dict."""
         return {
             # Global

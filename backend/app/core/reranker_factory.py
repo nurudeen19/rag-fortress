@@ -69,16 +69,20 @@ def _create_reranker() -> Any:
     
     elif provider == "cohere":
         try:
-            from langchain_cohere import CohereRerank
+            from langchain_cohere import CohereRerank            
             if not config.get("api_key"):
                 raise ConfigurationError(
                     "Cohere API key not provided. "
                     "Set RERANKER_API_KEY environment variable or configuration."
                 )
-            return CohereRerank(
-                model=config["model"],
-                cohere_api_key=config["api_key"]
-            )
+            
+            kwargs = {"cohere_api_key": config.get("api_key")}
+            
+            # Only include model if explicitly provided in config
+            if config.get("model"):
+                kwargs["model"] = config["model"]
+                
+            return CohereRerank(**kwargs)
         except ImportError:
             raise ConfigurationError(
                 "langchain-cohere not installed. "
@@ -93,10 +97,13 @@ def _create_reranker() -> Any:
                     "Jina API key not provided. "
                     "Set RERANKER_API_KEY environment variable or configuration."
                 )
-            # JinaRerank has default model "jina-reranker-v1-base-en", can be overridden
-            kwargs = {"api_key": config["api_key"]}
+            
+            kwargs = {"api_key": config.get("api_key")}
+            
+            # Only include model if explicitly provided in config
             if config.get("model"):
                 kwargs["model"] = config["model"]
+                
             return JinaRerank(**kwargs)
         except ImportError:
             raise ConfigurationError(
