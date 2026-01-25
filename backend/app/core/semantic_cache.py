@@ -7,7 +7,7 @@ Provides two-tier caching (response and context) with security-aware access cont
 
 import json
 from typing import Optional, Dict, Any, List, Literal
-from redisvl.extensions.llm.cache import SemanticCache as RedisVLSemanticCache
+from redisvl.extensions.cache.llm import SemanticCache as RedisVLSemanticCache
 
 from app.core import get_logger
 from app.config.settings import settings
