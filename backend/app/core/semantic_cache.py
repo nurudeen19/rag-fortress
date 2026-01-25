@@ -19,6 +19,51 @@ logger = get_logger(__name__)
 CacheType = Literal["response", "context"]
 
 
+def _create_redisvl_vectorizer():
+    """
+    Create RedisVL vectorizer based on embedding settings.
+    
+    Uses the same provider and configuration as the main embedding provider,
+    but with RedisVL's native vectorizer classes.
+    """
+    from redisvl.utils.vectorize import (
+        OpenAITextVectorizer,
+        CohereTextVectorizer,
+        HuggingFaceTextVectorizer,
+    )
+    
+    embedding_config = settings.embedding_settings
+    provider = embedding_config.EMBEDDING_PROVIDER.lower()
+    
+    if provider == "openai":
+        return OpenAITextVectorizer(
+            model=embedding_config.EMBEDDING_MODEL,
+            api_key=embedding_config.EMBEDDING_API_KEY,
+            dimensions=embedding_config.EMBEDDING_DIMENSIONS
+        )
+    
+    elif provider == "cohere":
+        return CohereTextVectorizer(
+            model=embedding_config.EMBEDDING_MODEL,
+            api_key=embedding_config.EMBEDDING_API_KEY,
+            input_type=embedding_config.EMBEDDING_INPUT_TYPE or "search_query"
+        )
+    
+    elif provider == "huggingface":
+        return HuggingFaceTextVectorizer(
+            model=embedding_config.EMBEDDING_MODEL
+        )
+    
+    else:
+        logger.warning(
+            f"Embedding provider '{provider}' not directly supported by RedisVL. "
+            "Falling back to HuggingFace default."
+        )
+        return HuggingFaceTextVectorizer(
+            model="sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+
 class SemanticCache:
     """
     Two-tier semantic cache using RedisVL.
@@ -51,19 +96,22 @@ class SemanticCache:
                 logger.warning("Redis not available, semantic cache disabled")
                 return
             
-            redis_url = settings.cache_settings.REDIS_URL or "redis://localhost:6379"
+            # Create RedisVL vectorizer using same config as main embedding provider
+            vectorizer = _create_redisvl_vectorizer()
+            
+            redis_url = settings.cache_settings.get_redis_url() or "redis://localhost:6379"
             
             # Initialize response cache
             if self.config["response"]["enabled"]:
                 self.response_cache = RedisVLSemanticCache(
                     name="rag_response_cache",
                     redis_url=redis_url,
-                    distance_threshold=self.config["response"]["threshold"],
+                    distance_threshold=self.config["response"]["similarity_threshold"],
                     ttl=self.config["response"]["ttl_seconds"],
-                    vectorizer=None  # Will use existing embeddings
+                    vectorizer=vectorizer
                 )
                 logger.info(
-                    f"Response cache initialized (threshold={self.config['response']['threshold']}, "
+                    f"Response cache initialized (threshold={self.config['response']['similarity_threshold']}, "
                     f"TTL={self.config['response']['ttl_seconds']}s)"
                 )
             
@@ -72,12 +120,12 @@ class SemanticCache:
                 self.context_cache = RedisVLSemanticCache(
                     name="rag_context_cache",
                     redis_url=redis_url,
-                    distance_threshold=self.config["context"]["threshold"],
+                    distance_threshold=self.config["context"]["similarity_threshold"],
                     ttl=self.config["context"]["ttl_seconds"],
-                    vectorizer=None  # Will use existing embeddings
+                    vectorizer=vectorizer
                 )
                 logger.info(
-                    f"Context cache initialized (threshold={self.config['context']['threshold']}, "
+                    f"Context cache initialized (threshold={self.config['context']['similarity_threshold']}, "
                     f"TTL={self.config['context']['ttl_seconds']}s)"
                 )
         
@@ -112,14 +160,7 @@ class SemanticCache:
             return None, False
         
         try:
-            # Build filter metadata for security
-            filters = self._build_security_filters(
-                user_security_level,
-                user_department_id,
-                user_department_security_level
-            )
-            
-            # Check cache with RedisVL
+            # Check cache with RedisVL (uses our adapter vectorizer automatically)
             results = cache.check(
                 prompt=query,
                 return_fields=["response", "metadata"],
@@ -207,7 +248,7 @@ class SemanticCache:
                 # No encryption - serialize to JSON directly
                 encrypted_entry = json.dumps(entry)
             
-            # Store in RedisVL cache
+            # Store in RedisVL cache (uses our adapter vectorizer automatically)
             cache.store(
                 prompt=query,
                 response=encrypted_entry,
@@ -345,9 +386,10 @@ class SemanticCache:
 
 # Singleton instance
 _semantic_cache: Optional[SemanticCache] = None
+_redis_vl_supported: Optional[bool] = None  # Track if Redis VL is supported
 
 
-def verify_redis_vl_support() -> bool:
+async def verify_redis_vl_support() -> bool:
     """
     Verify Redis supports RediSearch module for vector operations.
     
@@ -357,34 +399,53 @@ def verify_redis_vl_support() -> bool:
     Returns:
         True if RediSearch module is available, False otherwise
     """
+    global _redis_vl_supported
+    
+    # Return cached result if already checked
+    if _redis_vl_supported is not None:
+        return _redis_vl_supported
+    
     try:
         cache = get_cache()
-        if not hasattr(cache, 'redis_client') or cache.redis_client is None:
-            logger.warning("✗ Redis not available")
-            return False
-        
         redis_client = cache.redis_client
         
-        # Get all loaded modules
-        modules = redis_client.module_list()
+        if redis_client is None:
+            logger.warning("✗ Redis not available (using in-memory cache)")
+            _redis_vl_supported = False
+            return False
         
-        # Log available modules for debugging
-        module_names = [
-            module.get(b'name', b'').decode('utf-8') if isinstance(module.get(b'name', b''), bytes)
-            else module.get('name', '')
-            for module in modules
-        ]
-        logger.debug(f"Redis modules detected: {module_names}")
+        # Get all loaded modules (async call)
+        modules = await redis_client.module_list()
+        
+        # Parse module names - redis.asyncio returns list of dicts
+        module_names = []
+        for module in modules:
+            try:
+                if isinstance(module, dict):
+                    # Direct dict access
+                    name = module.get('name', '')
+                    if name:
+                        module_names.append(str(name))
+                elif isinstance(module, (list, tuple)):
+                    # Fallback for flat list format: ['name', 'bf', 'ver', 80400, ...]
+                    for i, item in enumerate(module):
+                        key = item.decode('utf-8') if isinstance(item, bytes) else str(item)
+                        if key == 'name' and i + 1 < len(module):
+                            name = module[i + 1]
+                            name = name.decode('utf-8') if isinstance(name, bytes) else str(name)
+                            module_names.append(name)
+                            break
+            except Exception as e:
+                logger.debug(f"Error parsing module {module}: {e}")
+        
+        logger.info(f"Redis modules detected: {module_names}")
         
         # Check for RediSearch module (name is 'search')
-        has_search = any(
-            module.get(b'name', b'').decode('utf-8').lower() == 'search' if isinstance(module.get(b'name', b''), bytes)
-            else module.get('name', '').lower() == 'search'
-            for module in modules
-        )
+        has_search = any(name.lower() == 'search' for name in module_names)
         
         if has_search:
             logger.info("✓ Redis vector search supported (RediSearch module detected)")
+            _redis_vl_supported = True
             return True
         else:
             logger.warning(
@@ -393,6 +454,7 @@ def verify_redis_vl_support() -> bool:
                 "Install Redis Stack or load RediSearch module. "
                 "See: https://redis.io/docs/stack/"
             )
+            _redis_vl_supported = False
             return False
     
     except AttributeError:
@@ -401,16 +463,25 @@ def verify_redis_vl_support() -> bool:
             "✗ Cannot verify RediSearch module (Redis version too old). "
             "Semantic cache disabled. Upgrade to Redis Stack."
         )
+        _redis_vl_supported = False
         return False
     
     except Exception as e:
         logger.warning(f"✗ Failed to verify RediSearch support: {e}")
+        _redis_vl_supported = False
         return False
 
 
 def get_semantic_cache() -> SemanticCache:
     """Get semantic cache singleton instance."""
     global _semantic_cache
+    
+    # If Redis VL is known to be unsupported, return disabled cache
+    if _redis_vl_supported is False:
+        if _semantic_cache is None:
+            # Create a disabled instance (no caches initialized)
+            _semantic_cache = SemanticCache()
+        return _semantic_cache
     
     if _semantic_cache is None:
         _semantic_cache = SemanticCache()

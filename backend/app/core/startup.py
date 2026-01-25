@@ -409,21 +409,25 @@ class StartupController:
             
             # Check if either tier is enabled
             if not (config["response"]["enabled"] or config["context"]["enabled"]):
-                logger.info("○ Semantic Cache: DISABLED")
+                logger.info("○ Semantic Cache: DISABLED (not enabled in configuration)")
                 return
             
             # Verify Redis VL support
-            if not verify_redis_vl_support():
+            if not await verify_redis_vl_support():
                 logger.warning("⚠ Semantic Cache: DISABLED (Redis VL not supported)")
                 return
             
             # Initialize cache
             cache = get_semantic_cache()
             
-            if cache.redis_client and cache.embedding_client:
+            # Check if caches were successfully initialized
+            has_response = cache.response_cache is not None
+            has_context = cache.context_cache is not None
+            
+            if has_response or has_context:
                 logger.info(
-                    f"✓ Semantic Cache: Response={config['response']['enabled']}, "
-                    f"Context={config['context']['enabled']}"
+                    f"✓ Semantic Cache: Response={config['response']['enabled']} ({has_response}), "
+                    f"Context={config['context']['enabled']} ({has_context})"
                 )
             else:
                 logger.info("○ Semantic Cache: DISABLED (initialization failed)")
