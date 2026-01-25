@@ -403,7 +403,7 @@ class StartupController:
                 # This should never happen, but log it clearly if it does
     
     async def _initialize_semantic_cache(self):
-        """Initialize semantic cache if enabled."""
+        """Initialize semantic cache if enabled and supported."""
         try:            
             config = settings.cache_settings.get_semantic_cache_config()
             
@@ -415,6 +415,17 @@ class StartupController:
             # Verify Redis VL support
             if not await verify_redis_vl_support():
                 logger.warning("⚠ Semantic Cache: DISABLED (Redis VL not supported)")
+                return
+            
+            # Validate RedisVL configuration
+            try:
+                settings.embedding_settings.validate_redisvl_config()
+            except ValueError as e:
+                logger.warning(
+                    f"⚠ Semantic Cache: DISABLED (configuration invalid)\n"
+                    f"   Reason: {e}\n"
+                    f"   Please check REDISVL_* environment settings."
+                )
                 return
             
             # Initialize cache

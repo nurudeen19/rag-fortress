@@ -123,6 +123,41 @@ class EmbeddingSettings(BaseSettings):
         else:
             raise ValueError(f"Unsupported embedding provider: {provider}")
     
+    def validate_redisvl_config(self):
+        """
+        Validate RedisVL configuration.
+        Raises ValueError if configuration is invalid.
+        """
+        # If using existing embedding config, no additional validation needed
+        if self.REDISVL_USE_EXISTING_EMBEDDING:
+            return
+        
+        # Validate separate RedisVL configuration
+        if not self.REDISVL_PROVIDER:
+            raise ValueError(
+                "REDISVL_PROVIDER is required when REDISVL_USE_EXISTING_EMBEDDING=false. "
+                "Supported: openai, cohere, huggingface"
+            )
+        
+        provider = self.REDISVL_PROVIDER.lower()
+        supported_providers = {"openai", "cohere", "huggingface"}
+        
+        if provider not in supported_providers:
+            raise ValueError(
+                f"Unsupported REDISVL_PROVIDER: {provider}. "
+                f"Supported: {', '.join(supported_providers)}"
+            )
+        
+        # Validate required fields for each provider
+        if not self.REDISVL_MODEL:
+            raise ValueError("REDISVL_MODEL is required for RedisVL configuration")
+        
+        if provider in {"openai", "cohere"}:
+            if not self.REDISVL_API_KEY:
+                raise ValueError(
+                    f"REDISVL_API_KEY is required for {provider.capitalize()} RedisVL provider"
+                )
+    
     def get_redisvl_config(self) -> dict:
         """
         Get RedisVL vectorizer configuration.
