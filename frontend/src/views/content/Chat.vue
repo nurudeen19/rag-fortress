@@ -507,7 +507,7 @@ const loadMessagesForConversation = async (conversationId) => {
 // Watch for conversation changes when route changes
 watch(
   () => route.params.id,
-  async (newId) => {
+  async (newId, oldId) => {
     if (suppressAutoLoad.value && newId && newId !== 'new') {
       return
     }
@@ -515,8 +515,13 @@ watch(
     if (newId && newId !== 'new') {
       await loadMessagesForConversation(newId)
     } else {
+      // Clear messages for new chat
       messages.value = []
       activeChat.value = null
+      inputMessage.value = ''
+      showChatOptions.value = false
+      showRenameModal.value = false
+      renameInput.value = ''
     }
   },
   { immediate: true }

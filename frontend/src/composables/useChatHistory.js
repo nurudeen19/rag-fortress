@@ -125,10 +125,24 @@ export function useChatHistory() {
 
   /**
    * Open new chat window (doesn't create conversation yet)
+   * Forces a clean slate even if already on /chat/new
    */
   const openNewChat = async () => {
+    const currentRoute = router.currentRoute.value
+    
+    // Clear active chat state
     activeChat.value = null
-    await router.push('/chat/new')
+    
+    // If already on /chat/new, force a "refresh" by navigating away and back
+    // This ensures the watch fires and clears the chat state
+    if (currentRoute.path === '/chat/new' || currentRoute.params.id === 'new') {
+      // Navigate to a temporary route then back to /chat/new
+      // This triggers the watcher and clears all state
+      await router.push('/chat')
+      await router.push('/chat/new')
+    } else {
+      await router.push('/chat/new')
+    }
   }
 
   /**
@@ -204,6 +218,7 @@ export function useChatHistory() {
     }
     
     const deletedChatIndex = chats.value.findIndex(c => c.id === chatId)
+    const isCurrentChat = router.currentRoute.value.params.id === chatId
     
     try {
       // Send delete request to server first (non-optimistic to ensure proper error handling)
@@ -223,8 +238,15 @@ export function useChatHistory() {
       }
       
       // Navigate away if we're deleting the active chat
-      if (router.currentRoute.value.params.id === chatId) {
-        await router.push('/chat/new')
+      if (isCurrentChat) {
+        // If already on /chat/new or /chat, force a refresh by navigating away and back
+        const currentPath = router.currentRoute.value.path
+        if (currentPath === '/chat/new' || currentPath === '/chat') {
+          await router.push('/chat')
+          await router.push('/chat/new')
+        } else {
+          await router.push('/chat/new')
+        }
       }
     } catch (err) {
       error.value = err.message || 'Failed to delete conversation'
