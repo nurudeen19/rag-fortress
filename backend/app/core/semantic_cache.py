@@ -12,56 +12,12 @@ from redisvl.extensions.cache.llm import SemanticCache as RedisVLSemanticCache
 from app.core import get_logger
 from app.config.settings import settings
 from app.core.cache import get_cache
+from app.core.embedding_factory import get_redisvl_vectorizer
 from app.utils.encryption import encrypt, decrypt, EncryptionError, DecryptionError
 
 logger = get_logger(__name__)
 
 CacheType = Literal["response", "context"]
-
-
-def _create_redisvl_vectorizer():
-    """
-    Create RedisVL vectorizer based on embedding settings.
-    
-    Uses the same provider and configuration as the main embedding provider,
-    but with RedisVL's native vectorizer classes.
-    """
-    from redisvl.utils.vectorize import (
-        OpenAITextVectorizer,
-        CohereTextVectorizer,
-        HuggingFaceTextVectorizer,
-    )
-    
-    embedding_config = settings.embedding_settings
-    provider = embedding_config.EMBEDDING_PROVIDER.lower()
-    
-    if provider == "openai":
-        return OpenAITextVectorizer(
-            model=embedding_config.EMBEDDING_MODEL,
-            api_key=embedding_config.EMBEDDING_API_KEY,
-            dimensions=embedding_config.EMBEDDING_DIMENSIONS
-        )
-    
-    elif provider == "cohere":
-        return CohereTextVectorizer(
-            model=embedding_config.EMBEDDING_MODEL,
-            api_key=embedding_config.EMBEDDING_API_KEY,
-            input_type=embedding_config.EMBEDDING_INPUT_TYPE or "search_query"
-        )
-    
-    elif provider == "huggingface":
-        return HuggingFaceTextVectorizer(
-            model=embedding_config.EMBEDDING_MODEL
-        )
-    
-    else:
-        logger.warning(
-            f"Embedding provider '{provider}' not directly supported by RedisVL. "
-            "Falling back to HuggingFace default."
-        )
-        return HuggingFaceTextVectorizer(
-            model="sentence-transformers/all-MiniLM-L6-v2"
-        )
 
 
 class SemanticCache:
@@ -96,8 +52,8 @@ class SemanticCache:
                 logger.warning("Redis not available, semantic cache disabled")
                 return
             
-            # Create RedisVL vectorizer using same config as main embedding provider
-            vectorizer = _create_redisvl_vectorizer()
+            # Get RedisVL vectorizer from factory (reuses existing embedding config by default)
+            vectorizer = get_redisvl_vectorizer()
             
             redis_url = settings.cache_settings.get_redis_url() or "redis://localhost:6379"
             

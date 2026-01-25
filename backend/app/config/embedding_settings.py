@@ -30,6 +30,19 @@ class EmbeddingSettings(BaseSettings):
     EMBEDDING_TASK_TYPE: Optional[str] = Field(None, env="EMBEDDING_TASK_TYPE")  # For Google
     EMBEDDING_INPUT_TYPE: Optional[str] = Field(None, env="EMBEDDING_INPUT_TYPE")  # For Cohere
     
+    # ============================================================================
+    # REDISVL VECTORIZER SETTINGS (for semantic cache)
+    # ============================================================================
+    # RedisVL vectorizer can reuse existing embedding config or use separate configuration
+    # ============================================================================
+    REDISVL_USE_EXISTING_EMBEDDING: bool = Field(True, env="REDISVL_USE_EXISTING_EMBEDDING")
+    
+    # Separate RedisVL configuration (only used if REDISVL_USE_EXISTING_EMBEDDING=False)
+    REDISVL_PROVIDER: Optional[str] = Field(None, env="REDISVL_PROVIDER")  # openai, cohere, huggingface
+    REDISVL_API_KEY: Optional[str] = Field(None, env="REDISVL_API_KEY")
+    REDISVL_MODEL: Optional[str] = Field(None, env="REDISVL_MODEL")
+    REDISVL_INPUT_TYPE: Optional[str] = Field(None, env="REDISVL_INPUT_TYPE")  # For Cohere
+    
     @field_validator("EMBEDDING_DIMENSIONS", mode="before")
     @classmethod
     def validate_embedding_dimensions(cls, v):
@@ -109,3 +122,41 @@ class EmbeddingSettings(BaseSettings):
                 
         else:
             raise ValueError(f"Unsupported embedding provider: {provider}")
+    
+    def get_redisvl_config(self) -> dict:
+        """
+        Get RedisVL vectorizer configuration.
+        
+        Returns:
+            dict: Configuration for RedisVL vectorizer
+        """
+        # Use existing embedding config if flag is set
+        if self.REDISVL_USE_EXISTING_EMBEDDING:
+            return self.get_embedding_config()
+        
+        # Use separate RedisVL configuration
+        provider = self.REDISVL_PROVIDER.lower()
+        
+        if provider == "openai":
+            return {
+                "provider": "openai",
+                "api_key": self.REDISVL_API_KEY,
+                "model": self.REDISVL_MODEL,
+            }
+        
+        elif provider == "cohere":
+            return {
+                "provider": "cohere",
+                "api_key": self.REDISVL_API_KEY,
+                "model": self.REDISVL_MODEL,
+                "input_type": self.REDISVL_INPUT_TYPE or "search_query",
+            }
+        
+        elif provider == "huggingface":
+            return {
+                "provider": "huggingface",
+                "model": self.REDISVL_MODEL,
+            }
+        
+        else:
+            raise ValueError(f"Unsupported RedisVL provider: {provider}. Supported: openai, cohere, huggingface")
