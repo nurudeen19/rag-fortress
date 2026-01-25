@@ -1,130 +1,49 @@
 """
-Semantic Cache for Vector Store Queries
+Semantic Cache using RedisVL
 
-Two-tier caching system:
-1. Response Cache: Caches final LLM responses
-2. Context Cache: Caches retrieved documents before LLM
-
-Each tier supports multiple variations and random selection.
+Simplified semantic caching implementation leveraging RedisVL's built-in SemanticCache.
+Provides two-tier caching (response and context) with security-aware access control.
 """
 
-from typing import Optional, Dict, Any, List, Literal
 import json
-import hashlib
-import random
-from datetime import datetime
-from app.core.embedding_factory import get_embedding_provider
-from app.core.cache import get_cache
+from typing import Optional, Dict, Any, List, Literal
+from redisvl.extensions.llm.cache import SemanticCache as RedisVLSemanticCache
 
 from app.core import get_logger
 from app.config.settings import settings
-from app.utils.encryption import encrypt, decrypt
-from redis.commands.search.field import VectorField, TextField, TagField, NumericField
-from redis.commands.search.indexDefinition import IndexDefinition, IndexType
+from app.core.cache import get_cache
+from app.utils.encryption import encrypt, decrypt, EncryptionError, DecryptionError
 
 logger = get_logger(__name__)
 
 CacheType = Literal["response", "context"]
 
 
-class SemanticCacheCluster:
-    """
-    Represents a semantic cluster with multiple variations (responses or contexts).
-    
-    Stores multiple variations for the same semantic query and returns random selections.
-    """
-    
-    def __init__(
-        self,
-        cache_type: CacheType,
-        query: str,
-        query_embedding: List[float],
-        entries: List[Any],  # List of responses or contexts
-        is_encrypted: bool,
-        min_security_level: Optional[int],
-        is_departmental: bool,
-        department_ids: Optional[List[int]],
-        timestamp: datetime
-    ):
-        self.cache_type = cache_type
-        self.query = query
-        self.query_embedding = query_embedding
-        self.entries = entries  # responses or contexts
-        self.is_encrypted = is_encrypted
-        self.min_security_level = min_security_level
-        self.is_departmental = is_departmental
-        self.department_ids = department_ids or []
-        self.timestamp = timestamp
-    
-    def can_add_more(self, max_entries: int) -> bool:
-        """Check if cluster can accept more entries."""
-        return len(self.entries) < max_entries
-    
-    def add_entry(self, entry: Any):
-        """Add a new variation to this cluster (FIFO if at max)."""
-        self.entries.append(entry)
-        self.timestamp = datetime.utcnow()
-    
-    def get_random_entry(self) -> Any:
-        """Get a random entry from the cluster."""
-        return random.choice(self.entries) if self.entries else None
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Serialize to dictionary."""
-        return {
-            "cache_type": self.cache_type,
-            "query": self.query,
-            "entries": self.entries,
-            "is_encrypted": self.is_encrypted,
-            "min_security_level": self.min_security_level,
-            "is_departmental": self.is_departmental,
-            "department_ids": self.department_ids,
-            "timestamp": self.timestamp.isoformat()
-        }
-    
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any], query_embedding: List[float]) -> 'SemanticCacheCluster':
-        """Deserialize from dictionary."""
-        return cls(
-            cache_type=data["cache_type"],
-            query=data["query"],
-            query_embedding=query_embedding,
-            entries=data["entries"],
-            is_encrypted=data["is_encrypted"],
-            min_security_level=data.get("min_security_level"),
-            is_departmental=data.get("is_departmental", False),
-            department_ids=data.get("department_ids", []),
-            timestamp=datetime.fromisoformat(data["timestamp"])
-        )
-
-
 class SemanticCache:
     """
-    Two-tier semantic cache system using Redis VL.
+    Two-tier semantic cache using RedisVL.
     
     Response Cache: Caches final LLM responses (lower threshold, shorter TTL)
     Context Cache: Caches retrieved documents (higher threshold, longer TTL)
     
     Features:
-    - Multiple variations per semantic cluster
-    - Random selection to avoid repetition
-    - Security-aware (clearance + department)
-    - Per-entry encryption flag
+    - Simplified implementation using RedisVL
+    - Security-aware caching with metadata filtering
     - Independent enable/disable for each tier
     """
     
     def __init__(self):
-        """Initialize semantic cache."""
+        """Initialize semantic cache with RedisVL."""
         self.config = settings.cache_settings.get_semantic_cache_config()
-        self.redis_client = None
-        self.embedding_client = None
+        self.response_cache: Optional[RedisVLSemanticCache] = None
+        self.context_cache: Optional[RedisVLSemanticCache] = None
         
         # Initialize if at least one tier is enabled
         if self.config["response"]["enabled"] or self.config["context"]["enabled"]:
             self._initialize()
     
     def _initialize(self):
-        """Initialize Redis VL connection and embedding client."""
+        """Initialize RedisVL semantic caches."""
         try:
             base_cache = get_cache()
             
@@ -132,73 +51,38 @@ class SemanticCache:
                 logger.warning("Redis not available, semantic cache disabled")
                 return
             
-            self.redis_client = base_cache.redis_client
+            redis_url = settings.cache_settings.REDIS_URL or "redis://localhost:6379"
             
-            # Initialize embedding client
-            self.embedding_client = get_embedding_provider()
+            # Initialize response cache
+            if self.config["response"]["enabled"]:
+                self.response_cache = RedisVLSemanticCache(
+                    name="rag_response_cache",
+                    redis_url=redis_url,
+                    distance_threshold=self.config["response"]["threshold"],
+                    ttl=self.config["response"]["ttl_seconds"],
+                    vectorizer=None  # Will use existing embeddings
+                )
+                logger.info(
+                    f"Response cache initialized (threshold={self.config['response']['threshold']}, "
+                    f"TTL={self.config['response']['ttl_seconds']}s)"
+                )
             
-            if not self.embedding_client:
-                logger.warning("Embedding client not available, semantic cache disabled")
-                return
-            
-            # Create semantic cache index
-            self._create_index()
-            
-            
+            # Initialize context cache
+            if self.config["context"]["enabled"]:
+                self.context_cache = RedisVLSemanticCache(
+                    name="rag_context_cache",
+                    redis_url=redis_url,
+                    distance_threshold=self.config["context"]["threshold"],
+                    ttl=self.config["context"]["ttl_seconds"],
+                    vectorizer=None  # Will use existing embeddings
+                )
+                logger.info(
+                    f"Context cache initialized (threshold={self.config['context']['threshold']}, "
+                    f"TTL={self.config['context']['ttl_seconds']}s)"
+                )
         
         except Exception as e:
             logger.error(f"Failed to initialize semantic cache: {e}", exc_info=True)
-    
-    def _create_index(self):
-        """Create Redis search index for semantic cache."""
-        try:
-            
-            
-            index_name = self.config["index_name"]
-            
-            # Check if index exists
-            try:
-                self.redis_client.ft(index_name).info()
-                logger.debug(f"Semantic cache index '{index_name}' already exists")
-                return
-            except Exception:
-                pass
-            
-            # Define schema
-            schema = [
-                VectorField(
-                    "query_embedding",
-                    "FLAT",
-                    {
-                        "TYPE": "FLOAT32",
-                        "DIM": self.config["vector_dim"],
-                        "DISTANCE_METRIC": "COSINE"
-                    }
-                ),
-                TagField("cache_type"),  # "response" or "context"
-                TextField("query"),
-                NumericField("min_security_level"),
-                TagField("is_departmental"),
-                TagField("department_ids", separator=","),
-                NumericField("timestamp"),
-            ]
-            
-            # Create index
-            definition = IndexDefinition(
-                prefix=[f"semantic_cache:"],
-                index_type=IndexType.HASH
-            )
-            
-            self.redis_client.ft(index_name).create_index(
-                fields=schema,
-                definition=definition
-            )
-            
-            logger.info(f"Created semantic cache index '{index_name}'")
-        
-        except Exception as e:
-            logger.error(f"Failed to create semantic cache index: {e}", exc_info=True)
-            raise
     
     async def get(
         self,
@@ -209,13 +93,7 @@ class SemanticCache:
         user_department_security_level: Optional[int] = None
     ) -> tuple[Optional[Any], bool]:
         """
-        Get random entry from semantically similar cluster.
-        
-        Flow:
-        1. Check if cache type is enabled
-        2. Generate query embedding
-        3. Search for similar cluster with matching security
-        4. If found, return random entry and whether to continue pipeline
+        Get entry from semantic cache with security filtering.
         
         Args:
             cache_type: "response" or "context"
@@ -226,50 +104,61 @@ class SemanticCache:
         
         Returns:
             Tuple of (entry, should_continue_pipeline)
-            - entry: Random entry from cluster, or None if no cache hit
-            - should_continue_pipeline: True if cluster below max_entries (to add variation)
+            - entry: Cached entry or None if no cache hit
+            - should_continue_pipeline: Always False for RedisVL (single entry per cache)
         """
-        if cache_type == "response" and not self.config["response"]["enabled"]:
-            return None, False
-        if cache_type == "context" and not self.config["context"]["enabled"]:
+        cache = self._get_cache(cache_type)
+        if not cache:
             return None, False
         
         try:
-            # Generate query embedding
-            query_embedding = await self._get_embedding(query)
-            if not query_embedding:
-                return None, False
-            
-            # Search for similar cluster
-            cluster = await self._find_similar(
-                cache_type,
-                query_embedding,
+            # Build filter metadata for security
+            filters = self._build_security_filters(
                 user_security_level,
                 user_department_id,
                 user_department_security_level
             )
             
-            if cluster:
-                # Check if cluster can accept more variations
-                max_entries = self.config[cache_type]["max_entries"]
-                should_continue = cluster.can_add_more(max_entries)
+            # Check cache with RedisVL
+            results = cache.check(
+                prompt=query,
+                return_fields=["response", "metadata"],
+                num_results=1
+            )
+            
+            if results:
+                result = results[0]
+                metadata = result.get("metadata", {})
                 
-                # Get random entry from cluster
-                entry = cluster.get_random_entry()
-                if entry:
-                    # Decrypt if needed
-                    if cluster.is_encrypted:
-                        if isinstance(entry, str):
-                            entry = json.loads(decrypt(entry))
-                        elif isinstance(entry, dict) and "data" in entry:
-                            entry["data"] = json.loads(decrypt(entry["data"]))
-                    
-                    logger.info(
-                        f"{cache_type.capitalize()} cache HIT for query: '{query[:50]}...' "
-                        f"(cluster has {len(cluster.entries)}/{max_entries} variations, "
-                        f"continue_pipeline={should_continue})"
-                    )
-                    return entry, should_continue
+                # Validate security access
+                if not self._validate_security_access(
+                    metadata,
+                    user_security_level,
+                    user_department_id,
+                    user_department_security_level
+                ):
+                    logger.debug(f"Cache hit rejected due to security mismatch for: '{query[:50]}...'")
+                    return None, False
+                
+                # Get response and decrypt if encryption is enabled
+                encrypted_response = result.get("response")
+                
+                if self.config[cache_type].get("encrypt", False):
+                    # Encryption enabled - decrypt the data
+                    response = self._decrypt_data(encrypted_response, cache_type)
+                    if response is None:
+                        logger.warning(f"Failed to decrypt {cache_type} cache data, treating as cache miss")
+                        return None, False
+                else:
+                    # No encryption - parse JSON directly
+                    try:
+                        response = json.loads(encrypted_response)
+                    except Exception as e:
+                        logger.error(f"Error parsing {cache_type} cache data: {e}", exc_info=True)
+                        return None, False
+                
+                logger.info(f"{cache_type.capitalize()} cache HIT for query: '{query[:50]}...'")
+                return response, False
             
             logger.debug(f"{cache_type.capitalize()} cache MISS for query: '{query[:50]}...'")
             return None, False
@@ -288,15 +177,7 @@ class SemanticCache:
         department_ids: Optional[List[int]] = None
     ):
         """
-        Add entry to semantic cluster or create new cluster.
-        
-        Flow:
-        1. Check if cache type is enabled
-        2. Generate query embedding
-        3. Search for existing compatible cluster
-        4. If found AND below max_entries: Add to cluster
-        5. If found AND at max_entries: Skip (already at capacity)
-        6. If not found: Create new cluster
+        Store entry in semantic cache with security metadata.
         
         Args:
             cache_type: "response" or "context"
@@ -306,389 +187,160 @@ class SemanticCache:
             is_departmental: Whether this is department-specific
             department_ids: List of department IDs (if departmental)
         """
-        if cache_type == "response" and not self.config["response"]["enabled"]:
-            return
-        if cache_type == "context" and not self.config["context"]["enabled"]:
+        cache = self._get_cache(cache_type)
+        if not cache:
             return
         
         try:
-            # Generate query embedding
-            query_embedding = await self._get_embedding(query)
-            if not query_embedding:
-                return
+            # Build security metadata
+            metadata = {
+                "min_security_level": min_security_level or 0,
+                "is_departmental": is_departmental,
+                "department_ids": ",".join(map(str, department_ids)) if department_ids else ""
+            }
             
-            # Determine encryption for this entry
-            should_encrypt = self.config[cache_type]["encrypt"]
+            # Encrypt data if encryption is enabled
+            if self.config[cache_type].get("encrypt", False):
+                # Encryption enabled - encrypt the data
+                encrypted_entry = self._encrypt_data(entry, cache_type)
+            else:
+                # No encryption - serialize to JSON directly
+                encrypted_entry = json.dumps(entry)
             
-            # Encrypt entry if needed
-            encrypted_entry = entry
-            if should_encrypt:
-                if isinstance(entry, (dict, list)):
-                    encrypted_entry = encrypt(json.dumps(entry))
-                elif isinstance(entry, str):
-                    encrypted_entry = encrypt(entry)
-            
-            # Check if similar cluster exists
-            existing_cluster = await self._find_cluster_for_new_entry(
-                cache_type,
-                query_embedding,
-                min_security_level,
-                is_departmental,
-                department_ids or []
+            # Store in RedisVL cache
+            cache.store(
+                prompt=query,
+                response=encrypted_entry,
+                metadata=metadata
             )
             
-            max_entries = self.config[cache_type]["max_entries"]
-            
-            if existing_cluster:
-                # Check if cluster can accept more entries
-                if existing_cluster.can_add_more(max_entries):
-                    existing_cluster.add_entry(encrypted_entry)
-                    await self._update_cluster(existing_cluster, cache_type)
-                    logger.debug(
-                        f"Added {cache_type} variation to existing cluster "
-                        f"({len(existing_cluster.entries)}/{max_entries}): '{query[:50]}...'"
-                    )
-                else:
-                    logger.debug(
-                        f"Cluster at capacity ({max_entries}), skipping add: '{query[:50]}...'"
-                    )
-            else:
-                # Create new cluster
-                cluster = SemanticCacheCluster(
-                    cache_type=cache_type,
-                    query=query,
-                    query_embedding=query_embedding,
-                    entries=[encrypted_entry],
-                    is_encrypted=should_encrypt,
-                    min_security_level=min_security_level,
-                    is_departmental=is_departmental,
-                    department_ids=department_ids or [],
-                    timestamp=datetime.utcnow()
-                )
-                await self._store_cluster(cluster, cache_type)
-                logger.debug(f"Created new {cache_type} cluster for query: '{query[:50]}...'")
+            logger.debug(f"Stored {cache_type} cache entry for query: '{query[:50]}...'")
         
         except Exception as e:
             logger.error(f"Error storing in {cache_type} cache: {e}", exc_info=True)
     
-    async def _get_embedding(self, text: str) -> Optional[List[float]]:
-        """Generate embedding for query text."""
-        try:
-            embeddings = await self.embedding_client.aembed_query(text)
-            return embeddings
-        except Exception as e:
-            logger.error(f"Failed to generate embedding: {e}", exc_info=True)
-            return None
-    
-    async def _find_similar(
-        self,
-        cache_type: CacheType,
-        query_embedding: List[float],
-        user_security_level: int,
-        user_department_id: Optional[int],
-        user_department_security_level: Optional[int] = None
-    ) -> Optional[SemanticCacheCluster]:
-        """
-        Find semantically similar cluster that user can access.
-        
-        Args:
-            cache_type: "response" or "context"
-            query_embedding: Query vector
-            user_security_level: User's organization-level security clearance
-            user_department_id: User's department ID
-            user_department_security_level: User's department-level security clearance
-        
-        Returns:
-            Cluster if found and accessible, None otherwise
-        """
-        try:
-            from redis.commands.search.query import Query
-            import numpy as np
-            
-            index_name = settings.cache_settings.SEMANTIC_CACHE_INDEX_NAME
-            threshold = (
-                self.response_threshold if cache_type == "response" else self.context_threshold
-            )
-            
-            # Build KNN query filtering by cache type
-            query_vector = np.array(query_embedding, dtype=np.float32).tobytes()
-            
-            query = (
-                Query(f"@cache_type:{{{cache_type}}}=>[KNN 5 @query_embedding $vec AS score]")
-                .return_fields("query", "min_security_level", "is_departmental", "department_ids", "timestamp", "score")
-                .sort_by("score")
-                .dialect(2)
-            )
-            
-            results = self.redis_client.ft(index_name).search(
-                query,
-                query_params={"vec": query_vector}
-            )
-            
-            # Find best match that user can access
-            for doc in results.docs:
-                score = float(doc.score)
-                
-                # Check similarity threshold
-                if score < threshold:
-                    continue
-                
-                # Validate security access based on whether cluster is departmental
-                cluster_min_security = int(doc.min_security_level) if doc.min_security_level else 0
-                cluster_is_departmental = doc.is_departmental == "true"
-                
-                # Use appropriate security level based on whether cluster is departmental
-                if cluster_is_departmental:
-                    # For departmental clusters, validate against department security level
-                    if user_department_security_level is None:
-                        logger.debug("Skipping departmental cluster - user has no department clearance")
-                        continue
-                    if user_department_security_level < cluster_min_security:
-                        logger.debug(
-                            f"Skipping cluster - user dept clearance {user_department_security_level} < "
-                            f"required {cluster_min_security}"
-                        )
-                        continue
-                else:
-                    # For organization-level clusters, validate against org security level
-                    if user_security_level < cluster_min_security:
-                        logger.debug(
-                            f"Skipping cluster - user org clearance {user_security_level} < "
-                            f"required {cluster_min_security}"
-                        )
-                        continue
-                
-                # Check department access
-                if cluster_is_departmental:
-                    if not user_department_id:
-                        logger.debug("Cache hit rejected: dept-only but user has no department")
-                        continue
-                    
-                    dept_ids_str = doc.department_ids
-                    if dept_ids_str:
-                        dept_ids = [int(d) for d in dept_ids_str.split(",") if d]
-                        if user_department_id not in dept_ids:
-                            logger.debug(f"Cache hit rejected: dept mismatch ({user_department_id} not in {dept_ids})")
-                            continue
-                
-                # Valid cache hit - retrieve full cluster
-                cache_key = doc.id
-                cluster_data = self.redis_client.hgetall(cache_key)
-                
-                if not cluster_data:
-                    continue
-                
-                # Get embedding
-                embedding_bytes = cluster_data.get(b"query_embedding", b"")
-                embedding = np.frombuffer(embedding_bytes, dtype=np.float32).tolist()
-                
-                # Get entries
-                entries_data = cluster_data.get(b"entries", b"").decode("utf-8")
-                entries = json.loads(entries_data)
-                
-                # Build cluster dict
-                cluster_dict = {
-                    "cache_type": cache_type,
-                    "query": cluster_data.get(b"query", b"").decode("utf-8"),
-                    "entries": entries,
-                    "is_encrypted": cluster_data.get(b"is_encrypted", b"false").decode("utf-8") == "true",
-                    "min_security_level": cluster_min_security,
-                    "is_departmental": cluster_is_departmental,
-                    "department_ids": dept_ids if cluster_is_departmental and dept_ids_str else [],
-                    "timestamp": datetime.fromtimestamp(float(doc.timestamp))
-                }
-                
-                return SemanticCacheCluster.from_dict(cluster_dict, embedding)
-            
-            return None
-        
-        except Exception as e:
-            logger.error(f"Error searching {cache_type} cache: {e}", exc_info=True)
-            return None
-    
-    async def _find_cluster_for_new_entry(
-        self,
-        cache_type: CacheType,
-        query_embedding: List[float],
-        min_security_level: Optional[int],
-        is_departmental: bool,
-        department_ids: List[int]
-    ) -> Optional[SemanticCacheCluster]:
-        """
-        Find existing cluster to add new entry to.
-        
-        Only returns cluster if security context matches exactly.
-        """
-        try:
-            from redis.commands.search.query import Query
-            import numpy as np
-            
-            index_name = settings.cache_settings.SEMANTIC_CACHE_INDEX_NAME
-            threshold = (
-                self.response_threshold if cache_type == "response" else self.context_threshold
-            )
-            
-            query_vector = np.array(query_embedding, dtype=np.float32).tobytes()
-            
-            query = (
-                Query(f"@cache_type:{{{cache_type}}}=>[KNN 3 @query_embedding $vec AS score]")
-                .return_fields("query", "min_security_level", "is_departmental", "department_ids", "timestamp", "score")
-                .sort_by("score")
-                .dialect(2)
-            )
-            
-            results = self.redis_client.ft(index_name).search(
-                query,
-                query_params={"vec": query_vector}
-            )
-            
-            # Find cluster with matching security context
-            for doc in results.docs:
-                score = float(doc.score)
-                
-                if score < threshold:
-                    continue
-                
-                # Security context must match exactly
-                existing_min_security = int(doc.min_security_level) if doc.min_security_level else None
-                if existing_min_security != min_security_level:
-                    continue
-                
-                existing_is_dept = doc.is_departmental == "true"
-                if existing_is_dept != is_departmental:
-                    continue
-                
-                if is_departmental:
-                    existing_dept_ids = [int(d) for d in doc.department_ids.split(",") if d] if doc.department_ids else []
-                    if set(existing_dept_ids) != set(department_ids):
-                        continue
-                
-                # Compatible cluster found
-                cache_key = doc.id
-                cluster_data = self.redis_client.hgetall(cache_key)
-                
-                if not cluster_data:
-                    continue
-                
-                # Get embedding
-                embedding_bytes = cluster_data.get(b"query_embedding", b"")
-                embedding = np.frombuffer(embedding_bytes, dtype=np.float32).tolist()
-                
-                # Get entries
-                entries_data = cluster_data.get(b"entries", b"").decode("utf-8")
-                entries = json.loads(entries_data)
-                
-                cluster_dict = {
-                    "cache_type": cache_type,
-                    "query": cluster_data.get(b"query", b"").decode("utf-8"),
-                    "entries": entries,
-                    "is_encrypted": cluster_data.get(b"is_encrypted", b"false").decode("utf-8") == "true",
-                    "min_security_level": existing_min_security,
-                    "is_departmental": existing_is_dept,
-                    "department_ids": existing_dept_ids if existing_is_dept else [],
-                    "timestamp": datetime.fromtimestamp(float(doc.timestamp))
-                }
-                
-                cluster = SemanticCacheCluster.from_dict(cluster_dict, embedding)
-                cluster.cache_key = cache_key  # Store for update
-                return cluster
-            
-            return None
-        
-        except Exception as e:
-            logger.error(f"Error finding cluster for new entry: {e}", exc_info=True)
-            return None
-    
-    async def _store_cluster(self, cluster: SemanticCacheCluster, cache_type: CacheType):
-        """Store new semantic cluster in Redis."""
-        try:
-            import numpy as np
-            
-            # Generate unique key from embedding
-            embedding_hash = hashlib.md5(np.array(cluster.query_embedding, dtype=np.float32).tobytes()).hexdigest()
-            cache_key = f"semantic_cache:{cache_type}:{embedding_hash}"
-            
-            # Convert embedding to bytes
-            embedding_bytes = np.array(cluster.query_embedding, dtype=np.float32).tobytes()
-            
-            # Prepare entries
-            entries_json = json.dumps(cluster.entries)
-            
-            # Store in Redis hash
-            data = {
-                "cache_type": cache_type,
-                "query": cluster.query,
-                "query_embedding": embedding_bytes,
-                "entries": entries_json,
-                "is_encrypted": "true" if cluster.is_encrypted else "false",
-                "min_security_level": cluster.min_security_level or 0,
-                "is_departmental": "true" if cluster.is_departmental else "false",
-                "department_ids": ",".join(map(str, cluster.department_ids)),
-                "timestamp": cluster.timestamp.timestamp(),
-            }
-            
-            ttl = self.config[cache_type]["ttl_seconds"]
-            
-            self.redis_client.hset(cache_key, mapping=data)
-            self.redis_client.expire(cache_key, ttl)
-            
-        except Exception as e:
-            logger.error(f"Error storing cache cluster: {e}", exc_info=True)
-            raise
-    
-    async def _update_cluster(self, cluster: SemanticCacheCluster, cache_type: CacheType):
-        """Update existing cluster with new entry."""
-        try:
-            import numpy as np
-            
-            # Use stored cache key if available
-            if hasattr(cluster, 'cache_key'):
-                cache_key = cluster.cache_key
-            else:
-                embedding_hash = hashlib.md5(np.array(cluster.query_embedding, dtype=np.float32).tobytes()).hexdigest()
-                cache_key = f"semantic_cache:{cache_type}:{embedding_hash}"
-            
-            # Update entries and timestamp
-            entries_json = json.dumps(cluster.entries)
-            self.redis_client.hset(cache_key, "entries", entries_json)
-            self.redis_client.hset(cache_key, "timestamp", cluster.timestamp.timestamp())
-            
-            # Refresh TTL
-            ttl = self.config[cache_type]["ttl_seconds"]
-            self.redis_client.expire(cache_key, ttl)
-            
-            # Refresh TTL
-            ttl = self.config[cache_type]["ttl_seconds"]
-            self.redis_client.expire(cache_key, ttl)
-            
-        except Exception as e:
-            logger.error(f"Error updating cache cluster: {e}", exc_info=True)
-            raise
-    
     async def clear(self, cache_type: Optional[CacheType] = None):
-        """Clear semantic cache clusters."""
+        """Clear semantic cache entries."""
         try:
             if cache_type:
-                pattern = f"semantic_cache:{cache_type}:*"
+                cache = self._get_cache(cache_type)
+                if cache:
+                    cache.clear()
+                    logger.info(f"Cleared {cache_type} semantic cache")
             else:
-                pattern = "semantic_cache:*"
-            
-            cursor = 0
-            deleted = 0
-            
-            while True:
-                cursor, keys = self.redis_client.scan(cursor, match=pattern, count=100)
-                if keys:
-                    self.redis_client.delete(*keys)
-                    deleted += len(keys)
-                if cursor == 0:
-                    break
-            
-            cache_desc = f"{cache_type} " if cache_type else ""
-            logger.info(f"Cleared {deleted} semantic {cache_desc}cache clusters")
+                if self.response_cache:
+                    self.response_cache.clear()
+                if self.context_cache:
+                    self.context_cache.clear()
+                logger.info("Cleared all semantic caches")
         
         except Exception as e:
             logger.error(f"Error clearing semantic cache: {e}", exc_info=True)
+    
+    def _get_cache(self, cache_type: CacheType) -> Optional[RedisVLSemanticCache]:
+        """Get the appropriate cache instance."""
+        if cache_type == "response":
+            return self.response_cache
+        elif cache_type == "context":
+            return self.context_cache
+        return None
+    
+    def _build_security_filters(
+        self,
+        user_security_level: int,
+        user_department_id: Optional[int],
+        user_department_security_level: Optional[int]
+    ) -> Dict[str, Any]:
+        """Build security filter metadata."""
+        return {
+            "user_security_level": user_security_level,
+            "user_department_id": user_department_id or 0,
+            "user_department_security_level": user_department_security_level or 0
+        }
+    
+    def _validate_security_access(
+        self,
+        metadata: Dict[str, Any],
+        user_security_level: int,
+        user_department_id: Optional[int],
+        user_department_security_level: Optional[int]
+    ) -> bool:
+        """Validate if user can access cached entry based on security metadata."""
+        try:
+            min_security = int(metadata.get("min_security_level", 0))
+            is_departmental = metadata.get("is_departmental", False)
+            
+            # Check security clearance
+            if is_departmental:
+                # Departmental content - check department clearance
+                if user_department_security_level is None:
+                    return False
+                if user_department_security_level < min_security:
+                    return False
+                
+                # Check department access
+                if user_department_id:
+                    dept_ids_str = metadata.get("department_ids", "")
+                    if dept_ids_str:
+                        dept_ids = [int(d) for d in dept_ids_str.split(",") if d]
+                        if user_department_id not in dept_ids:
+                            return False
+            else:
+                # Organization-level content - check org clearance
+                if user_security_level < min_security:
+                    return False
+            
+            return True
+        
+        except Exception as e:
+            logger.warning(f"Error validating security access: {e}")
+            return False
+    
+    def _encrypt_data(self, data: Any, cache_type: CacheType) -> str:
+        """Encrypt cache data. Only call this if encryption is enabled."""
+        try:
+            # Serialize data to JSON
+            json_data = json.dumps(data)
+            
+            # Encrypt using purpose-specific key
+            purpose = f"semantic_cache_{cache_type}"
+            encrypted = encrypt(json_data, purpose=purpose, version=1)
+            
+            logger.debug(f"Encrypted {cache_type} cache data")
+            return encrypted
+        
+        except EncryptionError as e:
+            logger.error(f"Encryption failed for {cache_type} cache: {e}")
+            # Fall back to unencrypted data
+            return json.dumps(data)
+        except Exception as e:
+            logger.error(f"Error encrypting {cache_type} cache data: {e}", exc_info=True)
+            return json.dumps(data)
+    
+    def _decrypt_data(self, encrypted_data: str, cache_type: CacheType) -> Any:
+        """Decrypt cache data. Only call this if encryption is enabled."""
+        try:
+            # Check if data is encrypted (has version prefix)
+            if ":" in encrypted_data and encrypted_data.startswith("v"):
+                # Decrypt using purpose-specific key
+                purpose = f"semantic_cache_{cache_type}"
+                decrypted = decrypt(encrypted_data, purpose=purpose)
+                return json.loads(decrypted)
+            else:
+                # Legacy unencrypted data (from before encryption was enabled)
+                logger.debug(f"Reading legacy unencrypted {cache_type} cache data")
+                return json.loads(encrypted_data)
+        
+        except DecryptionError as e:
+            logger.error(f"Decryption failed for {cache_type} cache: {e}")
+            # Try to parse as plain JSON (might be legacy data)
+            try:
+                return json.loads(encrypted_data)
+            except:
+                return None
+        except Exception as e:
+            logger.error(f"Error decrypting {cache_type} cache data: {e}", exc_info=True)
+            return None
 
 
 # Singleton instance
@@ -699,7 +351,8 @@ def verify_redis_vl_support() -> bool:
     """
     Verify Redis supports RediSearch module for vector operations.
     
-    This should be called explicitly during startup before initializing semantic cache.
+    The correct module name is 'search' (RediSearch module).
+    RedisVL requires this module for vector similarity search.
     
     Returns:
         True if RediSearch module is available, False otherwise
@@ -712,20 +365,32 @@ def verify_redis_vl_support() -> bool:
         
         redis_client = cache.redis_client
         
-        # Check for RediSearch module
+        # Get all loaded modules
         modules = redis_client.module_list()
+        
+        # Log available modules for debugging
+        module_names = [
+            module.get(b'name', b'').decode('utf-8') if isinstance(module.get(b'name', b''), bytes)
+            else module.get('name', '')
+            for module in modules
+        ]
+        logger.debug(f"Redis modules detected: {module_names}")
+        
+        # Check for RediSearch module (name is 'search')
         has_search = any(
-            module.get(b'name') == b'search' or module.get('name') == 'search'
+            module.get(b'name', b'').decode('utf-8').lower() == 'search' if isinstance(module.get(b'name', b''), bytes)
+            else module.get('name', '').lower() == 'search'
             for module in modules
         )
         
         if has_search:
-            logger.info("✓ Redis VL supported (RediSearch module detected)")
+            logger.info("✓ Redis vector search supported (RediSearch module detected)")
             return True
         else:
             logger.warning(
-                "✗ RediSearch module not loaded. "
-                "Semantic cache requires Redis Stack or Redis with RediSearch. "
+                f"✗ RediSearch module not detected. Found modules: {module_names}. "
+                "Semantic cache requires RediSearch module (name: 'search'). "
+                "Install Redis Stack or load RediSearch module. "
                 "See: https://redis.io/docs/stack/"
             )
             return False
@@ -739,7 +404,7 @@ def verify_redis_vl_support() -> bool:
         return False
     
     except Exception as e:
-        logger.warning(f"✗ Failed to verify Redis VL support: {e}")
+        logger.warning(f"✗ Failed to verify RediSearch support: {e}")
         return False
 
 

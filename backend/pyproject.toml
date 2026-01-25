@@ -130,6 +130,7 @@ dependencies = [
 
     # Caching
     "redis==5.1.0",
+    "redisvl==0.13.2",
 
     # Logging & Monitoring
     "python-json-logger==4.0.0",
