@@ -344,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, computed, watch } from 'vue'
+import { ref, nextTick, onMounted, computed, watch, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -361,6 +361,9 @@ const {
   loadChatMessages,
   createConversation
 } = useChatHistory()
+
+// Inject reset signal from parent layout (for New Chat button)
+const resetChatSignal = inject('resetChatSignal', ref(0))
 
 // State
 const messages = ref([])
@@ -504,18 +507,34 @@ const loadMessagesForConversation = async (conversationId) => {
   }
 }
 
+// Reset all component state to initial values
+const resetComponentState = () => {
+  messages.value = []
+  inputMessage.value = ''
+  loading.value = false
+  loadingMessages.value = false
+  deleting.value = false
+  deleteError.value = null
+  showChatOptions.value = false
+  showRenameModal.value = false
+  showDeleteModal.value = false
+  renameInput.value = ''
+  suppressAutoLoad.value = false
+  activeChat.value = null
+}
+
+// Watch for reset signal from parent layout (New Chat button)
+watch(resetChatSignal, () => {
+  resetComponentState()
+})
+
 // Watch for conversation changes when route changes
 watch(
   () => route.params.id,
   async (newId, oldId) => {
     // Always clear when navigating to new chat
     if (newId === 'new') {
-      messages.value = []
-      activeChat.value = null
-      inputMessage.value = ''
-      showChatOptions.value = false
-      showRenameModal.value = false
-      renameInput.value = ''
+      resetComponentState()
       return
     }
 
