@@ -11,7 +11,9 @@ from langchain_core.embeddings import Embeddings
 
 from app.config.settings import settings
 from app.core.exceptions import ConfigurationError
-
+from app.core import get_logger
+    
+logger = get_logger(__name__)
 
 # Global instances (initialized in startup)
 _embedding_instance: Optional[Embeddings] = None
@@ -147,14 +149,12 @@ def _create_redisvl_vectorizer():
     Returns:
         RedisVL vectorizer instance configured for the selected provider
     """
-    from app.core import get_logger
-    logger = get_logger(__name__)
     
     try:
         from redisvl.utils.vectorize import (
             OpenAITextVectorizer,
             CohereTextVectorizer,
-            HuggingFaceTextVectorizer,
+            HFTextVectorizer,
         )
     except ImportError:
         raise ConfigurationError(
@@ -170,18 +170,18 @@ def _create_redisvl_vectorizer():
     if provider == "openai":
         return OpenAITextVectorizer(
             model=config["model"],
-            api_key=config["api_key"]
+            api_config={"api_key": config["api_key"]}
         )
     
     elif provider == "cohere":
         return CohereTextVectorizer(
             model=config["model"],
-            api_key=config["api_key"],
+            api_config={"api_key": config["api_key"]},
             input_type=config.get("input_type", "search_query")
         )
     
     elif provider == "huggingface":
-        return HuggingFaceTextVectorizer(
+        return HFTextVectorizer(
             model=config["model"]
         )
     
