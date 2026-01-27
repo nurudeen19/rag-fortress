@@ -10,6 +10,7 @@ from langchain_core.documents import Document
 from app.core.vector_store_factory import get_retriever
 from app.core import get_logger
 from app.core.semantic_cache import get_semantic_cache
+from app.core.events import get_event_bus
 from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.services.vector_store.reranker import get_reranker_service
@@ -362,6 +363,12 @@ class RetrieverService:
         )
         
         if cached_context and not should_continue:
+            # Deserialize documents from cache (they were stored as dicts)
+            if cached_context.get("context"):
+                cached_context["context"] = [
+                    Document(page_content=doc["page_content"], metadata=doc["metadata"])
+                    for doc in cached_context["context"]
+                ]
             # Cluster at capacity, return cached immediately
             return cached_context
         
@@ -379,7 +386,7 @@ class RetrieverService:
             skip_security_filter
         )
         
-        # Cache successful retrieval in context cache
+        # Cache successful retrieval in context cache (non-blocking)
         if retrieval_result["success"] and retrieval_result.get("context"):
             # Analyze security metadata from documents
             documents = retrieval_result["context"]
@@ -397,14 +404,16 @@ class RetrieverService:
                 if doc.metadata.get("is_department_only") and doc.metadata.get("department_id")
             ))
             
-            await self.semantic_cache.set(
-                cache_type="context",
-                query=query_text,
-                entry=retrieval_result,
-                min_security_level=max_security,
-                is_departmental=is_departmental,
-                department_ids=dept_ids if is_departmental else None
-            )
+            # Emit cache event (non-blocking background processing)
+            bus = get_event_bus()
+            await bus.emit("semantic_cache", {
+                "cache_type": "context",
+                "query": query_text,
+                "entry": retrieval_result,
+                "min_security_level": max_security,
+                "is_departmental": is_departmental,
+                "department_ids": dept_ids if is_departmental else None
+            })
         
         return retrieval_result
     

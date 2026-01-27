@@ -242,7 +242,7 @@
 
       <!-- Main Chat View -->
       <main class="flex-1 overflow-hidden h-[calc(100vh-4rem)]">
-        <router-view :key="route.path" />
+        <router-view :key="chatComponentKey" />
       </main>
 
       <!-- Mobile Sidebar Overlay -->
@@ -269,6 +269,7 @@ const { chats, activeChat, selectChat, openNewChat, loadChats } = useChatHistory
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 const chatSettingsOpen = ref(false)
+const chatComponentKey = ref(0) // Key to force component reload
 
 const userInitials = computed(() => {
   if (!authStore.user) return '?'
@@ -323,6 +324,8 @@ watch(() => route.path, () => {
 })
 
 const newChat = async () => {
+  // Force reload the Chat component by changing the key
+  chatComponentKey.value++
   await openNewChat()
   sidebarOpen.value = false
 }

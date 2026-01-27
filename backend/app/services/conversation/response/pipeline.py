@@ -22,6 +22,7 @@ from app.models.message import MessageRole
 from app.config.settings import settings
 from app.core import get_logger
 from app.core.semantic_cache import get_semantic_cache
+from app.core.events import get_event_bus
 
 logger = get_logger(__name__)
 
@@ -171,47 +172,18 @@ class ResponsePipeline:
             response_text: Generated response to cache
             documents: Context documents used (for security metadata)
         """
+        # Emit cache event (non-blocking background processing)
+        # Event handler will perform validation and metadata extraction
         try:
-            # Extract security metadata from documents
-            min_security_level = None
-            is_departmental = False
-            department_ids = set()
-            
-            for doc in documents:
-                metadata = doc.metadata if hasattr(doc, 'metadata') else {}
-                
-                # Track max security level
-                sec_level = metadata.get('min_security_level')
-                if sec_level is not None:
-                    if min_security_level is None:
-                        min_security_level = sec_level
-                    else:
-                        min_security_level = max(min_security_level, sec_level)
-                
-                # Track departmental status
-                if metadata.get('is_departmental'):
-                    is_departmental = True
-                    dept_id = metadata.get('department_id')
-                    if dept_id:
-                        department_ids.add(dept_id)
-            
-            # Store in response cache
-            await self.semantic_cache.set(
-                cache_type="response",
-                query=user_query,
-                entry=response_text,
-                min_security_level=min_security_level,
-                is_departmental=is_departmental,
-                department_ids=list(department_ids) if department_ids else None
-            )
-            
-            logger.debug(
-                f"Cached response (sec_level={min_security_level}, "
-                f"dept={is_departmental}, query='{user_query[:50]}...')"
-            )
-            
+            bus = get_event_bus()
+            await bus.emit("semantic_cache", {
+                "cache_type": "response",
+                "query": user_query,
+                "entry": response_text,
+                "documents": documents
+            })
         except Exception as e:
-            logger.error(f"Failed to cache response: {e}", exc_info=True)
+            logger.error(f"Failed to emit cache event: {e}", exc_info=True)
     
     def select_llm(self, max_doc_level: Optional[int]) -> Tuple[Any, LLMType]:
         """
@@ -424,6 +396,15 @@ class ResponsePipeline:
             for doc in documents
         ])
         
+        # Log context building for debugging
+        logger.debug(
+            f"Streaming: {len(documents)} documents, "
+            f"context length: {len(context_text)} chars"
+        )
+        
+        if not context_text.strip():
+            logger.warning("Empty context being passed to LLM streaming!")
+        
         # Select appropriate system prompt based on partial context
         system_prompt = self._select_prompt(partial_context)
         
@@ -450,6 +431,8 @@ class ResponsePipeline:
             content = chunk.content if hasattr(chunk, 'content') else str(chunk)
             full_response += content
             yield {"type": "token", "content": content}
+        
+        logger.info(f"Streaming complete: '{full_response[:100]}...'")
         
         sources = self._build_sources_payload(documents)
         
@@ -493,11 +476,22 @@ class ResponsePipeline:
             for doc in documents
         ])
         
+        # Log context building for debugging
+        logger.debug(
+            f"Building context: {len(documents)} documents, "
+            f"context length: {len(context_text)} chars"
+        )
+        
+        if not context_text.strip():
+            logger.warning("Empty context being passed to LLM generation!")
+        
         # Select appropriate system prompt based on partial context
         system_prompt = self._select_prompt(partial_context)
         
         # Build human message with partial context details if applicable
         human_message = self._build_human_message(user_query, context_text, partial_context)
+        
+        logger.debug(f"Human message length: {len(human_message)} chars")
         
         prompt = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -515,6 +509,8 @@ class ResponsePipeline:
         })
         
         response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        logger.info(f"Generated response: '{response_text[:100]}...'")
         
         # Cache the response
         await self._cache_response(user_query, response_text, documents)

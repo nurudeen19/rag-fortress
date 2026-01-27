@@ -508,20 +508,25 @@ const loadMessagesForConversation = async (conversationId) => {
 watch(
   () => route.params.id,
   async (newId, oldId) => {
-    if (suppressAutoLoad.value && newId && newId !== 'new') {
-      return
-    }
-
-    if (newId && newId !== 'new') {
-      await loadMessagesForConversation(newId)
-    } else {
-      // Clear messages for new chat
+    // Always clear when navigating to new chat
+    if (newId === 'new') {
       messages.value = []
       activeChat.value = null
       inputMessage.value = ''
       showChatOptions.value = false
       showRenameModal.value = false
       renameInput.value = ''
+      return
+    }
+
+    // Skip loading if we're suppressing auto-load for a non-new chat
+    if (suppressAutoLoad.value && newId && newId !== 'new') {
+      return
+    }
+
+    // Load messages for existing conversation
+    if (newId && newId !== 'new') {
+      await loadMessagesForConversation(newId)
     }
   },
   { immediate: true }

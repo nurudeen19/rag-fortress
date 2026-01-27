@@ -479,7 +479,13 @@ class StartupController:
             # Close database connections
             if self.database_manager:
                 logger.info("Closing database connections...")
-                await self.database_manager.close_connection()
+                try:
+                    await self.database_manager.close_connection()
+                except RuntimeError as e:
+                    # Suppress harmless "Event loop is closed" errors from aiomysql cleanup
+                    if "Event loop is closed" not in str(e):
+                        raise
+                    logger.debug(f"Suppressed harmless aiomysql cleanup error: {e}")
             
             # Shutdown email client
             if self.email_client:
