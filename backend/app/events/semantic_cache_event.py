@@ -5,7 +5,7 @@ Handles semantic cache storage events asynchronously to avoid blocking
 the main request/response flow. Processes both context and response caching.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 
 from app.events.base import BaseEventHandler
 from app.core import get_logger
@@ -64,8 +64,8 @@ class SemanticCacheEvent(BaseEventHandler):
         """Process semantic cache storage event."""
         try:
             cache_type = event_data["cache_type"]
-            query = event_data["query"]
-            entry = event_data["entry"]
+            event_data["query"]
+            event_data["entry"]
             
             if cache_type == "context":
                 await self._handle_context_cache(event_data)

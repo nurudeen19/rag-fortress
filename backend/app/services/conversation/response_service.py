@@ -25,7 +25,6 @@ from app.utils.intent_classifier import get_intent_classifier
 from app.services.llm.classifier import get_llm_intent_classifier
 from app.services.llm.decomposer import get_query_decomposer
 from app.config.settings import settings
-from app.models.message import MessageRole
 from app.core import get_logger
 
 logger = get_logger(__name__)

@@ -3,7 +3,7 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import uuid
 import json
 

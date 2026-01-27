@@ -132,7 +132,7 @@ async def refresh_access_token(
             detail="Refresh token not found"
         )
     
-    from app.core.security import verify_token, create_access_token, create_refresh_token
+    from app.core.security import create_access_token, create_refresh_token
     from sqlalchemy import select
     
     try:

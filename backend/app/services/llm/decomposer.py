@@ -5,7 +5,6 @@ Uses structured output to optimize queries for semantic search.
 """
 
 from typing import Optional, List
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 from app.core import get_logger
 from app.core.llm_factory import get_classifier_llm

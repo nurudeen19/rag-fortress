@@ -227,7 +227,7 @@ async def handle_reject_file(
     """Reject file from processing."""
     try:
         service = FileUploadService(session)
-        old_status = (await service.get_file(file_id)).status
+        (await service.get_file(file_id)).status
         file_upload = await service.reject(file_id, admin.id, reason=reason)
         
         await session.commit()

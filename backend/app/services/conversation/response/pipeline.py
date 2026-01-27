@@ -18,7 +18,6 @@ from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
 from app.utils.text_processing import preprocess_query
 from app.config.prompt_settings import get_prompt_settings
 from app.models.user_permission import PermissionLevel
-from app.models.message import MessageRole
 from app.config.settings import settings
 from app.core import get_logger
 from app.core.semantic_cache import get_semantic_cache

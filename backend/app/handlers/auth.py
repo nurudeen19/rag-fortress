@@ -792,9 +792,9 @@ async def handle_signup_with_invite(
     try:
         logger.info(f"Signup attempt with invitation token for username: {request.username}")
         
-        password_service = PasswordService(session)
+        PasswordService(session)
         user_account_service = UserAccountService(session)
-        auth_service = AuthService(session)
+        AuthService(session)
         
         # Verify invitation token and extract email
         from app.models.user_invitation import UserInvitation

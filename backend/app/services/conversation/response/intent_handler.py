@@ -9,7 +9,6 @@ from typing import Any, AsyncGenerator, Literal, Union, Dict
 import asyncio
 
 from app.services.conversation.service import ConversationService
-from app.models.message import MessageRole
 from app.core import get_logger
 
 logger = get_logger(__name__)
