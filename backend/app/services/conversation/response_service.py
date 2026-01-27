@@ -228,7 +228,7 @@ class ConversationResponseService:
     async def _retrieve_context(
         self,
         user_query: str,
-        all_queries: list[str],
+        query_info: dict,
         user_clearance: Any,
         user_department_id: int,
         user_dept_clearance: Any,
@@ -253,7 +253,7 @@ class ConversationResponseService:
             user_department_id=user_department_id,
             user_dept_clearance=user_dept_clearance,
             user_id=user_id,
-            decomposed_queries=all_queries
+            decomposition_result=query_info.get("decomposition_result")
         )
         
         # Handle retrieval errors
@@ -461,7 +461,7 @@ class ConversationResponseService:
         # Step 2: Retrieve context with security filtering
         context_result = await self._retrieve_context(
             user_query=user_query,
-            all_queries=all_queries,
+            query_info=query_info,
             user_clearance=user_clearance,
             user_department_id=user_department_id,
             user_dept_clearance=user_dept_clearance,

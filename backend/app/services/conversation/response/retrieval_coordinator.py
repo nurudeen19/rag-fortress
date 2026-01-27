@@ -382,6 +382,5 @@ class RetrievalCoordinator:
             user_department_id=user_department_id,
             user_dept_clearance=user_dept_clearance,
             queries=queries,
-            subquery_document_map=subquery_document_map,
-            is_multi_query=is_multi_query
+            subquery_document_map=subquery_document_map
         )

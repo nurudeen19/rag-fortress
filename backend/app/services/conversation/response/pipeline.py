@@ -130,7 +130,7 @@ class ResponsePipeline:
         user_department_id: Optional[int],
         user_dept_clearance: Optional[PermissionLevel],
         user_id: int,
-        decomposed_queries: Optional[List[str]] = None
+        decomposition_result: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Retrieve context documents for query with optional multi-query decomposition.
@@ -143,7 +143,7 @@ class ResponsePipeline:
             user_department_id: User's department ID
             user_dept_clearance: User's department-level clearance
             user_id: User ID for logging
-            decomposed_queries: Optional list of decomposed queries to retrieve
+            decomposition_result: Optional decomposition result with queries and decomposed flag
             
         Returns:
             Retrieval result dict with success status, documents, and metadata
@@ -154,7 +154,7 @@ class ResponsePipeline:
             user_department_id=user_department_id,
             user_dept_clearance=user_dept_clearance,
             user_id=user_id,
-            decomposed_queries=decomposed_queries
+            decomposition_result=decomposition_result
         )
     
     async def _cache_response(
