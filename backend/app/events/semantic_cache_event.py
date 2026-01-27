@@ -80,42 +80,61 @@ class SemanticCacheEvent(BaseEventHandler):
             logger.error(f"Failed to process semantic_cache event: {e}", exc_info=True)
     
     async def _handle_context_cache(self, event_data: Dict[str, Any]) -> None:
-        """Handle context-level cache storage."""
+        """Handle context-level cache storage with formatting."""
         try:
-            entry = event_data["entry"]
+            documents = event_data["documents"]
             
-            # Serialize documents to dict format (Document objects are not JSON serializable)
-            if entry.get("context"):
-                documents = entry["context"]
-                serialized_entry = {
-                    "success": entry["success"],
-                    "count": entry.get("count", 0),
-                    "max_security_level": entry.get("max_security_level"),
-                    "context": [
-                        {
-                            "page_content": doc.page_content,
-                            "metadata": doc.metadata
-                        }
-                        for doc in documents
-                    ]
-                }
-            else:
-                serialized_entry = entry
+            # Format context text from documents
+            context_text = "\n\n".join([
+                doc.page_content for doc in documents
+            ])
+            
+            # Extract consolidated metadata
+            min_security_level = None
+            is_departmental = False
+            department_ids = set()
+            
+            for doc in documents:
+                metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+                
+                # Track highest security level (becomes min required for cache access)
+                sec_level = metadata.get('security_level')
+                if sec_level is not None:
+                    if min_security_level is None:
+                        min_security_level = sec_level
+                    else:
+                        min_security_level = max(min_security_level, sec_level)
+                
+                # Track departmental status
+                if metadata.get('is_department_only'):
+                    is_departmental = True
+                    dept_id = metadata.get('department_id')
+                    if dept_id:
+                        department_ids.add(dept_id)
+            
+            # Build cache entry with formatted text and metadata
+            entry = {
+                "context_text": context_text,
+                "source_count": len(documents),
+                "min_security_level": min_security_level,
+                "is_departmental": is_departmental,
+                "department_ids": list(department_ids) if department_ids else None
+            }
             
             # Store in cache
             cache = get_semantic_cache()
             await cache.set(
                 cache_type="context",
                 query=event_data["query"],
-                entry=serialized_entry,
-                min_security_level=event_data.get("min_security_level"),
-                is_departmental=event_data.get("is_departmental", False),
-                department_ids=event_data.get("department_ids")
+                entry=entry,
+                min_security_level=min_security_level,
+                is_departmental=is_departmental,
+                department_ids=list(department_ids) if department_ids else None
             )
             
             logger.debug(
-                f"Context cached (docs={len(documents) if entry.get('context') else 0}, "
-                f"query='{event_data['query'][:50]}...')"
+                f"Context cached (source_count={len(documents)}, "
+                f"text_length={len(context_text)}, query='{event_data['query'][:50]}...')"
             )
         
         except Exception as e:

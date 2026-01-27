@@ -21,6 +21,7 @@ from app.services.conversation.response import (
     ErrorResponseHandler,
     ConversationActivityLogger
 )
+from app.core.semantic_cache import get_semantic_cache
 from app.utils.intent_classifier import get_intent_classifier
 from app.services.llm.classifier import get_llm_intent_classifier
 from app.services.llm.decomposer import get_query_decomposer
@@ -238,14 +239,38 @@ class ConversationResponseService:
         """
         Retrieve context documents with security filtering.
         
-        Handles retrieval, error checking, and metadata extraction.
+        Checks context cache first. If hit, returns pre-formatted context.
+        If miss, performs retrieval and emits to cache in background.
         
         Returns:
             Dict with either:
-            - success=True: documents, max_doc_level, partial_context
+            - success=True: documents OR cached_context, max_doc_level, partial_context
             - success=False: error response (already handled)
         """
-        # Retrieve context with user credentials
+        # Check context cache first (before retrieval!)
+        
+        semantic_cache = get_semantic_cache()
+        
+        cached_context, should_continue = await semantic_cache.get(
+            cache_type="context",
+            query=user_query,
+            user_security_level=user_clearance.value if user_clearance else 0,
+            user_department_id=user_department_id,
+            user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
+        )
+        
+        if cached_context and not should_continue:
+            # Cache hit - return pre-formatted context
+            logger.info(f"Context cache HIT - using cached formatted context")
+            return {
+                "success": True,
+                "cached_context_text": cached_context.get("context_text"),
+                "max_doc_level": cached_context.get("min_security_level"),
+                "source_count": cached_context.get("source_count", 0),
+                "from_cache": True
+            }
+        
+        # Cache miss or should continue - perform retrieval
         retrieval_result = await self.pipeline.retrieve_context(
             user_query=user_query,
             user_clearance=user_clearance,
@@ -287,7 +312,8 @@ class ConversationResponseService:
     
     async def _generate_llm_response(
         self,
-        documents: list[Any],
+        documents: Optional[list[Any]],
+        cached_context_text: Optional[str],
         max_doc_level: Any,
         partial_context: Dict[str, Any],
         user_query: str,
@@ -296,9 +322,10 @@ class ConversationResponseService:
         stream: bool
     ) -> Dict[str, Any]:
         """
-        Generate LLM response from retrieved documents.
+        Generate LLM response from retrieved documents or cached context.
         
         Handles LLM selection and both streaming/non-streaming generation.
+        Accepts either raw documents (first retrieval) or pre-formatted context (cache hit).
         
         Returns:
             Response dict with success status and either generator or text
@@ -315,6 +342,7 @@ class ConversationResponseService:
                     llm_type=llm_type,
                     user_query=user_query,
                     documents=documents,
+                    cached_context_text=cached_context_text,
                     conversation_id=conversation_id,
                     user_id=user_id,
                     partial_context=partial_context
@@ -327,12 +355,14 @@ class ConversationResponseService:
                 llm_type=llm_type,
                 user_query=user_query,
                 documents=documents,
+                cached_context_text=cached_context_text,
                 conversation_id=conversation_id,
                 user_id=user_id,
                 partial_context=partial_context
             )
             
-            sources = self.pipeline._build_sources_payload(documents)
+            # Build sources only if we have documents (not from cache)
+            sources = self.pipeline._build_sources_payload(documents) if documents else []
             
             # Save response (cache + persist)
             await self.conversation_service.save_assistant_response(
@@ -473,11 +503,12 @@ class ConversationResponseService:
         if not context_result["success"]:
             return context_result["error_response"]
         
-        # Step 3: Generate LLM response from documents
+        # Step 3: Generate LLM response from documents or cached context
         return await self._generate_llm_response(
-            documents=context_result["documents"],
+            documents=context_result.get("documents"),
+            cached_context_text=context_result.get("cached_context_text"),
             max_doc_level=context_result["max_doc_level"],
-            partial_context=context_result["partial_context"],
+            partial_context=context_result.get("partial_context"),
             user_query=user_query,
             conversation_id=conversation_id,
             user_id=user_id,

@@ -184,6 +184,30 @@ class ResponsePipeline:
         except Exception as e:
             logger.error(f"Failed to emit cache event: {e}", exc_info=True)
     
+    async def _emit_context_cache(
+        self,
+        user_query: str,
+        documents: List[Any]
+    ):
+        """
+        Emit context cache event with raw documents.
+        
+        Event handler will format context text and extract metadata in background.
+        
+        Args:
+            user_query: Original user query
+            documents: Raw documents to cache
+        """
+        try:
+            bus = get_event_bus()
+            await bus.emit("semantic_cache", {
+                "cache_type": "context",
+                "query": user_query,
+                "documents": documents  # Pass raw documents, event handler formats
+            })
+        except Exception as e:
+            logger.error(f"Failed to emit context cache event: {e}", exc_info=True)
+    
     def select_llm(self, max_doc_level: Optional[int]) -> Tuple[Any, LLMType]:
         """
         Select appropriate LLM based on document security.
@@ -211,7 +235,8 @@ class ResponsePipeline:
         llm: Any,
         llm_type: LLMType,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         conversation_id: str,
         user_id: int,
         partial_context: Optional[Dict[str, Any]] = None
@@ -245,6 +270,7 @@ class ResponsePipeline:
                 llm=llm,
                 user_query=user_query,
                 documents=documents,
+                cached_context_text=cached_context_text,
                 history=history,
                 conversation_id=conversation_id,
                 user_id=user_id,
@@ -275,6 +301,7 @@ class ResponsePipeline:
                             llm=fallback_llm,
                             user_query=user_query,
                             documents=documents,
+                            cached_context_text=cached_context_text,
                             history=history,
                             conversation_id=conversation_id,
                             user_id=user_id,
@@ -302,7 +329,8 @@ class ResponsePipeline:
         llm: Any,
         llm_type: LLMType,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         conversation_id: str,
         user_id: int,
         partial_context: Optional[Dict[str, Any]] = None
@@ -328,6 +356,7 @@ class ResponsePipeline:
                 llm=llm,
                 user_query=user_query,
                 documents=documents,
+                cached_context_text=cached_context_text,
                 history=history,
                 is_fallback=False,
                 partial_context=partial_context
@@ -355,6 +384,7 @@ class ResponsePipeline:
                             llm=fallback_llm,
                             user_query=user_query,
                             documents=documents,
+                            cached_context_text=cached_context_text,
                             history=history,
                             is_fallback=True,
                             partial_context=partial_context
@@ -377,7 +407,8 @@ class ResponsePipeline:
         self,
         llm: Any,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         history: List[Dict[str, str]],
         conversation_id: str,
         user_id: int,
@@ -387,19 +418,21 @@ class ResponsePipeline:
         """
         Attempt streaming response generation with given LLM.
         
+        Uses cached context if available, otherwise builds from documents.
         Yields tokens and metadata. Persists successful response to DB.
         """
-        # Build context from documents
-        context_text = "\n\n".join([
-            f"{doc.page_content}"
-            for doc in documents
-        ])
-        
-        # Log context building for debugging
-        logger.debug(
-            f"Streaming: {len(documents)} documents, "
-            f"context length: {len(context_text)} chars"
-        )
+        # Use cached context if available, otherwise build from documents
+        if cached_context_text:
+            context_text = cached_context_text
+            logger.debug(f"Using cached context: {len(context_text)} chars")
+        elif documents:
+            # Build context from documents and emit cache event
+            context_text = "\n\n".join([f"{doc.page_content}" for doc in documents])
+            await self._emit_context_cache(user_query, documents)
+            logger.debug(f"Built context from {len(documents)} documents: {len(context_text)} chars")
+        else:
+            context_text = ""
+            logger.warning("No context available (no cache and no documents)")
         
         if not context_text.strip():
             logger.warning("Empty context being passed to LLM streaming!")
@@ -433,7 +466,8 @@ class ResponsePipeline:
         
         logger.info(f"Streaming complete: '{full_response[:100]}...'")
         
-        sources = self._build_sources_payload(documents)
+        # Build sources only if we have documents (not from cache)
+        sources = self._build_sources_payload(documents) if documents else []
         
         # Build metadata
         meta = {"sources": sources} if sources else {}
@@ -463,23 +497,25 @@ class ResponsePipeline:
         self,
         llm: Any,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         history: List[Dict[str, str]],
         is_fallback: bool = False,
         partial_context: Optional[Dict[str, Any]] = None
     ) -> str:
         """Attempt response generation with given LLM."""
-        # Build context
-        context_text = "\n\n".join([
-            f"{doc.page_content}"
-            for doc in documents
-        ])
-        
-        # Log context building for debugging
-        logger.debug(
-            f"Building context: {len(documents)} documents, "
-            f"context length: {len(context_text)} chars"
-        )
+        # Use cached context if available, otherwise build from documents
+        if cached_context_text:
+            context_text = cached_context_text
+            logger.debug(f"Using cached context: {len(context_text)} chars")
+        elif documents:
+            # Build context from documents and emit cache event
+            context_text = "\n\n".join([f"{doc.page_content}" for doc in documents])
+            await self._emit_context_cache(user_query, documents)
+            logger.debug(f"Built context from {len(documents)} documents: {len(context_text)} chars")
+        else:
+            context_text = ""
+            logger.warning("No context available (no cache and no documents)")
         
         if not context_text.strip():
             logger.warning("Empty context being passed to LLM generation!")

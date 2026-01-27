@@ -353,27 +353,8 @@ class RetrieverService:
         Returns:
             Dict with success, context (documents), count, error, message
         """
-        # Check context-level semantic cache
-        cached_context, should_continue = await self.semantic_cache.get(
-            cache_type="context",
-            query=query_text,
-            user_security_level=user_security_level or 0,
-            user_department_id=user_department_id,
-            user_department_security_level=user_department_security_level
-        )
-        
-        if cached_context and not should_continue:
-            # Deserialize documents from cache (they were stored as dicts)
-            if cached_context.get("context"):
-                cached_context["context"] = [
-                    Document(page_content=doc["page_content"], metadata=doc["metadata"])
-                    for doc in cached_context["context"]
-                ]
-            # Cluster at capacity, return cached immediately
-            return cached_context
-        
-        if should_continue:
-            logger.debug("Context cache hit but continuing retrieval to add variation")
+        # Context caching moved to pipeline level (after formatting)
+        # Retriever now focuses solely on document retrieval
         
         # Perform retrieval
         retrieval_result = await self._perform_retrieval(
@@ -385,35 +366,6 @@ class RetrieverService:
             user_id,
             skip_security_filter
         )
-        
-        # Cache successful retrieval in context cache (non-blocking)
-        if retrieval_result["success"] and retrieval_result.get("context"):
-            # Analyze security metadata from documents
-            documents = retrieval_result["context"]
-            max_security = retrieval_result.get("max_security_level")
-            
-            # Check if any docs are department-only
-            is_departmental = any(
-                doc.metadata.get("is_department_only", False) for doc in documents
-            )
-            
-            # Collect department IDs
-            dept_ids = list(set(
-                doc.metadata.get("department_id")
-                for doc in documents
-                if doc.metadata.get("is_department_only") and doc.metadata.get("department_id")
-            ))
-            
-            # Emit cache event (non-blocking background processing)
-            bus = get_event_bus()
-            await bus.emit("semantic_cache", {
-                "cache_type": "context",
-                "query": query_text,
-                "entry": retrieval_result,
-                "min_security_level": max_security,
-                "is_departmental": is_departmental,
-                "department_ids": dept_ids if is_departmental else None
-            })
         
         return retrieval_result
     
