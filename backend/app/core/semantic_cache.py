@@ -394,8 +394,6 @@ async def verify_redis_vl_support() -> bool:
             except Exception as e:
                 logger.debug(f"Error parsing module {module}: {e}")
         
-        logger.info(f"Redis modules detected: {module_names}")
-        
         # Check for RediSearch module (name is 'search')
         has_search = any(name.lower() == 'search' for name in module_names)
         
