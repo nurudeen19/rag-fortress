@@ -198,14 +198,30 @@ class RetrieverService:
         """
         Extract documents that meet the quality threshold from similarity results.
         
+        Args:
+            results: List of (document, score) tuples from vector store
+            score_threshold: Minimum similarity score required
+            
         Returns:
             List of documents that passed the threshold
         """
         high_quality_docs = []
+        filtered_out_count = 0
+        
         for doc, score in results:
             if score >= score_threshold:
                 high_quality_docs.append(doc)
+            else:
+                filtered_out_count += 1
+                logger.debug(
+                    f"Filtered out: score={score:.4f} < threshold={score_threshold} "
+                    f"(source={doc.metadata.get('source', 'unknown')})"
+                )
         
+        logger.debug(
+            f"Similarity filtering: {len(high_quality_docs)} passed, "
+            f"{filtered_out_count} filtered (threshold={score_threshold})"
+        )
         return high_quality_docs
     
     def _perform_reranking(
@@ -221,15 +237,18 @@ class RetrieverService:
         Args:
             query_text: Query to rerank against
             results: List of (document, score) tuples to rerank
-            top_k: Number of top results to return
+            top_k: Number of top results to request from reranker
             reranker_threshold: Minimum score required after reranking
         
         Returns:
-            List of relevant documents after reranking
+            List of relevant documents after reranking and threshold filtering
         """
         docs_to_rerank = [doc for doc, _ in results]
         
-        logger.info(f"Reranking {len(docs_to_rerank)} candidates (target: top {top_k})")
+        logger.info(
+            f"Reranking {len(docs_to_rerank)} candidates (target: top {top_k}, "
+            f"filter_threshold={reranker_threshold})"
+        )
         reranked_docs, reranked_scores = self.reranker.rerank(
             query_text,
             docs_to_rerank,
@@ -238,11 +257,22 @@ class RetrieverService:
         
         # Filter by reranker threshold
         relevant_docs = []
+        filtered_out_count = 0
+        
         for doc, score in zip(reranked_docs, reranked_scores):
             if score >= reranker_threshold:
                 relevant_docs.append(doc)
+            else:
+                filtered_out_count += 1
+                logger.debug(
+                    f"Filtered out (reranker): score={score:.4f} < threshold={reranker_threshold} "
+                    f"(source={doc.metadata.get('source', 'unknown')})"
+                )
         
-        logger.info(f"Reranker identified {len(relevant_docs)} relevant documents (threshold={reranker_threshold})")
+        logger.info(
+            f"Reranking complete: {len(relevant_docs)} passed threshold, "
+            f"{filtered_out_count} filtered (threshold={reranker_threshold})"
+        )
         return relevant_docs
     
     def _select_relevant_documents(
@@ -254,34 +284,57 @@ class RetrieverService:
         """
         Select relevant documents using quality threshold and optional reranking.
         
-        Strategy:
-        - If high-quality docs exist: Use them directly (no reranking needed)
-        - If no high-quality docs: Attempt reranking (if enabled)
-        - If no reranker: Use quality docs or empty list
+        Consistent filtering:
+        - All documents must meet their respective threshold
+        - Similarity threshold: when no reranking or initial filtering
+        - Reranker threshold: when reranking is applied
         
         Returns:
             List of relevant documents
         """
         score_threshold = self.settings.app_settings.RETRIEVAL_SCORE_THRESHOLD
         reranker_threshold = self.settings.app_settings.RERANKER_SCORE_THRESHOLD
+        reranker_enabled = self.reranker and self.settings.app_settings.ENABLE_RERANKER
+        
+        logger.debug(
+            f"Selecting relevant documents: "
+            f"retrieval_threshold={score_threshold}, "
+            f"reranker_threshold={reranker_threshold}, "
+            f"reranker_enabled={reranker_enabled}"
+        )
         
         # Check for high-quality results from similarity
         high_quality_docs = self._get_high_quality_docs(results, score_threshold)
+        logger.debug(f"High-quality docs (threshold={score_threshold}): {len(high_quality_docs)}/{len(results)}")
         
         # Decide on retrieval strategy
-        if self.reranker and self.settings.app_settings.ENABLE_RERANKER:
+        if reranker_enabled:
             if len(high_quality_docs) > 0:
-                # Have quality results - use them directly
-                logger.info(f"Using {len(high_quality_docs)} high-quality results (threshold={score_threshold})")
+                # Have quality results - use them directly (no reranking needed)
+                logger.debug(
+                    f"Using {len(high_quality_docs)} high-quality results "
+                    f"(retrieval_threshold={score_threshold}), skipping reranker"
+                )
                 return high_quality_docs[:top_k]
             else:
-                # No quality results - try reranking
-                logger.info(f"No high-quality results found (threshold={score_threshold}), attempting reranking")
-                return self._perform_reranking(query_text, results, top_k, reranker_threshold)
+                # No quality results from similarity - try reranking with ALL candidates
+                logger.info(
+                    f"No high-quality results (threshold={score_threshold}), "
+                    f"attempting reranking on {len(results)} candidates"
+                )
+                reranked = self._perform_reranking(query_text, results, top_k, reranker_threshold)
+                logger.debug(
+                    f"Reranking complete: {len(reranked)} docs above "
+                    f"reranker_threshold={reranker_threshold}"
+                )
+                return reranked
         else:
             # No reranker - use quality docs only
             relevant_docs = high_quality_docs[:top_k] if high_quality_docs else []
-            logger.info(f"Found {len(relevant_docs)} relevant documents by similarity (threshold={score_threshold})")
+            logger.info(
+                f"Found {len(relevant_docs)} relevant documents "
+                f"(retrieval_threshold={score_threshold}, reranker_disabled)"
+            )
             return relevant_docs
     
     def _build_retrieval_outcome(

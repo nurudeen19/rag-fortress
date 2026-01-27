@@ -8,7 +8,7 @@ Clean orchestration service that delegates to specialized components:
 - ConversationActivityLogger: Activity logging
 """
 
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm import get_llm_router
@@ -70,7 +70,7 @@ class ConversationResponseService:
             f"decomposer={'on' if query_decomposer else 'off'})"
         )
     
-    def _initialize_classifier(self) -> tuple[Any, str]:
+    def _initialize_classifier(self) -> tuple[Optional[Any], str]:
         """
         Initialize intent classifier (LLM or heuristic).
         
