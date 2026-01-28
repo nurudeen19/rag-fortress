@@ -63,6 +63,9 @@ class AppSettings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")  # 7 days for refresh tokens
     COOKIE_SECURE: bool = Field(True, env="COOKIE_SECURE")  # Set to False for HTTP development
     
+    # Diagnostics - Key for accessing system health check endpoint
+    DIAGNOSTIC_KEY: Optional[str] = Field(None, env="DIAGNOSTIC_KEY")
+    
     # Master encryption key for HKDF key derivation
     # Derives purpose-specific keys: conversations, settings, etc.
     MASTER_ENCRYPTION_KEY: str = Field(None, env="MASTER_ENCRYPTION_KEY")

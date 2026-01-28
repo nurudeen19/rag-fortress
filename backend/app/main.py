@@ -108,6 +108,7 @@ def create_app() -> FastAPI:
     from app.routes.settings import router as settings_router
     from app.routes.override_requests import router as override_requests_router
     from app.routes.error_reports import router as error_reports_router, admin_router as error_reports_admin_router
+    from app.routes.diagnostics import router as diagnostics_router
     
     app.include_router(email_router)
     app.include_router(auth_router)
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     app.include_router(override_requests_router)
     app.include_router(error_reports_router)
     app.include_router(error_reports_admin_router)
+    app.include_router(diagnostics_router, prefix="/api/v1")
 
     # Static file serving for error report attachments
     error_report_dir = Path(settings.DATA_DIR) / "error_reports"
