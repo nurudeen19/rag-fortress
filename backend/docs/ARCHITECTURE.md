@@ -14,7 +14,7 @@ RAG Fortress is a **security-aware, enterprise-grade Retrieval-Augmented Generat
 
 1. **Access-Controlled Knowledge Retrieval**: Organizations need to provide AI-powered question answering while respecting document-level security clearances and departmental access restrictions.
 
-2. **Provider-Agnostic AI Integration**: Avoid vendor lock-in by supporting multiple LLM providers (OpenAI, Anthropic, Google, Ollama, etc.), embedding providers, and vector databases through abstraction layers.
+2. **Provider-Agnostic AI Integration**: Avoid vendor lock-in by supporting multiple LLM providers (OpenAI, Google, Huggingface, etc.), embedding providers, and vector databases through abstraction layers.
 
 3. **Configurable Query Processing**: Different use cases require different retrieval strategies - from simple keyword search to complex query decomposition with reranking.
 
@@ -373,7 +373,6 @@ SUPPORTED_PROVIDERS = {
     "milvus",   # Sparse vector support
     "chroma",   # Dense only
     "faiss",    # Dense only, local storage
-    "pgvector", # PostgreSQL extension
 }
 ```
 
@@ -483,10 +482,10 @@ results = vector_store.similarity_search(query, filter=filter)
 
 ```python
 class PermissionLevel(IntEnum):
-    PUBLIC = 0
-    GENERAL = 1
-    CONFIDENTIAL = 2
-    TOP_SECRET = 3
+  GENERAL = 1                     # Open company-wide
+  RESTRICTED = 2                  # Managerial data access
+  CONFIDENTIAL = 3                # Confidential information
+  HIGHLY_CONFIDENTIAL = 4         # Sensitive management access
 ```
 
 **Document-Level Security**:
