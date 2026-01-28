@@ -400,7 +400,7 @@ class ConversationResponseService:
         Returns:
             Tuple of (response_dict, should_continue_pipeline)
             - response_dict: Formatted response if cache hit, None if miss
-            - should_continue_pipeline: True if should continue to add variation
+            - should_continue_pipeline: True if cluster below max_entries (should add variation)
         """
         cached_response, should_continue = await self.semantic_cache.get(
             cache_type="response",
@@ -416,15 +416,16 @@ class ConversationResponseService:
         
         logger.info(
             f"Response cache HIT for query: '{user_query[:50]}...' "
-            f"(continue_for_variation={should_continue})"
+            f"(should_continue={should_continue})"
         )
         
-        # If we should continue pipeline to add variation, return None to trigger pipeline
+        # If cluster below max_entries, return cached response but signal to continue pipeline
+        # This allows generating a variation to add to the cluster
         if should_continue:
             logger.debug("Cluster below max_entries, continuing pipeline to add variation")
-            return None, True  # Signal that we have cached response but should continue
+            return None, True  # Return None to trigger pipeline, but signal cache hit
         
-        # Cluster at capacity, return cached response immediately
+        # Cluster at max capacity, return cached response immediately
         if stream:
             # For streaming, wrap cached response in async generator
             async def cached_response_generator():
@@ -468,13 +469,14 @@ class ConversationResponseService:
             stream=stream
         )
         
-        # If cache hit and cluster at capacity, return cached response immediately
+        # If cache hit and cluster at max capacity, return cached response immediately
         if cached_result and not should_continue:
+            logger.debug("Cache cluster at capacity, returning cached response")
             return cached_result
         
-        # If cache hit but cluster below max_entries, log and continue to add variation
+        # If cache hit but cluster below max_entries, continue to generate variation
         if should_continue:
-            logger.debug("Cache hit but continuing pipeline to generate variation")
+            logger.info("Cache hit but cluster below max_entries, generating variation to enrich cluster")
         
         # Step 1: Query Processing and Decomposition
         query_info = await self.pipeline.process_query(user_query)

@@ -134,8 +134,6 @@ fastapi-mail>=1.5.8
 # Caching (Optional - for production)
 # ============================================================================
 redis>=5.0.0
-# RedisVL for semantic caching and vector search
-redisvl>=0.13.2
 
 # ============================================================================
 # Logging & Monitoring

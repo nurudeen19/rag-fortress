@@ -27,11 +27,13 @@ class SemanticCacheEvent(BaseEventHandler):
     Event data fields:
     - cache_type: str ("context" or "response") (required)
     - query: str (required)
-    - entry: Any (required) - response text or retrieval result dict
-    - min_security_level: Optional[int]
-    - is_departmental: Optional[bool]
-    - department_ids: Optional[List[int]]
-    - documents: Optional[List] - for response cache metadata extraction
+    
+    For context cache:
+    - documents: List (required) - raw documents to format and cache
+    
+    For response cache:
+    - entry: str (required) - response text to cache
+    - documents: Optional[List] - for security metadata extraction
     
     Usage from services:
         from app.core.events import get_event_bus
@@ -41,10 +43,7 @@ class SemanticCacheEvent(BaseEventHandler):
         await bus.emit("semantic_cache", {
             "cache_type": "context",
             "query": query_text,
-            "entry": retrieval_result,  # Will serialize documents
-            "min_security_level": max_security,
-            "is_departmental": is_dept,
-            "department_ids": dept_ids
+            "documents": documents  # Event handler will format and extract metadata
         })
         
         # Response cache
@@ -52,7 +51,7 @@ class SemanticCacheEvent(BaseEventHandler):
             "cache_type": "response",
             "query": user_query,
             "entry": response_text,
-            "documents": documents  # For metadata extraction
+            "documents": documents  # Optional, for metadata extraction
         })
     """
     
@@ -64,12 +63,14 @@ class SemanticCacheEvent(BaseEventHandler):
         """Process semantic cache storage event."""
         try:
             cache_type = event_data["cache_type"]
-            event_data["query"]
-            event_data["entry"]
+            event_data["query"]  # Validate query exists
             
+            # Validate cache-type-specific required fields
             if cache_type == "context":
+                event_data["documents"]  # Context cache requires documents
                 await self._handle_context_cache(event_data)
             elif cache_type == "response":
+                event_data["entry"]  # Response cache requires entry
                 await self._handle_response_cache(event_data)
             else:
                 logger.error(f"Unknown cache_type: {cache_type}")
