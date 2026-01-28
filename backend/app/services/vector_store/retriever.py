@@ -10,7 +10,6 @@ from langchain_core.documents import Document
 from app.core.vector_store_factory import get_retriever
 from app.core import get_logger
 from app.core.semantic_cache import get_semantic_cache
-from app.core.events import get_event_bus
 from app.config.settings import settings
 from app.models.user_permission import PermissionLevel
 from app.services.vector_store.reranker import get_reranker_service

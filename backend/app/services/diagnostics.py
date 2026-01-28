@@ -252,60 +252,63 @@ class DiagnosticsService:
         start_time = datetime.now(timezone.utc)
         
         try:
-            # Import vector store service
-            from app.services.vector_store.retriever import get_retriever_service
+            # Import vector store factory (core component)
+            from app.core.vector_store_factory import get_retriever, get_vector_store
             
-            # Get retriever service
-            retriever = get_retriever_service()
-            
-            # Initialize vector store
+            # Get vector store instance
             init_start = datetime.now(timezone.utc)
-            await retriever.initialize()
-            init_duration = int((datetime.now(timezone.utc) - init_start).total_seconds() * 1000)
-            
-            # Try a simple search (may return no results if store is empty)
-            search_start = datetime.now(timezone.utc)
             try:
-                # Simple diagnostic query
-                results = await retriever.get_relevant_documents(
-                    query="test",
-                    user_id=None,  # No ACL filtering for diagnostic
-                    k=1,
-                    use_reranker=False
-                )
-                search_duration = int((datetime.now(timezone.utc) - search_start).total_seconds() * 1000)
+                # Get the actual vector store retriever
+                retriever = get_retriever()
+                init_duration = int((datetime.now(timezone.utc) - init_start).total_seconds() * 1000)
                 
-                total_duration = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
-                
+                # Try a simple search (may return no results if store is empty)
+                search_start = datetime.now(timezone.utc)
+                try:
+                    # Simple diagnostic query using invoke (LangChain retriever method)
+                    results = retriever.invoke("test")
+                    search_duration = int((datetime.now(timezone.utc) - search_start).total_seconds() * 1000)
+                    
+                    total_duration = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+                    
+                    return {
+                        "test": test_name,
+                        "status": "pass",
+                        "message": "Vector store connection successful",
+                        "details": {
+                            "initialization": "passed",
+                            "search_operation": "passed",
+                            "documents_found": len(results) if results else 0,
+                            "init_time_ms": init_duration,
+                            "search_time_ms": search_duration,
+                            "total_time_ms": total_duration
+                        },
+                        "timestamp": start_time.isoformat()
+                    }
+                    
+                except Exception as search_error:
+                    logger.warning(f"Vector store search failed (may be expected if empty): {search_error}")
+                    
+                    # Connection works but search failed - still consider it a pass if initialization worked
+                    return {
+                        "test": test_name,
+                        "status": "pass",
+                        "message": "Vector store initialized (search operation skipped)",
+                        "details": {
+                            "initialization": "passed",
+                            "search_operation": "skipped",
+                            "init_time_ms": init_duration,
+                            "note": "Search test skipped - vector store may be empty"
+                        },
+                        "timestamp": start_time.isoformat()
+                    }
+                    
+            except Exception as init_error:
+                logger.error(f"Vector store initialization failed: {init_error}")
                 return {
                     "test": test_name,
-                    "status": "pass",
-                    "message": "Vector store connection successful",
-                    "details": {
-                        "initialization": "passed",
-                        "search_operation": "passed",
-                        "documents_found": len(results) if results else 0,
-                        "init_time_ms": init_duration,
-                        "search_time_ms": search_duration,
-                        "total_time_ms": total_duration
-                    },
-                    "timestamp": start_time.isoformat()
-                }
-                
-            except Exception as search_error:
-                logger.warning(f"Vector store search failed (may be expected if empty): {search_error}")
-                
-                # Connection works but search failed - still consider it a pass if initialization worked
-                return {
-                    "test": test_name,
-                    "status": "pass",
-                    "message": "Vector store initialized (search operation skipped)",
-                    "details": {
-                        "initialization": "passed",
-                        "search_operation": "skipped",
-                        "init_time_ms": init_duration,
-                        "note": "Search test skipped - vector store may be empty"
-                    },
+                    "status": "fail",
+                    "message": f"Vector store initialization failed: {str(init_error)}",
                     "timestamp": start_time.isoformat()
                 }
                     
