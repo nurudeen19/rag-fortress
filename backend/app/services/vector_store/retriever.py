@@ -136,7 +136,7 @@ class RetrieverService:
         user_security_level: int,
         user_department_id: Optional[int] = None,
         user_department_security_level: Optional[int] = None
-    ) -> Tuple[List[Document], Optional[int], Optional[List[str]]]:
+    ) -> Tuple[List[Document], Dict[str, Any], Optional[List[str]]]:
         """
         Filter documents based on user's security clearance and department access.
         
@@ -146,10 +146,16 @@ class RetrieverService:
         3. If user has no department, they can only access non-department documents
             
         Returns:
-            Tuple of (filtered documents, max security level accessed, blocked department names)
+            Tuple of (filtered documents, security metadata dict, blocked department names)
+            security_metadata contains:
+            - max_security_level: int - highest security level among accessible documents
+            - is_department_only: bool - whether any documents are department-only
+            - department_id: Optional[int] - department ID when is_department_only is True
         """
         filtered_docs: List[Document] = []
-        max_security_level: Optional[int] = None
+        security_level: Optional[int] = None
+        is_department_only = False
+        department_id: Optional[int] = None
         blocked_departments: set = set()  # Track departments that blocked access
         
         for doc in documents:
@@ -160,9 +166,9 @@ class RetrieverService:
             doc_level_value = self._get_document_security_level(doc_security_level)
             
             # Check department access
-            is_department_only = metadata.get("is_department_only", False)
+            doc_is_department_only = metadata.get("is_department_only", False)
                         
-            if is_department_only:
+            if doc_is_department_only:
                 # Check department membership
                 if not self._check_department_membership(metadata, user_department_id, blocked_departments):
                     continue
@@ -183,11 +189,24 @@ class RetrieverService:
             # Document passes all checks
             filtered_docs.append(doc)
 
-            # Track maximum security level among accessible documents
-            if max_security_level is None or doc_level_value > max_security_level:
-                max_security_level = doc_level_value
+            # Track highest security level among accessible documents
+            if security_level is None or doc_level_value > security_level:
+                security_level = doc_level_value
+            
+            # Track department-only status and department_id
+            if doc_is_department_only:
+                is_department_only = True
+                if department_id is None:
+                    department_id = metadata.get("department_id")
         
-        return filtered_docs, max_security_level, list(blocked_departments) if blocked_departments else None
+        # Build complete security metadata
+        security_metadata = {
+            "max_security_level": security_level,
+            "is_department_only": is_department_only,
+            "department_id": department_id
+        }
+        
+        return filtered_docs, security_metadata, list(blocked_departments) if blocked_departments else None
     
     def _get_high_quality_docs(
         self,
@@ -340,7 +359,7 @@ class RetrieverService:
         self,
         filtered_docs: List[Document],
         relevant_docs: List[Document],
-        max_security_level: Optional[int],
+        security_metadata: Dict[str, Any],
         blocked_depts: Optional[List[str]]
     ) -> Dict[str, Any]:
         """
@@ -349,7 +368,7 @@ class RetrieverService:
         Args:
             filtered_docs: Documents that passed security filtering
             relevant_docs: All relevant documents before filtering
-            max_security_level: Highest security level accessed
+            security_metadata: Complete security metadata dict
             blocked_depts: List of department names that blocked access
         
         Returns:
@@ -360,7 +379,7 @@ class RetrieverService:
                 "success": True,
                 "context": filtered_docs,
                 "count": len(filtered_docs),
-                "max_security_level": max_security_level,
+                "security_metadata": security_metadata,
             }
         
         # Determine error type based on blocking reason
@@ -378,8 +397,7 @@ class RetrieverService:
             "error": error_type,
             "message": error_msg,
             "count": 0,
-            "max_security_level": max_security_level,
-            "blocked_departments": blocked_depts
+            "security_metadata": security_metadata,
         }
     
     async def query(
@@ -502,7 +520,7 @@ class RetrieverService:
                 }
             
             # Apply security filtering
-            filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
+            filtered_docs, security_metadata, blocked_depts = self._filter_by_security(
                 relevant_docs, user_security_level, user_department_id, user_department_security_level
             )
             
@@ -510,7 +528,7 @@ class RetrieverService:
             
             # Step 4: Build and return outcome
             return self._build_retrieval_outcome(
-                filtered_docs, relevant_docs, max_security_level, blocked_depts
+                filtered_docs, relevant_docs, security_metadata, blocked_depts
             )
         
         except Exception as e:
@@ -545,7 +563,7 @@ class RetrieverService:
             }
         
         # Apply security filtering
-        filtered_docs, max_security_level, blocked_depts = self._filter_by_security(
+        filtered_docs, security_metadata, blocked_depts = self._filter_by_security(
             docs, user_security_level, user_department_id, user_department_security_level
         )
         
@@ -554,7 +572,7 @@ class RetrieverService:
         
         # Build outcome using shared method
         return self._build_retrieval_outcome(
-            filtered_docs, docs, max_security_level, blocked_depts
+            filtered_docs, docs, security_metadata, blocked_depts
         )
 
 

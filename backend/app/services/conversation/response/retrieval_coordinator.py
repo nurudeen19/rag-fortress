@@ -144,8 +144,8 @@ class RetrievalCoordinator:
         """
         logger.debug(f"Applying security filtering to {len(documents)} documents")
         
-        # Apply security filtering
-        filtered_docs, max_security_level, blocked_depts = self.retriever._filter_by_security(
+        # Apply security filtering - returns complete metadata in one pass
+        filtered_docs, security_metadata, blocked_depts = self.retriever._filter_by_security(
             documents=documents,
             user_security_level=user_clearance.value,
             user_department_id=user_department_id,
@@ -170,7 +170,7 @@ class RetrievalCoordinator:
             satisfied_queries=satisfied_queries,
             clearance_blocked_queries=clearance_blocked_queries,
             unsatisfied_queries=unsatisfied_queries,
-            max_security_level=max_security_level,
+            security_metadata=security_metadata,
             blocked_depts=blocked_depts
         )
         
@@ -232,7 +232,7 @@ class RetrievalCoordinator:
         satisfied_queries: List[str],
         clearance_blocked_queries: List[str],
         unsatisfied_queries: List[str],
-        max_security_level: Optional[int],
+        security_metadata: Dict[str, Any],
         blocked_depts: Optional[List[str]]
     ) -> Dict[str, Any]:
         """
@@ -244,6 +244,7 @@ class RetrievalCoordinator:
             Final result dict with success/error status and partial context metadata
         """
         # If all documents blocked, return error with partial context
+        # keeping max_security_level for backward compatibility
         if not filtered_docs:
             if blocked_depts:
                 dept_list = ", ".join(sorted(blocked_depts))
@@ -261,7 +262,7 @@ class RetrievalCoordinator:
                 "error": error_type,
                 "message": error_msg,
                 "blocked_departments": list(blocked_depts) if blocked_depts else None,
-                "max_security_level": max_security_level,
+                "security_metadata": security_metadata,
                 "partial_context": {
                     "is_partial": True,
                     "type": "clearance",
@@ -290,12 +291,12 @@ class RetrievalCoordinator:
             }
             logger.debug(f"Partial context detected: type={context_type}")
         
-        # Success: return filtered documents with optional partial context
+        # Success: return filtered documents with complete security metadata        
         result = {
             "success": True,
             "context": filtered_docs,
             "count": len(filtered_docs),
-            "max_security_level": max_security_level
+            "security_metadata": security_metadata  # Complete metadata from filtering
         }
         
         if partial_context:

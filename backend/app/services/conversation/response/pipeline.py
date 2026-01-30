@@ -161,25 +161,25 @@ class ResponsePipeline:
         self,
         user_query: str,
         response_text: str,
-        documents: List[Any]
+        security_metadata: Optional[Dict[str, Any]] = None
     ):
         """
-        Cache the generated response with security metadata from documents.
+        Cache the generated response with pre-computed security metadata.
         
         Args:
             user_query: Original user query
             response_text: Generated response to cache
-            documents: Context documents used (for security metadata)
+            security_metadata: Pre-computed complete security metadata dict
         """
         # Emit cache event (non-blocking background processing)
-        # Event handler will perform validation and metadata extraction
+        # Event handler will use pre-computed metadata directly
         try:
             bus = get_event_bus()
             await bus.emit("semantic_cache", {
                 "cache_type": "response",
                 "query": user_query,
                 "entry": response_text,
-                "documents": documents
+                "security_metadata": security_metadata  # Pass complete metadata object
             })
         except Exception as e:
             logger.error(f"Failed to emit cache event: {e}", exc_info=True)
@@ -187,23 +187,27 @@ class ResponsePipeline:
     async def _emit_context_cache(
         self,
         user_query: str,
-        documents: List[Any]
+        documents: List[Any],
+        security_metadata: Optional[Dict[str, Any]] = None
     ):
         """
-        Emit context cache event with raw documents.
+        Emit context cache event with pre-computed complete security metadata.
         
-        Event handler will format context text and extract metadata in background.
+        Event handler will format context text using already-computed metadata
+        without any document iteration for security extraction.
         
         Args:
             user_query: Original user query
             documents: Raw documents to cache
+            security_metadata: Pre-computed complete security metadata dict
         """
         try:
             bus = get_event_bus()
             await bus.emit("semantic_cache", {
                 "cache_type": "context",
                 "query": user_query,
-                "documents": documents  # Pass raw documents, event handler formats
+                "documents": documents,
+                "security_metadata": security_metadata  # Pass complete metadata object
             })
         except Exception as e:
             logger.error(f"Failed to emit context cache event: {e}", exc_info=True)
@@ -239,7 +243,8 @@ class ResponsePipeline:
         cached_context_text: Optional[str],
         conversation_id: str,
         user_id: int,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate streaming RAG response with fallback on error.
@@ -274,7 +279,8 @@ class ResponsePipeline:
                 history=history,
                 conversation_id=conversation_id,
                 user_id=user_id,
-                partial_context=partial_context
+                partial_context=partial_context,
+                security_metadata=security_metadata
             ):
                 yield item
             return
@@ -306,7 +312,8 @@ class ResponsePipeline:
                             conversation_id=conversation_id,
                             user_id=user_id,
                             is_fallback=True,
-                            partial_context=partial_context
+                            partial_context=partial_context,
+                            security_metadata=security_metadata
                         ):
                             yield item
                         return
@@ -333,7 +340,8 @@ class ResponsePipeline:
         cached_context_text: Optional[str],
         conversation_id: str,
         user_id: int,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Generate complete RAG response (non-streaming) with fallback.
@@ -359,7 +367,8 @@ class ResponsePipeline:
                 cached_context_text=cached_context_text,
                 history=history,
                 is_fallback=False,
-                partial_context=partial_context
+                partial_context=partial_context,
+                security_metadata=security_metadata
             )
         
         except Exception as e:
@@ -387,7 +396,8 @@ class ResponsePipeline:
                             cached_context_text=cached_context_text,
                             history=history,
                             is_fallback=True,
-                            partial_context=partial_context
+                            partial_context=partial_context,
+                            security_metadata=security_metadata
                         )
                     except Exception as fallback_err:
                         fallback_exception = fallback_err
@@ -413,7 +423,8 @@ class ResponsePipeline:
         conversation_id: str,
         user_id: int,
         is_fallback: bool = False,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Attempt streaming response generation with given LLM.
@@ -477,7 +488,7 @@ class ResponsePipeline:
             meta["partial_context"] = partial_context
         
         # Cache the complete response after streaming
-        await self._cache_response(user_query, full_response, documents)
+        await self._cache_response(user_query, full_response, documents, security_metadata)
         
         # Save response (cache + persist)
         await self.conversation_service.save_assistant_response(
@@ -501,7 +512,8 @@ class ResponsePipeline:
         cached_context_text: Optional[str],
         history: List[Dict[str, str]],
         is_fallback: bool = False,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Attempt response generation with given LLM."""
         # Use cached context if available, otherwise build from documents
@@ -511,7 +523,7 @@ class ResponsePipeline:
         elif documents:
             # Build context from documents and emit cache event
             context_text = "\n\n".join([f"{doc.page_content}" for doc in documents])
-            await self._emit_context_cache(user_query, documents)
+            await self._emit_context_cache(user_query, documents, security_metadata)
             logger.debug(f"Built context from {len(documents)} documents: {len(context_text)} chars")
         else:
             context_text = ""
@@ -548,7 +560,7 @@ class ResponsePipeline:
         logger.info(f"Generated response: '{response_text[:100]}...'")
         
         # Cache the response
-        await self._cache_response(user_query, response_text, documents)
+        await self._cache_response(user_query, response_text, documents, security_metadata)
         
         return response_text
     

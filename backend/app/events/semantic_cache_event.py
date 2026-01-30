@@ -22,7 +22,7 @@ class SemanticCacheEvent(BaseEventHandler):
     Processes cache storage requests in the background, including:
     - Document serialization for context cache
     - Response validation (generic negatives, length checks)
-    - Security metadata extraction
+    - Uses complete pre-computed security metadata (no document iteration)
     
     Event data fields:
     - cache_type: str ("context" or "response") (required)
@@ -30,28 +30,44 @@ class SemanticCacheEvent(BaseEventHandler):
     
     For context cache:
     - documents: List (required) - raw documents to format and cache
+    - security_metadata: Dict (required) - complete pre-computed security info
+      - max_security_level: int - highest security level among documents
+      - is_department_only: bool - whether security applies to department
+      - department_id: Optional[int] - department ID when is_department_only is True
     
     For response cache:
     - entry: str (required) - response text to cache
-    - documents: Optional[List] - for security metadata extraction
+    - security_metadata: Dict (required) - complete pre-computed security info
+      - max_security_level: int - highest security level among documents
+      - is_department_only: bool - whether security applies to department
+      - department_id: Optional[int] - department ID when is_department_only is True
     
     Usage from services:
         from app.core.events import get_event_bus
         
-        # Context cache
+        # Context cache with complete security metadata
         bus = get_event_bus()
         await bus.emit("semantic_cache", {
             "cache_type": "context",
             "query": query_text,
-            "documents": documents  # Event handler will format and extract metadata
+            "documents": documents,
+            "security_metadata": {
+                "max_security_level": 2,
+                "is_department_only": False,
+                "department_id": None
+            }
         })
         
-        # Response cache
+        # Response cache with complete security metadata
         await bus.emit("semantic_cache", {
             "cache_type": "response",
             "query": user_query,
             "entry": response_text,
-            "documents": documents  # Optional, for metadata extraction
+            "security_metadata": {
+                "max_security_level": 3,
+                "is_department_only": True,
+                "department_id": 5
+            }
         })
     """
     
@@ -90,36 +106,18 @@ class SemanticCacheEvent(BaseEventHandler):
                 doc.page_content for doc in documents
             ])
             
-            # Extract consolidated metadata
-            min_security_level = None
-            is_departmental = False
-            department_ids = set()
+            # Use pre-computed complete security metadata (no document iteration)
+            security_metadata = event_data.get("security_metadata", {})
+            max_security_level = security_metadata.get("max_security_level", 1)
+            is_department_only = security_metadata.get("is_department_only", False)
+            department_id = security_metadata.get("department_id")
             
-            for doc in documents:
-                metadata = doc.metadata if hasattr(doc, 'metadata') else {}
-                
-                # Track highest security level (becomes min required for cache access)
-                sec_level = metadata.get('security_level')
-                if sec_level is not None:
-                    if min_security_level is None:
-                        min_security_level = sec_level
-                    else:
-                        min_security_level = max(min_security_level, sec_level)
-                
-                # Track departmental status
-                if metadata.get('is_department_only'):
-                    is_departmental = True
-                    dept_id = metadata.get('department_id')
-                    if dept_id:
-                        department_ids.add(dept_id)
+          
             
-            # Build cache entry with formatted text and metadata
+            # Build cache entry with formatted text
             entry = {
                 "context_text": context_text,
-                "source_count": len(documents),
-                "min_security_level": min_security_level,
-                "is_departmental": is_departmental,
-                "department_ids": list(department_ids) if department_ids else None
+                "source_count": len(documents)
             }
             
             # Store in cache
@@ -128,9 +126,9 @@ class SemanticCacheEvent(BaseEventHandler):
                 cache_type="context",
                 query=event_data["query"],
                 entry=entry,
-                min_security_level=min_security_level,
-                is_departmental=is_departmental,
-                department_ids=list(department_ids) if department_ids else None
+                min_security_level=max_security_level,
+                is_department_only=is_department_only,
+                department_id=department_id
             )
             
             logger.debug(
@@ -146,7 +144,6 @@ class SemanticCacheEvent(BaseEventHandler):
         try:
             response_text = event_data["entry"]
             user_query = event_data["query"]
-            documents = event_data.get("documents", [])
             
             # Validation: Skip generic negative responses
             generic_negative_responses = [
@@ -171,6 +168,7 @@ class SemanticCacheEvent(BaseEventHandler):
                 return
             
             # Validation: Don't cache very short responses (likely incomplete)
+            # to monitor for potential issues as some valid responses can be short.
             if len(response_text.strip()) < 20:
                 logger.info(
                     f"Skipping cache for short response ({len(response_text)} chars): "
@@ -178,28 +176,16 @@ class SemanticCacheEvent(BaseEventHandler):
                 )
                 return
             
-            # Extract security metadata from documents
-            min_security_level = None
-            is_departmental = False
-            department_ids = set()
+            # Use pre-computed complete security metadata (no document iteration)
+            security_metadata = event_data.get("security_metadata", {})
+            max_security_level = security_metadata.get("max_security_level", 1)
+            is_department_only = security_metadata.get("is_department_only", False)
+            department_id = security_metadata.get("department_id")
             
-            for doc in documents:
-                metadata = doc.metadata if hasattr(doc, 'metadata') else {}
-                
-                # Track highest security level (minimum clearance to access this cache)
-                sec_level = metadata.get('security_level')
-                if sec_level is not None:
-                    if min_security_level is None:
-                        min_security_level = sec_level
-                    else:
-                        min_security_level = max(min_security_level, sec_level)
-                
-                # Track departmental status
-                if metadata.get('is_departmental'):
-                    is_departmental = True
-                    dept_id = metadata.get('department_id')
-                    if dept_id:
-                        department_ids.add(dept_id)
+            logger.debug(
+                f"Using pre-computed security metadata: max_security_level={max_security_level}, "
+                f"dept_only={is_department_only}, dept_id={department_id}"
+            )
             
             # Store in cache
             cache = get_semantic_cache()
@@ -207,14 +193,14 @@ class SemanticCacheEvent(BaseEventHandler):
                 cache_type="response",
                 query=user_query,
                 entry=response_text,
-                min_security_level=min_security_level,
-                is_departmental=is_departmental,
-                department_ids=list(department_ids) if department_ids else None
+                min_security_level=max_security_level,
+                is_department_only=is_department_only,
+                department_id=department_id
             )
             
             logger.debug(
-                f"Response cached (min_clearance_required={min_security_level}, "
-                f"dept={is_departmental}, query='{user_query[:50]}...')"
+                f"Response cached (max_security_level={max_security_level}, "
+                f"dept_only={is_department_only}, query='{user_query[:50]}...')"
             )
         
         except Exception as e:

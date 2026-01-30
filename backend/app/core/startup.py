@@ -31,7 +31,7 @@ from app.core.llm_factory import (
     get_classifier_llm
 )
 from app.core.vector_store_factory import get_vector_store, get_retriever
-from app.core.semantic_cache import verify_redis_vl_support, get_semantic_cache
+from app.core.semantic_cache import verify_semantic_cache_support, get_semantic_cache
 from app.core.database import DatabaseManager
 from app.core.settings_loader import load_settings_by_category
 from app.config import (
@@ -122,7 +122,7 @@ class StartupController:
             if settings.llm_settings.ENABLE_INTERNAL_LLM:
                 await self._initialize_internal_llm()
 
-            if settings.reranker_settings.ENABLE_RERANKER:
+            if settings.app_settings.ENABLE_RERANKER:
                 await self._initialize_reranker()
             
             # ========== STEP 8: Classifier/Decomposer LLM (optional) ==========
@@ -132,10 +132,6 @@ class StartupController:
             # ========== STEP 9: Validate decomposer/reranker configuration ==========
             self._validate_decomposer_reranker_config()
             
-            # ========== STEP 10: Reranker (OPTIONAL) ==========
-            # Reranker initialization/validation moved to setup.py to avoid
-            # performing model availability checks on every application startup.
-            # The reranker service will still be lazy-loaded on first use.
             
             # ========== STEP 9: Email Client (OPTIONAL) ==========
             await self._initialize_email_client()
@@ -407,45 +403,31 @@ class StartupController:
         try:            
             config = settings.cache_settings.get_semantic_cache_config()
             
-            # Check if either tier is enabled
-            if not (config["response"]["enabled"] or config["context"]["enabled"]):
-                logger.info("○ Semantic Cache: DISABLED (not enabled in configuration)")
-                return
+            # Check if either tier is enabled in configuration
+            config_enabled = config["response"]["enabled"] or config["context"]["enabled"]
             
-            # Verify Redis VL support
-            if not await verify_redis_vl_support():
-                logger.warning("⚠ Semantic Cache: DISABLED (Redis VL not supported)")
-                return
+            if config_enabled:            
+                # Verify semantic cache support (RediSearch module check)
+                support_available = await verify_semantic_cache_support()
+                
+                if not support_available:
+                    logger.warning("⚠ Semantic Cache: DISABLED (not supported - RediSearch module required)")
+                    return
             
-            # Validate RedisVL configuration
-            try:
-                settings.embedding_settings.validate_redisvl_config()
-            except ValueError as e:
-                logger.warning(
-                    f"⚠ Semantic Cache: DISABLED (configuration invalid)\n"
-                    f"   Reason: {e}\n"
-                    f"   Please check REDISVL_* environment settings."
-                )
-                return
+                # Initialize cache instance
+                cache = get_semantic_cache()
             
-            # Initialize cache
-            cache = get_semantic_cache()
-            
-            # Check if caches were successfully initialized
-            has_response = cache.response_cache is not None
-            has_context = cache.context_cache is not None
-            
-            if has_response or has_context:
-                logger.info(
-                    f"✓ Semantic Cache: Response={config['response']['enabled']} ({has_response}), "
-                    f"Context={config['context']['enabled']} ({has_context})"
-                )
-            else:
-                logger.info("○ Semantic Cache: DISABLED (initialization failed)")
+                if cache:
+                    logger.info(
+                        f"✓ Semantic Cache: ENABLED "
+                        f"(Response={config['response']['enabled']}, "
+                        f"Context={config['context']['enabled']})"
+                    )
+                else:
+                    logger.warning("⚠ Semantic Cache: Failed to initialize instance")
         
         except Exception as e:
             logger.warning(f"⚠ Semantic Cache initialization failed: {e}")
-
     
     async def shutdown(self):
         """

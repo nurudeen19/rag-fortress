@@ -43,22 +43,25 @@ Each cluster stores **multiple variations** of responses/context for the same se
 
 ```python
 {
-    "cache_type": "response",  # or "context"
     "query": "What is our refund policy?",
-    "query_embedding": [0.123, 0.456, ...],
-    "entries": [
-        "Our refund policy allows...",  # Variation 1
-        "We offer refunds within...",   # Variation 2
-        "You can request a refund..."   # Variation 3
-    ],
+    "is_encrypted": false,
     "min_security_level": 2,
-    "is_departmental": False,
-    "department_ids": [],
-    "timestamp": 1234567890.123
+    "is_department_only": false,
+    "min_department_security_level": null,
+    "variations": [
+        {"text": "Our refund policy allows..."},
+        {"text": "We offer refunds within..."},
+        {"text": "You can request a refund..."}
+    ]
 }
 ```
 
-Cache returns a **random entry** from cluster to avoid repetition.
+**Key Design Points:**
+- Security metadata at **root level** (applies to all variations)
+- Encryption flag at **root level** (all variations encrypted/decrypted together)
+- Variations contain **only the text/data**
+- Single security check - no iteration needed
+- Cache returns a **random variation** to avoid repetition
 
 ## Configuration
 
@@ -73,14 +76,14 @@ SEMANTIC_CACHE_VECTOR_DIM=1536  # Match your embedding model
 ENABLE_RESPONSE_CACHE=true
 RESPONSE_CACHE_TTL_MINUTES=60
 RESPONSE_CACHE_MAX_ENTRIES=10
-RESPONSE_CACHE_SIMILARITY_THRESHOLD=0.90
+RESPONSE_CACHE_SIMILARITY_THRESHOLD=0.1 # 0 - 2 lower for higher relevance
 RESPONSE_CACHE_ENCRYPT=false
 
 # Context cache (retrieved documents)
 ENABLE_CONTEXT_CACHE=true
 CONTEXT_CACHE_TTL_MINUTES=120
 CONTEXT_CACHE_MAX_ENTRIES=5
-CONTEXT_CACHE_SIMILARITY_THRESHOLD=0.95
+CONTEXT_CACHE_SIMILARITY_THRESHOLD=0.05 # 0 - 2 lower for higher relevance
 CONTEXT_CACHE_ENCRYPT=false
 ```
 
@@ -120,46 +123,62 @@ When cluster reaches `max_entries`, it stops accepting new variations but contin
 
 Cache validates user clearance against cached entry requirements:
 
-**Departmental entries** → Validated against `user_department_security_level`  
-**Organization entries** → Validated against `user_security_level`
+**Departmental entries** → Validated against `dept_security_level`  
+**Organization entries** → Validated against `org_security_level`
 
 ```python
-# User with CONFIDENTIAL (2) clearance
-result = await retriever.query(
-    query_text="Q4 financials",
-    user_security_level=2,  # Org clearance
-    user_department_security_level=3  # Dept clearance
+# Get from cache with security check
+result, access_denied = await semantic_cache.get(
+    cache_type="response",
+    query="Q4 financial data",
+    org_security_level=2,  # User's org clearance
+    dept_security_level=3   # User's dept clearance (if applicable)
 )
-# Caches with min_security_level=2, is_departmental=False
 
-# Another user queries
-result = await retriever.query(
-    query_text="Q4 financial data",
-    user_security_level=1,  # Too low!
-    user_department_security_level=3
-)
-# Cache miss - insufficient org clearance
+if access_denied:
+    # Cache hit but insufficient clearance
+    # Returns: {"access_denied": True, "is_departmental": False/True}
+    if access_denied["is_departmental"]:
+        return "Department-restricted content"
+    else:
+        return "Insufficient clearance"
+
+if result:
+    # Cache hit with access granted
+    text, at_capacity = result
+    if at_capacity:
+        return text  # Don't generate new variation
+    # else: continue to generate and add variation
 ```
 
-### Department Access
-
-Departmental cache entries only accessible to users in matching departments:
+### Storing in Cache
 
 ```python
-# Engineering dept user
-result = await retriever.query(
-    query_text="Server architecture",
-    user_department_id=1  # Engineering
+# Set cache entry with security metadata
+await semantic_cache.set(
+    cache_type="response",
+    query="What is our refund policy?",
+    entry=response_text,
+    org_security_level=2,  # CONFIDENTIAL required
+    is_department_only=False,  # Organization-wide
+    dept_security_level=None  # Not department-restricted
 )
-# Caches with is_departmental=True, department_ids=[1]
 
-# Marketing dept user
-result = await retriever.query(
-    query_text="Server architecture docs",
-    user_department_id=2  # Marketing
+# Department-only cache entry
+await semantic_cache.set(
+    cache_type="context",
+    query="Engineering specs",
+    entry=formatted_context,
+    org_security_level=3,  # SECRET required
+    is_department_only=True,  # Department-only
+    dept_security_level=3  # Department clearance required
 )
-# Cache miss - department mismatch
 ```
+
+**Key Points:**
+- Security metadata stored at root level (applies to all variations)
+- Automatically adds to variations until `max_entries` reached
+- Encryption controlled by config (applies to all variations)
 
 ### Encryption
 

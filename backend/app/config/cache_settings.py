@@ -61,20 +61,19 @@ class CacheSettings(BaseSettings):
     
     # Global semantic cache settings
     SEMANTIC_CACHE_INDEX_NAME: str = Field("semantic_cache", env="SEMANTIC_CACHE_INDEX_NAME")
-    SEMANTIC_CACHE_VECTOR_DIM: int = Field(1536, env="SEMANTIC_CACHE_VECTOR_DIM")  # Match your embedding model
     
     # Response-level cache (caches final LLM responses)
     ENABLE_RESPONSE_CACHE: bool = Field(False, env="ENABLE_RESPONSE_CACHE")
     RESPONSE_CACHE_TTL_MINUTES: int = Field(60, env="RESPONSE_CACHE_TTL_MINUTES")  # 60 minutes (1 hour)
-    RESPONSE_CACHE_MAX_ENTRIES: int = Field(10, env="RESPONSE_CACHE_MAX_ENTRIES")  # Max response variations per cluster
-    RESPONSE_CACHE_SIMILARITY_THRESHOLD: float = Field(0.90, env="RESPONSE_CACHE_SIMILARITY_THRESHOLD")  # More lenient
+    RESPONSE_CACHE_MAX_ENTRIES: int = Field(1, env="RESPONSE_CACHE_MAX_ENTRIES")  # Max variations per cluster (1=single, >1=variations)
+    RESPONSE_CACHE_SIMILARITY_THRESHOLD: float = Field(0.1, env="RESPONSE_CACHE_SIMILARITY_THRESHOLD")  # More lenient
     RESPONSE_CACHE_ENCRYPT: bool = Field(False, env="RESPONSE_CACHE_ENCRYPT")
     
     # Context-level cache (caches retrieved documents before LLM)
     ENABLE_CONTEXT_CACHE: bool = Field(False, env="ENABLE_CONTEXT_CACHE")
     CONTEXT_CACHE_TTL_MINUTES: int = Field(120, env="CONTEXT_CACHE_TTL_MINUTES")  # 120 minutes (2 hours)
-    CONTEXT_CACHE_MAX_ENTRIES: int = Field(5, env="CONTEXT_CACHE_MAX_ENTRIES")  # Max context variations per cluster
-    CONTEXT_CACHE_SIMILARITY_THRESHOLD: float = Field(0.95, env="CONTEXT_CACHE_SIMILARITY_THRESHOLD")  # Stricter
+    CONTEXT_CACHE_MAX_ENTRIES: int = Field(1, env="CONTEXT_CACHE_MAX_ENTRIES")  # Max variations per cluster (1=single, >1=variations)
+    CONTEXT_CACHE_SIMILARITY_THRESHOLD: float = Field(0.05, env="CONTEXT_CACHE_SIMILARITY_THRESHOLD")  # Stricter
     CONTEXT_CACHE_ENCRYPT: bool = Field(False, env="CONTEXT_CACHE_ENCRYPT")
     
     def get_redis_url(self) -> str:

@@ -14,14 +14,13 @@ from app.services.vector_store.retriever import get_retriever_service
 from app.services.llm import get_llm_router
 from app.services.conversation.service import ConversationService
 from app.services.user.user_service import UserAccountService
-from app.core.semantic_cache import get_semantic_cache
 from app.services.conversation.response import (
     IntentHandler,
     ResponsePipeline,
     ErrorResponseHandler,
     ConversationActivityLogger
 )
-from app.core.semantic_cache import get_semantic_cache
+from app.core.semantic_cache import get_semantic_cache, is_semantic_cache_enabled
 from app.utils.intent_classifier import get_intent_classifier
 from app.services.llm.classifier import get_llm_intent_classifier
 from app.services.llm.decomposer import get_query_decomposer
@@ -247,30 +246,40 @@ class ConversationResponseService:
             - success=True: documents OR cached_context, max_doc_level, partial_context
             - success=False: error response (already handled)
         """
-        # Check context cache first (before retrieval!)
+        # Check context cache first (before retrieval!)        
+        if is_semantic_cache_enabled() and self.semantic_cache:
+            cache_result, access_denied_info = await self.semantic_cache.get(
+                cache_type="context",
+                query=user_query,
+                min_security_level=user_clearance.value if user_clearance else 0,
+                is_department_only=bool(user_dept_clearance),
+                department_id=user_department_id if user_dept_clearance else None
+            )
+            
+            if access_denied_info:
+                # Cache hit but access denied - return appropriate error
+                error_type = "no_clearance" if access_denied_info.get("is_departmental") else "insufficient_clearance"
+                error_response = await self._handle_retrieval_error(
+                    retrieval_result={"success": False, "error_type": error_type},
+                    user_query=user_query,
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    stream=stream
+                )
+                return {"success": False, "error_response": error_response}
+            
+            if cache_result:
+                # Cache hit - return cached context
+                logger.info(f"Context cache HIT - using cached formatted context")
+                return {
+                    "success": True,
+                    "cached_context_text": cache_result.get("context_text") if isinstance(cache_result, dict) else cache_result,
+                    "max_doc_level": cache_result.get("min_security_level") if isinstance(cache_result, dict) else None,
+                    "source_count": cache_result.get("source_count", 0) if isinstance(cache_result, dict) else 0,
+                    "from_cache": True
+                }
         
-        semantic_cache = get_semantic_cache()
-        
-        cached_context, should_continue = await semantic_cache.get(
-            cache_type="context",
-            query=user_query,
-            user_security_level=user_clearance.value if user_clearance else 0,
-            user_department_id=user_department_id,
-            user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
-        )
-        
-        if cached_context and not should_continue:
-            # Cache hit - return pre-formatted context
-            logger.info(f"Context cache HIT - using cached formatted context")
-            return {
-                "success": True,
-                "cached_context_text": cached_context.get("context_text"),
-                "max_doc_level": cached_context.get("min_security_level"),
-                "source_count": cached_context.get("source_count", 0),
-                "from_cache": True
-            }
-        
-        # Cache miss or should continue - perform retrieval
+        # Cache miss - perform retrieval
         retrieval_result = await self.pipeline.retrieve_context(
             user_query=user_query,
             user_clearance=user_clearance,
@@ -295,6 +304,7 @@ class ConversationResponseService:
         documents = retrieval_result["context"]
         max_doc_level = retrieval_result.get("max_security_level")
         partial_context = retrieval_result.get("partial_context")
+        security_metadata = retrieval_result.get("security_metadata", {})
         
         logger.info(f"Retrieved {len(documents)} documents")
         if partial_context:
@@ -307,7 +317,8 @@ class ConversationResponseService:
             "success": True,
             "documents": documents,
             "max_doc_level": max_doc_level,
-            "partial_context": partial_context
+            "partial_context": partial_context,
+            "security_metadata": security_metadata
         }
     
     async def _generate_llm_response(
@@ -319,7 +330,8 @@ class ConversationResponseService:
         user_query: str,
         conversation_id: str,
         user_id: int,
-        stream: bool
+        stream: bool,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Generate LLM response from retrieved documents or cached context.
@@ -333,6 +345,10 @@ class ConversationResponseService:
         # Select appropriate LLM
         llm, llm_type = self.pipeline.select_llm(max_doc_level)
         
+        # Use provided security metadata or default to empty dict
+        if security_metadata is None:
+            security_metadata = {}
+        
         if stream:
             return {
                 "success": True,
@@ -345,7 +361,8 @@ class ConversationResponseService:
                     cached_context_text=cached_context_text,
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    partial_context=partial_context
+                    partial_context=partial_context,
+                    security_metadata=security_metadata
                 )
             }
         else:
@@ -358,7 +375,8 @@ class ConversationResponseService:
                 cached_context_text=cached_context_text,
                 conversation_id=conversation_id,
                 user_id=user_id,
-                partial_context=partial_context
+                partial_context=partial_context,
+                security_metadata=security_metadata
             )
             
             # Build sources only if we have documents (not from cache)
@@ -398,51 +416,52 @@ class ConversationResponseService:
             stream: Whether response should be streamed
             
         Returns:
-            Tuple of (response_dict, should_continue_pipeline)
-            - response_dict: Formatted response if cache hit, None if miss
-            - should_continue_pipeline: True if cluster below max_entries (should add variation)
+            Tuple of (response_dict, access_denied_info)
+            - response_dict: Formatted response if cache hit at capacity, None otherwise
+            - access_denied_info: Dict if access denied, None otherwise
         """
-        cached_response, should_continue = await self.semantic_cache.get(
+        
+        if not is_semantic_cache_enabled() or not self.semantic_cache:
+            return None, None
+        
+        cache_result, access_denied_info = await self.semantic_cache.get(
             cache_type="response",
             query=user_query,
-            user_security_level=user_clearance.value if user_clearance else None,
-            user_department_id=user_department_id,
-            user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
+            min_security_level=user_clearance.value if user_clearance else 0,
+            is_department_only=bool(user_dept_clearance),
+            department_id=user_department_id if user_dept_clearance else None
         )
         
-        if not cached_response:
+        # Handle access denial
+        if access_denied_info:
+            logger.info(f"Response cache HIT but ACCESS DENIED for query: '{user_query[:50]}...'")
+            return None, access_denied_info
+        
+        # Handle cache miss
+        if not cache_result:
             logger.debug(f"Response cache MISS for query: '{user_query[:50]}...'")
-            return None, False
+            return None, None
         
-        logger.info(
-            f"Response cache HIT for query: '{user_query[:50]}...' "
-            f"(should_continue={should_continue})"
-        )
+        # Cache hit - return cached response
+        logger.info(f"Response cache HIT for query: '{user_query[:50]}...'")
         
-        # If cluster below max_entries, return cached response but signal to continue pipeline
-        # This allows generating a variation to add to the cluster
-        if should_continue:
-            logger.debug("Cluster below max_entries, continuing pipeline to add variation")
-            return None, True  # Return None to trigger pipeline, but signal cache hit
-        
-        # Cluster at max capacity, return cached response immediately
         if stream:
             # For streaming, wrap cached response in async generator
             async def cached_response_generator():
-                yield {"type": "content", "content": cached_response}
+                yield {"type": "content", "content": cache_result}
                 yield {"type": "end"}
             
             return {
                 "success": True,
                 "streaming": True,
                 "generator": cached_response_generator()
-            }, False
+            }, None
         else:
             return {
                 "success": True,
                 "streaming": False,
-                "response": cached_response
-            }, False
+                "response": cache_result
+            }, None
     
     async def _handle_rag_pipeline(
         self,
@@ -461,7 +480,7 @@ class ConversationResponseService:
             Response dict with success status and either generator or text
         """
         # Step 0: Check response cache (before entire pipeline)
-        cached_result, should_continue = await self._check_response_cache(
+        cached_result, access_denied_info = await self._check_response_cache(
             user_query=user_query,
             user_clearance=user_clearance,
             user_department_id=user_department_id,
@@ -469,15 +488,38 @@ class ConversationResponseService:
             stream=stream
         )
         
-        # If cache hit and cluster at max capacity, return cached response immediately
-        if cached_result and not should_continue:
-            logger.debug("Cache cluster at capacity, returning cached response")
+        # Handle access denial from cache
+        if access_denied_info:
+            error_type = "no_clearance" if access_denied_info.get("is_departmental") else "insufficient_clearance"
+            if stream:
+                return {
+                    "success": True,
+                    "streaming": True,
+                    "generator": self.error_handler.stream_no_context_response(
+                        error_type=error_type,
+                        user_query=user_query,
+                        conversation_id=conversation_id,
+                        user_id=user_id
+                    )
+                }
+            else:
+                return {
+                    "success": True,
+                    "streaming": False,
+                    "response": await self.error_handler.generate_no_context_response(
+                        error_type=error_type,
+                        user_query=user_query,
+                        conversation_id=conversation_id,
+                        user_id=user_id
+                    )
+                }
+        
+        # If cache hit at capacity, return cached response immediately
+        if cached_result:
+            logger.debug("Cache hit at capacity, returning cached response")
             return cached_result
         
-        # If cache hit but cluster below max_entries, continue to generate variation
-        if should_continue:
-            logger.info("Cache hit but cluster below max_entries, generating variation to enrich cluster")
-        
+        # Cache miss or below max_entries - continue to pipeline
         # Step 1: Query Processing and Decomposition
         query_info = await self.pipeline.process_query(user_query)
         
@@ -514,7 +556,8 @@ class ConversationResponseService:
             user_query=user_query,
             conversation_id=conversation_id,
             user_id=user_id,
-            stream=stream
+            stream=stream,
+            security_metadata=context_result.get("security_metadata", {})
         )
     
     async def generate_response(
