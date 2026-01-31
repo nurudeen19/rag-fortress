@@ -5,10 +5,8 @@ Provides pluggable component testing for database, cache, vector store, etc.
 
 from typing import Dict, Any, List, Callable, Awaitable
 from datetime import datetime, timezone
-import asyncio
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import get_logger
 from app.core.cache import get_cache
@@ -253,7 +251,7 @@ class DiagnosticsService:
         
         try:
             # Import vector store factory (core component)
-            from app.core.vector_store_factory import get_retriever, get_vector_store
+            from app.core.vector_store_factory import get_retriever
             
             # Get vector store instance
             init_start = datetime.now(timezone.utc)

@@ -2,8 +2,7 @@
 System Diagnostics Routes - Authenticated health checks for system components.
 """
 
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Header, status
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
 from app.config.settings import settings

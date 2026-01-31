@@ -12,14 +12,14 @@ Distance Threshold (set in config):
 
 import json
 import random
-from typing import Optional, Dict, Any, List, Literal
+from typing import Optional, Dict, Any, Literal
 from redisvl.extensions.cache.llm import SemanticCache as RedisVLSemanticCache
 
 from app.core import get_logger
 from app.config.settings import settings
 from app.core.cache import get_cache
 from app.core.embedding_factory import get_redisvl_vectorizer
-from app.utils.encryption import encrypt, decrypt, EncryptionError, DecryptionError
+from app.utils.encryption import encrypt, decrypt
 
 logger = get_logger(__name__)
 
