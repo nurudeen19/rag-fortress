@@ -405,16 +405,22 @@ class ConversationResponseService:
         user_clearance: Any,
         user_department_id: int,
         user_dept_clearance: Any,
+        conversation_id: str,
+        user_id: int,
         stream: bool
     ) -> tuple[Dict[str, Any] | None, bool]:
         """
         Check response cache and return formatted response if found.
+        
+        Saves assistant response to conversation history when cache hit occurs.
         
         Args:
             user_query: User's query
             user_clearance: User's organization-level security clearance
             user_department_id: User's department ID
             user_dept_clearance: User's department-level security clearance
+            conversation_id: Conversation ID for saving message
+            user_id: User ID for saving message
             stream: Whether response should be streamed
             
         Returns:
@@ -446,6 +452,15 @@ class ConversationResponseService:
         
         # Cache hit - return cached response
         logger.info(f"Response cache HIT for query: '{user_query[:50]}...'")
+        
+        # persist cached response to conversation history
+        await self.conversation_service.save_assistant_response(
+            conversation_id=conversation_id,
+            user_id=user_id,
+            user_query=user_query,
+            response_text=cache_result,
+            assistant_meta={"from_cache": True, "cache_type": "response"}
+        )
         
         if stream:
             # For streaming, wrap cached response in async generator
@@ -488,6 +503,8 @@ class ConversationResponseService:
             user_clearance=user_clearance,
             user_department_id=user_department_id,
             user_dept_clearance=user_dept_clearance,
+            conversation_id=conversation_id,
+            user_id=user_id,
             stream=stream
         )
         
