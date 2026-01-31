@@ -449,9 +449,10 @@ class ConversationResponseService:
         
         if stream:
             # For streaming, wrap cached response in async generator
+            # Must match frontend expectations: type="token" for content, type="done" for completion
             async def cached_response_generator():
-                yield {"type": "content", "content": cache_result}
-                yield {"type": "end"}
+                yield {"type": "token", "content": cache_result}
+                yield {"type": "done"}
             
             return {
                 "success": True,
