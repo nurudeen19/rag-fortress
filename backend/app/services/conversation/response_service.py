@@ -548,12 +548,11 @@ class ConversationResponseService:
         # Return error response if retrieval failed
         if not context_result["success"]:
             return context_result["error_response"]
-        
+                
         # Step 3: Generate LLM response from documents or cached context
         return await self._generate_llm_response(
             documents=context_result.get("documents"),
             cached_context_text=context_result.get("cached_context_text"),
-            max_doc_level=context_result["max_doc_level"],
             partial_context=context_result.get("partial_context"),
             user_query=user_query,
             conversation_id=conversation_id,
