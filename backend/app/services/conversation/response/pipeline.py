@@ -289,37 +289,41 @@ class ResponsePipeline:
             primary_exception = e
             logger.error(f"Primary LLM error ({llm_type.value}): {e}", exc_info=True)
             
-            # Determine if we should try fallback
-            should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
-                e,
-                fallback_configured=self.llm_router.is_fallback_configured()
-            )
-            
-            logger.info(f"Fallback decision: {reason}")
-            
-            if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
-                fallback_llm = self.llm_router.get_fallback_llm()
-                if fallback_llm:
-                    attempted_fallback = True
-                    logger.info("Attempting fallback LLM")
-                    try:
-                        async for item in self._try_stream(
-                            llm=fallback_llm,
-                            user_query=user_query,
-                            documents=documents,
-                            cached_context_text=cached_context_text,
-                            history=history,
-                            conversation_id=conversation_id,
-                            user_id=user_id,
-                            is_fallback=True,
-                            partial_context=partial_context,
-                            security_metadata=security_metadata
-                        ):
-                            yield item
-                        return
-                    except Exception as fallback_err:
-                        fallback_exception = fallback_err
-                        logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
+            # Check if fallback is enabled before attempting
+            if not self.llm_router.is_fallback_enabled():
+                logger.info("Fallback LLM not enabled, skipping retry")
+            else:
+                # Determine if we should try fallback
+                should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
+                    e,
+                    fallback_configured=self.llm_router.is_fallback_configured()
+                )
+                
+                logger.info(f"Fallback decision: {reason}")
+                
+                if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
+                    fallback_llm = self.llm_router.get_fallback_llm()
+                    if fallback_llm:
+                        attempted_fallback = True
+                        logger.info("Attempting fallback LLM")
+                        try:
+                            async for item in self._try_stream(
+                                llm=fallback_llm,
+                                user_query=user_query,
+                                documents=documents,
+                                cached_context_text=cached_context_text,
+                                history=history,
+                                conversation_id=conversation_id,
+                                user_id=user_id,
+                                is_fallback=True,
+                                partial_context=partial_context,
+                                security_metadata=security_metadata
+                            ):
+                                yield item
+                            return
+                        except Exception as fallback_err:
+                            fallback_exception = fallback_err
+                            logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
         
         # If we get here, both primary and potentially fallback failed
         error_response = LLMErrorHandler.format_error_response(
@@ -375,33 +379,37 @@ class ResponsePipeline:
             primary_exception = e
             logger.error(f"Primary LLM error ({llm_type.value}): {e}", exc_info=True)
             
-            # Determine if we should try fallback
-            should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
-                e,
-                fallback_configured=self.llm_router.is_fallback_configured()
-            )
-            
-            logger.info(f"Fallback decision: {reason}")
-            
-            if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
-                fallback_llm = self.llm_router.get_fallback_llm()
-                if fallback_llm:
-                    attempted_fallback = True
-                    logger.info("Attempting fallback LLM")
-                    try:
-                        return await self._try_generate(
-                            llm=fallback_llm,
-                            user_query=user_query,
-                            documents=documents,
-                            cached_context_text=cached_context_text,
-                            history=history,
-                            is_fallback=True,
-                            partial_context=partial_context,
-                            security_metadata=security_metadata
-                        )
-                    except Exception as fallback_err:
-                        fallback_exception = fallback_err
-                        logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
+            # Check if fallback is enabled before attempting
+            if not self.llm_router.is_fallback_enabled():
+                logger.info("Fallback LLM not enabled, skipping retry")
+            else:
+                # Determine if we should try fallback
+                should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
+                    e,
+                    fallback_configured=self.llm_router.is_fallback_configured()
+                )
+                
+                logger.info(f"Fallback decision: {reason}")
+                
+                if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
+                    fallback_llm = self.llm_router.get_fallback_llm()
+                    if fallback_llm:
+                        attempted_fallback = True
+                        logger.info("Attempting fallback LLM")
+                        try:
+                            return await self._try_generate(
+                                llm=fallback_llm,
+                                user_query=user_query,
+                                documents=documents,
+                                cached_context_text=cached_context_text,
+                                history=history,
+                                is_fallback=True,
+                                partial_context=partial_context,
+                                security_metadata=security_metadata
+                            )
+                        except Exception as fallback_err:
+                            fallback_exception = fallback_err
+                            logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
             
             # If we get here, both failed or we shouldn't retry
             error_response = LLMErrorHandler.format_error_response(
@@ -488,7 +496,7 @@ class ResponsePipeline:
             meta["partial_context"] = partial_context
         
         # Cache the complete response after streaming
-        await self._cache_response(user_query, full_response, documents, security_metadata)
+        await self._cache_response(user_query, full_response, security_metadata)
         
         # Save response (cache + persist)
         await self.conversation_service.save_assistant_response(
@@ -560,7 +568,7 @@ class ResponsePipeline:
         logger.info(f"Generated response: '{response_text[:100]}...'")
         
         # Cache the response
-        await self._cache_response(user_query, response_text, documents, security_metadata)
+        await self._cache_response(user_query, response_text, security_metadata)
         
         return response_text
     

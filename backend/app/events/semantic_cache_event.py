@@ -107,7 +107,8 @@ class SemanticCacheEvent(BaseEventHandler):
             ])
             
             # Use pre-computed complete security metadata (no document iteration)
-            security_metadata = event_data.get("security_metadata", {})
+            # Ensure it's a dict, not None
+            security_metadata = event_data.get("security_metadata", {}) or {}
             max_security_level = security_metadata.get("max_security_level", 1)
             is_department_only = security_metadata.get("is_department_only", False)
             department_id = security_metadata.get("department_id")

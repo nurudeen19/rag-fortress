@@ -55,7 +55,12 @@ class LLMRouter:
         return self._internal_llm
 
     def _get_fallback_llm(self) -> Optional[BaseLanguageModel]:
-        """Get fallback LLM if configured."""
+        """Get fallback LLM if enabled and configured."""
+        
+        # Check if fallback is enabled first
+        if not settings.llm_settings.ENABLE_FALLBACK_LLM:
+            return None
+            
         if self._fallback_llm is None:
             try:
                 self._fallback_llm = get_fallback_llm_provider()
@@ -115,8 +120,14 @@ class LLMRouter:
         """
         return self._get_fallback_llm()
 
+    def is_fallback_enabled(self) -> bool:
+        """Check if fallback LLM is enabled in settings."""
+        return settings.llm_settings.ENABLE_FALLBACK_LLM
+    
     def is_fallback_configured(self) -> bool:
-        """Check if fallback LLM is configured."""
+        """Check if fallback LLM is both enabled and configured."""
+        if not self.is_fallback_enabled():
+            return False
         return self._get_fallback_llm() is not None
 
     def get_last_selected_type(self) -> Optional[LLMType]:
