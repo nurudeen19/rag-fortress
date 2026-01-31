@@ -144,7 +144,7 @@
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
                       </div>
-                      <span class="text-fortress-300 text-sm font-medium"></span>
+                      <span class="text-fortress-300 text-sm font-medium">Analyzing</span>
                     </div>
                     <!-- Show actual response content -->
                     <div v-else class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
@@ -645,7 +645,8 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
           content: 'I encountered an error while generating your response.',
           timestamp: new Date().toISOString(),
           sources: [],
-          error: payload.message || 'An error occurred while generating the response.'
+          error: payload.message || 'An error occurred while generating the response.',
+          isPlaceholder: false
         }
         messages.value.push(assistantMessage)
       } else {
@@ -653,7 +654,11 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
         if (!assistantMessage.content) {
           assistantMessage.content = 'I encountered an error while generating your response.'
         }
+        // Deactivate placeholder/analyzing state since we have a message
+        assistantMessage.isPlaceholder = false
       }
+      // Stop loading when error occurs
+      loading.value = false
       throw new Error(assistantMessage.error)
     }
 
