@@ -9,8 +9,8 @@ from typing import Dict, Any, AsyncGenerator
 
 from app.config.prompt_settings import get_prompt_settings
 from app.services.conversation.service import ConversationService
-from app.models.message import MessageRole
 from app.core import get_logger
+from app.core.events import get_event_bus
 
 logger = get_logger(__name__)
 
@@ -61,15 +61,15 @@ class ErrorResponseHandler:
         for word in words:
             yield {"type": "token", "content": word + " "}
         
-        # Persist the response
-        await self.conversation_service.add_message(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            token_count=None,
-            meta={"source": "no_context", "error_type": error_type}
-        )
+        # Emit event for background DB persistence
+        bus = get_event_bus()
+        await bus.emit("save_message", {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "role": "assistant",
+            "content": response_text,
+            "meta": {"source": "no_context", "error_type": error_type}
+        })
         
         logger.info(f"Completed no-context response for conversation {conversation_id}")
     
@@ -88,14 +88,14 @@ class ErrorResponseHandler:
         """
         response_text = self.get_no_context_response_text(error_type)
         
-        # Persist the response
-        await self.conversation_service.add_message(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            token_count=None,
-            meta={"source": "no_context", "error_type": error_type}
-        )
+        # Emit event for background DB persistence
+        bus = get_event_bus()
+        await bus.emit("save_message", {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "role": "assistant",
+            "content": response_text,
+            "meta": {"source": "no_context", "error_type": error_type}
+        })
         
         return response_text

@@ -61,6 +61,7 @@ class CacheSettings(BaseSettings):
     
     # Global semantic cache settings
     SEMANTIC_CACHE_INDEX_NAME: str = Field("semantic_cache", env="SEMANTIC_CACHE_INDEX_NAME")
+    SEMANTIC_CACHE_VECTOR_DIM: int = Field(384, env="SEMANTIC_CACHE_VECTOR_DIM")  # Typical for many embedding models
     
     # Response-level cache (caches final LLM responses)
     ENABLE_RESPONSE_CACHE: bool = Field(False, env="ENABLE_RESPONSE_CACHE")

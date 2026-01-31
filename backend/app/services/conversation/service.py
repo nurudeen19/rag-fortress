@@ -509,8 +509,8 @@ class ConversationService:
         """
         Save assistant response with caching and persistence.
         
-        This is the standard method for saving assistant responses throughout the system.
-        It handles both cache update and database persistence in a consistent way.
+        Cache update happens synchronously (needed for next request).
+        Database persistence happens asynchronously via event (reduces latency).
         """
         # Cache the exchange (updates cache with both messages)
         await self.cache_conversation_exchange(
@@ -522,15 +522,18 @@ class ConversationService:
             assistant_meta=assistant_meta
         )
         
-        # Persist assistant message to database
-        await self.add_message(
-            conversation_id=conversation_id,
-            user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=response_text,
-            token_count=None,
-            meta=assistant_meta
-        )
+        # Emit event for background DB persistence - ASYNCHRONOUS
+        bus = get_event_bus()
+        await bus.emit("save_message", {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "role": "assistant",
+            "content": response_text,
+            "token_count": self._estimate_tokens(response_text),
+            "meta": assistant_meta
+        })
+        
+        logger.debug(f"Assistant message cached and queued for DB save: {conversation_id}")
 
     async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
         """

@@ -325,7 +325,6 @@ class ConversationResponseService:
         self,
         documents: Optional[list[Any]],
         cached_context_text: Optional[str],
-        max_doc_level: Any,
         partial_context: Dict[str, Any],
         user_query: str,
         conversation_id: str,
@@ -342,12 +341,15 @@ class ConversationResponseService:
         Returns:
             Response dict with success status and either generator or text
         """
+        if security_metadata is None:
+            security_metadata = {}
+
+        max_doc_level = security_metadata.get("max_security_level", 1)
         # Select appropriate LLM
         llm, llm_type = self.pipeline.select_llm(max_doc_level)
         
         # Use provided security metadata or default to empty dict
-        if security_metadata is None:
-            security_metadata = {}
+        
         
         if stream:
             return {
