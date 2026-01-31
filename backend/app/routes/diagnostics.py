@@ -2,6 +2,8 @@
 System Diagnostics Routes - Authenticated health checks for system components.
 """
 
+import secrets
+
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
@@ -52,7 +54,7 @@ async def run_diagnostics(
             detail="Diagnostics endpoint not properly configured"
         )
     
-    if request.diagnostic_key != expected_key:
+    if not secrets.compare_digest(request.diagnostic_key, expected_key):
         logger.warning("Invalid diagnostic key attempt")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
