@@ -10,7 +10,7 @@ This migration:
 3. Includes security levels, approval workflow, and processing tracking
 4. Provides performance monitoring and data retention policies
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 from alembic import op
 import sqlalchemy as sa

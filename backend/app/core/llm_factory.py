@@ -9,12 +9,15 @@ from langchain_core.language_models import BaseLanguageModel
 
 from app.config.settings import settings
 from app.core.exceptions import ConfigurationError
+from app.core import get_logger
 
+logger = get_logger(__name__)
 
 # Global instances (initialized in startup)
 _llm_instance: Optional[BaseLanguageModel] = None
 _fallback_llm_instance: Optional[BaseLanguageModel] = None
 _internal_llm_instance: Optional[BaseLanguageModel] = None
+_classifier_llm_instance: Optional[BaseLanguageModel] = None
 
 
 def get_llm_provider() -> BaseLanguageModel:
@@ -76,7 +79,7 @@ def get_internal_llm_provider() -> Optional[BaseLanguageModel]:
     Returns:
         Optional[BaseLanguageModel]: Internal LangChain LLM instance or None
     """
-    if not settings.llm_settings.USE_INTERNAL_LLM:
+    if not settings.llm_settings.ENABLE_INTERNAL_LLM:
         return None
     
     global _internal_llm_instance
@@ -225,6 +228,50 @@ def _build_llm_from_config(config: dict) -> BaseLanguageModel:
         )
     
     raise ConfigurationError(f"Unsupported LLM provider: {provider}")
+
+
+def get_classifier_llm() -> Optional[BaseLanguageModel]:
+    """
+    Get or create the classifier/decomposer LLM instance.
+    
+    Returns None if both classifier and decomposer are disabled.
+    
+    Returns:
+        Optional[BaseLanguageModel]: Classifier LLM instance or None
+    """
+    global _classifier_llm_instance
+    
+    # Check if either feature is enabled
+    if not (settings.llm_settings.ENABLE_LLM_CLASSIFIER or settings.llm_settings.ENABLE_QUERY_DECOMPOSER):
+        return None
+    
+    # Return existing instance if available
+    if _classifier_llm_instance is not None:
+        return _classifier_llm_instance
+    
+    # Create new instance
+    _classifier_llm_instance = _create_classifier_llm()
+    return _classifier_llm_instance
+
+
+def _create_classifier_llm() -> Optional[BaseLanguageModel]:
+    """Create classifier LLM provider from settings."""
+    try:
+        config = settings.get_classifier_llm_config()
+        if not config:
+            logger.warning("No classifier LLM config available")
+            return None
+        
+        return _build_llm_from_config(config)
+    except Exception as e:
+        logger.error(f"Failed to initialize classifier LLM: {e}", exc_info=True)
+        return None
+
+
+def reset_classifier_llm():
+    """Reset the classifier LLM instance (for testing)."""
+    global _classifier_llm_instance
+    _classifier_llm_instance = None
 
 
 

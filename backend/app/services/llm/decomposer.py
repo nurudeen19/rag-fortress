@@ -5,10 +5,9 @@ Uses structured output to optimize queries for semantic search.
 """
 
 from typing import Optional, List
-from langchain_core.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
 
 from app.core import get_logger
-from app.services.llm.classifier_llm import get_classifier_llm
+from app.core.llm_factory import get_classifier_llm
 from app.schemas.llm_classifier import QueryDecompositionResult
 from app.config.settings import settings
 
@@ -31,18 +30,6 @@ class QueryDecomposer:
         except Exception as e:
             logger.warning(f"Structured output not supported, falling back to JSON mode: {e}")
             self.structured_llm = self.llm
-        
-        # Create prompt from settings
-        
-        system_template = SystemMessagePromptTemplate.from_template(
-            settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT
-        )
-        user_template = HumanMessagePromptTemplate.from_template(
-            settings.prompt_settings.DECOMPOSER_USER_PROMPT
-        )
-        self.prompt = ChatPromptTemplate.from_messages([system_template, user_template])
-        
-        logger.info("QueryDecomposer initialized with structured output")
     
     async def decompose(self, query: str) -> Optional[QueryDecompositionResult]:
         """
@@ -59,8 +46,12 @@ class QueryDecomposer:
         
         try:
             # Build and invoke chain with structured output
-            chain = self.prompt | self.structured_llm
-            result = await chain.ainvoke({"query": query.strip()})
+            system_prompt = settings.prompt_settings.DECOMPOSER_SYSTEM_PROMPT
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": query.strip()}
+            ]
+            result = await self.structured_llm.ainvoke(messages)
             
             # If structured output returned the model directly, use it
             if isinstance(result, QueryDecompositionResult):
@@ -68,7 +59,10 @@ class QueryDecomposer:
                 if len(result.queries) > 5:
                     result.queries = result.queries[:5]
                 
-                logger.info(f"Decomposed into {len(result.queries)} queries: {result.queries}")
+                logger.debug(
+                    f"Query decomposition: decomposed={result.decomposed}, "
+                    f"{len(result.queries)} queries: {result.queries}"
+                )
                 return result
             
             # Fallback: parse from dict if needed

@@ -3,8 +3,6 @@ Authentication service for handling login, logout, and token management.
 Manages user sessions and JWT token lifecycle.
 """
 
-import uuid
-from datetime import datetime, timezone, timedelta
 from typing import Optional, Tuple
 
 from sqlalchemy import select

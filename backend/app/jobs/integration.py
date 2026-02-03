@@ -14,11 +14,8 @@ Flow:
 """
 
 import json
-from typing import Optional, Callable, Any, List
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
+from typing import Optional, Callable
 import asyncio
-import concurrent.futures
 
 from app.models.job import Job, JobStatus, JobType
 from app.services.job_service import JobService
@@ -161,7 +158,6 @@ class JobQueueIntegration:
         try:
             # Run in a subprocess-like isolated context
             import concurrent.futures
-            import threading
             
             def _run_async():
                 """Run async code in isolated event loop."""
@@ -507,7 +503,7 @@ class JobQueueIntegration:
             
             logger.info(
                 f"Processing password reset email: "
-                f"email={recipient_email}, name={recipient_name}, token={reset_token[:10]}..."
+                f"email={recipient_email}, name={recipient_name}"
             )
             
             if not all([recipient_email, recipient_name, reset_token]):
@@ -541,7 +537,6 @@ class JobQueueIntegration:
         """Handle password changed notification email job."""
         try:
             payload = json.loads(job.payload) if job.payload else {}
-            
             logger.info(f"Password changed email job payload: {payload}")
             
             email_service = get_email_service()

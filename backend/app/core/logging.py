@@ -1,5 +1,7 @@
 """
 Logging configuration for RAG Fortress
+
+Includes automatic sanitization of sensitive data in all log messages.
 """
 import logging
 import logging.handlers
@@ -7,10 +9,11 @@ import sys
 from pathlib import Path
 from typing import Optional
 from app.config import settings
+from app.core.log_sanitizer import LogSanitizer
 
 
 class ColoredFormatter(logging.Formatter):
-    """Custom formatter with colors for console output"""
+    """Custom formatter with colors for console output and automatic sanitization"""
     
     # ANSI color codes
     COLORS = {
@@ -23,23 +26,67 @@ class ColoredFormatter(logging.Formatter):
     RESET = '\033[0m'
     
     def format(self, record):
+        # Sanitize the log message before formatting
+        record = self._sanitize_record(record)
+        
         if sys.stdout.isatty():  # Only use colors if outputting to terminal
             log_color = self.COLORS.get(record.levelname, self.RESET)
             record.levelname = f"{log_color}{record.levelname}{self.RESET}"
             record.name = f"\033[94m{record.name}{self.RESET}"  # Blue for logger name
-        return super().format(record)
+        
+        # Format the message and sanitize the final output
+        formatted = super().format(record)
+        return LogSanitizer._sanitize_string(formatted)
+    
+    def _sanitize_record(self, record):
+        """Sanitize sensitive data from log record"""
+        
+        # Sanitize the message
+        if isinstance(record.msg, str):
+            record.msg = LogSanitizer._sanitize_string(record.msg)
+        
+        # Sanitize args (for messages like logger.info("Data: %s", data))
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = LogSanitizer._sanitize_dict(record.args)
+            elif isinstance(record.args, (list, tuple)):
+                record.args = tuple(LogSanitizer.sanitize(arg) for arg in record.args)
+        
+        return record
 
 
 class PlainFormatter(logging.Formatter):
-    """Plain formatter without colors for file output"""
+    """Plain formatter without colors for file output and automatic sanitization"""
     
     def format(self, record):
+        # Sanitize the log message before formatting
+        record = self._sanitize_record(record)
+        
         # Ensure no color codes in record
         if '\033[' in record.levelname:
             record.levelname = record.levelname.replace('\033[32m', '').replace('\033[33m', '').replace('\033[31m', '').replace('\033[35m', '').replace('\033[36m', '').replace('\033[0m', '').replace('\033[94m', '')
         if '\033[' in record.name:
             record.name = record.name.replace('\033[94m', '').replace('\033[0m', '')
-        return super().format(record)
+        
+        # Format the message and sanitize the final output
+        formatted = super().format(record)
+        return LogSanitizer._sanitize_string(formatted)
+    
+    def _sanitize_record(self, record):
+        """Sanitize sensitive data from log record"""
+        
+        # Sanitize the message
+        if isinstance(record.msg, str):
+            record.msg = LogSanitizer._sanitize_string(record.msg)
+        
+        # Sanitize args (for messages like logger.info("Data: %s", data))
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = LogSanitizer._sanitize_dict(record.args)
+            elif isinstance(record.args, (list, tuple)):
+                record.args = tuple(LogSanitizer.sanitize(arg) for arg in record.args)
+        
+        return record
 
 
 def setup_logging(

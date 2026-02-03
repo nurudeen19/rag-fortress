@@ -2,7 +2,7 @@
 Cache configuration settings for RAG Fortress.
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -49,6 +49,33 @@ class CacheSettings(BaseSettings):
     CACHE_TTL_CONFIG: int = Field(3600, env="CACHE_TTL_CONFIG")  # 1 hour
     CACHE_TTL_USER_DATA: int = Field(300, env="CACHE_TTL_USER_DATA")  # 5 minutes
     CACHE_TTL_SESSION: int = Field(1800, env="CACHE_TTL_SESSION")  # 30 minutes
+    CACHE_TTL_HISTORY: int = Field(3600, env="CACHE_TTL_HISTORY")  # 1 hour (sensitive data)
+    
+    # Conversation History Caching
+    ENABLE_CACHE_HISTORY_ENCRYPTION: bool = Field(False, env="ENABLE_CACHE_HISTORY_ENCRYPTION")  # Encrypt history in cache
+    
+    # ==============================================================================
+    # SEMANTIC CACHE - Two-Tier System (Response + Context)
+    # Each tier works independently - enable the ones you need
+    # ==============================================================================
+    
+    # Global semantic cache settings
+    SEMANTIC_CACHE_INDEX_NAME: str = Field("semantic_cache", env="SEMANTIC_CACHE_INDEX_NAME")
+    SEMANTIC_CACHE_VECTOR_DIM: int = Field(384, env="SEMANTIC_CACHE_VECTOR_DIM")  # Typical for many embedding models
+    
+    # Response-level cache (caches final LLM responses)
+    ENABLE_RESPONSE_CACHE: bool = Field(False, env="ENABLE_RESPONSE_CACHE")
+    RESPONSE_CACHE_TTL_MINUTES: int = Field(60, env="RESPONSE_CACHE_TTL_MINUTES")  # 60 minutes (1 hour)
+    RESPONSE_CACHE_MAX_ENTRIES: int = Field(1, env="RESPONSE_CACHE_MAX_ENTRIES")  # Max variations per cluster (1=single, >1=variations)
+    RESPONSE_CACHE_SIMILARITY_THRESHOLD: float = Field(0.1, env="RESPONSE_CACHE_SIMILARITY_THRESHOLD")  # More lenient
+    RESPONSE_CACHE_ENCRYPT: bool = Field(False, env="RESPONSE_CACHE_ENCRYPT")
+    
+    # Context-level cache (caches retrieved documents before LLM)
+    ENABLE_CONTEXT_CACHE: bool = Field(False, env="ENABLE_CONTEXT_CACHE")
+    CONTEXT_CACHE_TTL_MINUTES: int = Field(120, env="CONTEXT_CACHE_TTL_MINUTES")  # 120 minutes (2 hours)
+    CONTEXT_CACHE_MAX_ENTRIES: int = Field(1, env="CONTEXT_CACHE_MAX_ENTRIES")  # Max variations per cluster (1=single, >1=variations)
+    CONTEXT_CACHE_SIMILARITY_THRESHOLD: float = Field(0.05, env="CONTEXT_CACHE_SIMILARITY_THRESHOLD")  # Stricter
+    CONTEXT_CACHE_ENCRYPT: bool = Field(False, env="CONTEXT_CACHE_ENCRYPT")
     
     def get_redis_url(self) -> str:
         """
@@ -77,6 +104,32 @@ class CacheSettings(BaseSettings):
             "max_connections": self.CACHE_REDIS_MAX_CONNECTIONS,
             "retry_on_timeout": self.CACHE_REDIS_RETRY_ON_TIMEOUT,
             "health_check_interval": self.CACHE_REDIS_HEALTH_CHECK_INTERVAL,
+        }
+    
+    def get_semantic_cache_config(self) -> Dict[str, Any]:
+        """Get semantic cache configuration as dict."""
+        return {
+            # Global
+            "index_name": self.SEMANTIC_CACHE_INDEX_NAME,
+            "vector_dim": self.SEMANTIC_CACHE_VECTOR_DIM,
+            
+            # Response cache
+            "response": {
+                "enabled": self.ENABLE_RESPONSE_CACHE,
+                "ttl_seconds": self.RESPONSE_CACHE_TTL_MINUTES * 60,
+                "max_entries": self.RESPONSE_CACHE_MAX_ENTRIES,
+                "similarity_threshold": self.RESPONSE_CACHE_SIMILARITY_THRESHOLD,
+                "encrypt": self.RESPONSE_CACHE_ENCRYPT,
+            },
+            
+            # Context cache
+            "context": {
+                "enabled": self.ENABLE_CONTEXT_CACHE,
+                "ttl_seconds": self.CONTEXT_CACHE_TTL_MINUTES * 60,
+                "max_entries": self.CONTEXT_CACHE_MAX_ENTRIES,
+                "similarity_threshold": self.CONTEXT_CACHE_SIMILARITY_THRESHOLD,
+                "encrypt": self.CONTEXT_CACHE_ENCRYPT,
+            }
         }
 
 

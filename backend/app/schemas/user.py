@@ -5,7 +5,6 @@ Used for API endpoints and data validation.
 
 from datetime import datetime
 from typing import Optional, List
-from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator, EmailStr, ConfigDict
 

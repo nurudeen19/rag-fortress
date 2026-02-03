@@ -27,10 +27,9 @@ from typing import Optional
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.file_upload import FileUpload, SecurityLevel
+from app.models.file_upload import FileUpload
 from app.models.permission_override import OverrideType, PermissionOverride
 from app.models.user import User
-from app.models.user_permission import PermissionLevel, UserPermission
 
 
 class PermissionService:
@@ -137,7 +136,7 @@ class PermissionService:
         Example:
             override = await permission_service.revoke_override(42, db)
             if override:
-                print(f"Revoked override for user {override.user_id}")
+                logger.debug(f"Revoked override for user {override.user_id}")
         """
         override = await db.get(PermissionOverride, override_id)
         if override:
@@ -167,7 +166,7 @@ class PermissionService:
 
         Example:
             count = await permission_service.cleanup_expired_overrides(db)
-            print(f"Cleaned up {count} expired overrides")
+            logger.info(f"Cleaned up {count} expired overrides")
         """
         now = datetime.now(timezone.utc)
 
@@ -218,7 +217,7 @@ class PermissionService:
         Example:
             overrides = await permission_service.get_active_overrides_for_user(42, db)
             for override in overrides:
-                print(f"Override: {override.reason}, expires {override.valid_until}")
+                logger.debug(f"Override: {override.reason}, expires {override.valid_until}")
         """
         now = datetime.now(timezone.utc)
 

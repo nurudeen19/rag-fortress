@@ -4,7 +4,6 @@ Handles MIME type checking and extension-based fallback validation.
 """
 
 from typing import Tuple, Dict, Set
-from pathlib import Path
 
 from app.core import get_logger
 

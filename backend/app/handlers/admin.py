@@ -2,10 +2,8 @@
 
 from typing import Dict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from app.core import get_logger
-from app.models.file_upload import FileUpload, FileStatus
 from app.models.user import User
 from app.services.admin_service import AdminService
 

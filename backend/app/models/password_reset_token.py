@@ -3,7 +3,7 @@ Password reset token model for tracking token state and expiry.
 """
 
 from sqlalchemy import String, DateTime, Boolean, Integer, ForeignKey, Index
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime, timezone
 from app.models.base import Base
 

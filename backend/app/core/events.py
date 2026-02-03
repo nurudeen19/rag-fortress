@@ -78,7 +78,6 @@ class EventBus:
         self._handlers: Dict[str, List[Callable]] = defaultdict(list)
         self._background_tasks: set = set()
         self._initialized = True
-        logger.info("EventBus initialized")
     
     def subscribe(self, event_type: str, handler: Callable) -> None:
         """
@@ -238,14 +237,7 @@ def init_event_handlers() -> None:
                     # Register with the event bus
                     bus.subscribe(handler_instance.event_type, handler_instance)
                     registered_count += 1
-                    
-                    logger.info(
-                        f"Registered event handler: {attr.__name__} "
-                        f"for '{handler_instance.event_type}' events"
-                    )
         
         except Exception as e:
             logger.error(f"Failed to load event handler module '{module_info.name}': {e}", exc_info=True)
-    
-    logger.info(f"✓ Event handlers initialized ({registered_count} handlers registered)")
 

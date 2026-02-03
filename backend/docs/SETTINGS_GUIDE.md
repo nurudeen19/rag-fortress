@@ -48,8 +48,8 @@ Below are the primary environment variables used by each config module. Defaults
   - `DEBUG` (False)
   - `DEMO_MODE` (False) — when True, destructive endpoints are blocked by the `prevent_in_demo_mode` decorator
   - `HOST`, `PORT` ("0.0.0.0", 8000)
-  - RAG parameters: `CHUNK_SIZE`, `CHUNK_OVERLAP`, `MIN_TOP_K`, `MAX_TOP_K`, `RETRIEVAL_SCORE_THRESHOLD`, `SIMILARITY_THRESHOLD`
-  - Reranker: `ENABLE_RERANKER`, `RERANKER_MODEL`, `RERANKER_TOP_K`, `RERANKER_SCORE_THRESHOLD`
+  - RAG parameters: `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K`, `MAX_K`, `RETRIEVAL_SCORE_THRESHOLD`, `SIMILARITY_THRESHOLD`
+  - Reranker: `ENABLE_RERANKER`, `RERANKER_MODEL`, `RERANKER_SCORE_THRESHOLD`
   - Logging: `LOG_LEVEL`, `LOG_FILE`, `LOG_MAX_BYTES`, `LOG_BACKUP_COUNT`
 
 - LLMs (in `llm_settings.py`)
@@ -58,7 +58,7 @@ Below are the primary environment variables used by each config module. Defaults
   - Google: `GOOGLE_API_KEY`, `GOOGLE_MODEL`, `GOOGLE_TEMPERATURE`, `GOOGLE_MAX_TOKENS`
   - HuggingFace: `HF_API_TOKEN`, `HF_MODEL`, `HF_ENDPOINT_URL`, `HF_TASK`, `HF_TEMPERATURE`, `HF_MAX_TOKENS`
   - Llama.cpp: `LLAMACPP_MODE`, `LLAMACPP_MODEL_PATH`, `LLAMACPP_ENDPOINT_URL`, `LLAMACPP_ENDPOINT_MODEL`, `LLAMACPP_ENDPOINT_API_KEY`, `LLAMACPP_*` tuning vars
-  - Fallback/internal LLM: `FALLBACK_LLM_PROVIDER`, `FALLBACK_LLM_MODEL`, `USE_INTERNAL_LLM`, `INTERNAL_LLM_PROVIDER`, etc.
+  - Fallback/internal LLM: `FALLBACK_LLM_PROVIDER`, `FALLBACK_LLM_MODEL`, `ENABLE_INTERNAL_LLM`, `INTERNAL_LLM_PROVIDER`, etc.
 
 - Embeddings (in `embedding_settings.py`)
   - `EMBEDDING_PROVIDER` (default: `huggingface`) — supported: `openai`, `google`, `huggingface`, `cohere`

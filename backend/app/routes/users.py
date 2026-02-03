@@ -33,13 +33,11 @@ from app.schemas.user import (
     RoleListResponse,
     PermissionResponse,
     RoleAssignRequest,
-    RoleRevokeRequest,
     UserSuspendRequest,
     UserInviteRequest,
     CreateRoleRequest,
     CreatePermissionRequest,
     AssignPermissionToRoleRequest,
-    RevokePermissionFromRoleRequest,
     SuccessResponse,
     InvitationsListResponse,
     InvitationLimitsResponse,
@@ -64,8 +62,6 @@ from app.handlers.users import (
     handle_create_permission,
     handle_assign_permission_to_role,
     handle_revoke_permission_from_role,
-    handle_list_invitations,
-    handle_resend_invitation,
 )
 
 
@@ -210,8 +206,6 @@ async def get_invitation_limits(
     - Available clearance level options
     """
     from app.utils.user_clearance_cache import get_user_clearance_cache
-    from sqlalchemy import select
-    from app.models.department import Department
     
     # Get user clearance from cache
     clearance = await get_user_clearance_cache(current_user.id, session)

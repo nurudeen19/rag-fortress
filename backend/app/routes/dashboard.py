@@ -10,7 +10,7 @@ from app.core.database import get_session
 from app.core.cache import get_cache
 from app.config.cache_settings import cache_settings
 from app.services.dashboard_service import DashboardService
-from app.handlers.dashboard import handle_get_user_metrics, invalidate_dashboard_cache
+from app.handlers.dashboard import handle_get_user_metrics
 
 
 router = APIRouter(

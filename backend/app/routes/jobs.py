@@ -9,7 +9,7 @@ import json
 
 from app.core.database import get_async_session_factory, get_session
 from app.core.startup import get_startup_controller
-from app.core.security import get_current_user, require_role
+from app.core.security import require_role
 from app.models.job import Job, JobStatus
 from app.models.user import User
 from app.schemas.common import MessageResponse

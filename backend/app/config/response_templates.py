@@ -6,15 +6,17 @@ to avoid unnecessary RAG pipeline invocations for simple interactions.
 """
 
 import random
-from typing import List, Dict
-from app.utils.intent_classifier import IntentType
+from typing import List, Dict, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.utils.intent_classifier import IntentType
 
 
 class ResponseTemplates:
     """Collection of templated responses for each intent type."""
     
-    TEMPLATES: Dict[IntentType, List[str]] = {
-        IntentType.GREETING: [
+    TEMPLATES: Dict[str, List[str]] = {
+        "greeting": [
             "Hello! How can I assist you today?",
             "Hi there! What can I help you with?",
             "Hey! I'm here to help. What would you like to know?",
@@ -23,7 +25,7 @@ class ResponseTemplates:
             "Hi! What questions can I answer for you today?",
         ],
         
-        IntentType.ACKNOWLEDGEMENT: [
+        "acknowledgement": [
             "Great! Let me know if you need anything else.",
             "Sounds good! I'm here if you have more questions.",
             "Perfect! Feel free to ask if you need further assistance.",
@@ -32,7 +34,7 @@ class ResponseTemplates:
             "Got it! Just let me know if there's anything more I can do.",
         ],
         
-        IntentType.GOODBYE: [
+        "goodbye": [
             "Goodbye! Have a great day!",
             "See you later! Feel free to come back anytime.",
             "Take care! I'm here whenever you need assistance.",
@@ -41,7 +43,7 @@ class ResponseTemplates:
             "See you! Have a wonderful day ahead!",
         ],
         
-        IntentType.GRATITUDE: [
+        "gratitude": [
             "You're welcome! Happy to help.",
             "My pleasure! Let me know if you need anything else.",
             "Glad I could assist! Feel free to ask more questions.",
@@ -50,7 +52,7 @@ class ResponseTemplates:
             "Happy to help! Don't hesitate to reach out again.",
         ],
         
-        IntentType.HELP_REQUEST: [
+        "help_request": [
             "I'm here to help! I can answer questions based on the documents and information available to me. Just ask me anything you'd like to know.",
             "I'm an AI assistant that can help you find information from our knowledge base. Feel free to ask questions about any topic you need assistance with.",
             "I can assist you by searching through available documents and providing relevant information. What would you like to know?",
@@ -58,7 +60,7 @@ class ResponseTemplates:
             "I can help you find information and answer questions. Simply ask me about any topic you need assistance with.",
         ],
         
-        IntentType.UNCLEAR: [
+        "unclear": [
             "I didn't quite catch that. Could you please rephrase your question?",
             "I'm not sure I understood. Could you provide a bit more detail?",
             "Could you clarify what you're looking for? I'm here to help!",
@@ -68,7 +70,7 @@ class ResponseTemplates:
     }
     
     @classmethod
-    def get_response(cls, intent: IntentType) -> str:
+    def get_response(cls, intent: 'IntentType') -> str:
         """
         Get a random response template for the given intent.
         
@@ -78,15 +80,17 @@ class ResponseTemplates:
         Returns:
             Random template response for that intent
         """
-        templates = cls.TEMPLATES.get(intent)
+        # Convert IntentType enum to string value
+        intent_key = intent.value if hasattr(intent, 'value') else str(intent)
+        templates = cls.TEMPLATES.get(intent_key)
         if not templates:
             # Fallback for unknown intents
             return "I'm here to help! What can I assist you with?"
         
         return random.choice(templates)
-    
+        
     @classmethod
-    def get_all_responses(cls, intent: IntentType) -> List[str]:
+    def get_all_responses(cls, intent: 'IntentType') -> List[str]:
         """
         Get all response templates for a given intent.
         
@@ -96,10 +100,12 @@ class ResponseTemplates:
         Returns:
             List of all templates for that intent
         """
-        return cls.TEMPLATES.get(intent, [])
+        # Convert IntentType enum to string value
+        intent_key = intent.value if hasattr(intent, 'value') else str(intent)
+        return cls.TEMPLATES.get(intent_key, [])
 
 
-def get_template_response(intent: IntentType) -> str:
+def get_template_response(intent: 'IntentType') -> str:
     """
     Convenience function to get a template response.
     

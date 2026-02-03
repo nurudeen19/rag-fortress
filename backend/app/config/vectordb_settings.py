@@ -2,7 +2,7 @@
 Vector database configuration settings.
 """
 from typing import Optional
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,45 +11,73 @@ class VectorDBSettings(BaseSettings):
     
     model_config = SettingsConfigDict(extra="ignore")
     
-    # Provider selection
-    # Default: faiss (Python 3.14+ compatible, local storage)
-    # Chroma: Currently Python 3.11-3.13 only (as of Dec 2025, Python 3.14 support in progress)
+    # ============================================================================
+    # VECTOR DATABASE PROVIDER SELECTION
+    # ============================================================================
+    # Supported: faiss, chroma, qdrant, pinecone, weaviate, milvus
     VECTOR_DB_PROVIDER: str = Field("faiss", env="VECTOR_DB_PROVIDER")
     
-    # Common Vector Store Configuration (used by FAISS, Chroma, etc.)
+    # ============================================================================
+    # GENERIC VECTOR STORE SETTINGS (all providers)
+    # ============================================================================
     VECTOR_STORE_COLLECTION_NAME: str = Field("rag_documents", env="VECTOR_STORE_COLLECTION_NAME")
     VECTOR_STORE_PERSIST_DIRECTORY: str = Field("./data/vector_store", env="VECTOR_STORE_PERSIST_DIRECTORY")
     
-    # Qdrant Configuration
-    QDRANT_HOST: str = Field("localhost", env="QDRANT_HOST")
-    QDRANT_PORT: int = Field(6333, env="QDRANT_PORT")
-    QDRANT_GRPC_PORT: int = Field(6334, env="QDRANT_GRPC_PORT")
-    QDRANT_API_KEY: Optional[str] = Field(None, env="QDRANT_API_KEY")
-    QDRANT_URL: Optional[str] = Field(None, env="QDRANT_URL")
-    QDRANT_COLLECTION_NAME: str = Field("rag_documents", env="QDRANT_COLLECTION_NAME")
-    QDRANT_PREFER_GRPC: bool = Field(False, env="QDRANT_PREFER_GRPC")
+    # ============================================================================
+    # CONSOLIDATED PROVIDER-SPECIFIC SETTINGS
+    # ============================================================================
+    # Generic fields for connecting to remote vector databases
+    VECTOR_DB_URL: Optional[str] = Field(None, env="VECTOR_DB_URL")
+    VECTOR_DB_HOST: Optional[str] = Field(None, env="VECTOR_DB_HOST")
+    VECTOR_DB_PORT: Optional[int] = Field(None, env="VECTOR_DB_PORT")
+    VECTOR_DB_API_KEY: Optional[str] = Field(None, env="VECTOR_DB_API_KEY")
+    VECTOR_DB_USERNAME: Optional[str] = Field(None, env="VECTOR_DB_USERNAME")
+    VECTOR_DB_PASSWORD: Optional[str] = Field(None, env="VECTOR_DB_PASSWORD")
+    VECTOR_DB_PREFER_GRPC: Optional[bool] = Field(None, env="VECTOR_DB_PREFER_GRPC")
+    VECTOR_DB_INDEX_NAME: Optional[str] = Field(None, env="VECTOR_DB_INDEX_NAME")
+    VECTOR_DB_CLASS_NAME: Optional[str] = Field(None, env="VECTOR_DB_CLASS_NAME")
+    VECTOR_DB_ENVIRONMENT: Optional[str] = Field(None, env="VECTOR_DB_ENVIRONMENT")
     
-    # Pinecone Configuration
-    PINECONE_API_KEY: Optional[str] = Field(None, env="PINECONE_API_KEY")
-    PINECONE_ENVIRONMENT: Optional[str] = Field(None, env="PINECONE_ENVIRONMENT")
-    PINECONE_INDEX_NAME: str = Field("rag-documents", env="PINECONE_INDEX_NAME")
+    # Additional GRPC port for Qdrant
+    VECTOR_DB_GRPC_PORT: Optional[int] = Field(None, env="VECTOR_DB_GRPC_PORT")
     
-    # Weaviate Configuration
-    WEAVIATE_URL: str = Field("http://localhost:8080", env="WEAVIATE_URL")
-    WEAVIATE_API_KEY: Optional[str] = Field(None, env="WEAVIATE_API_KEY")
-    WEAVIATE_CLASS_NAME: str = Field("Document", env="WEAVIATE_CLASS_NAME")
+    # ============================================================================
+    # HYBRID SEARCH CONFIGURATION
+    # ============================================================================
+    # Enable hybrid search (combines dense and sparse vectors using RRF)
+    # Only supported by: Qdrant, Weaviate, Milvus
+    ENABLE_HYBRID_SEARCH: bool = Field(False, env="ENABLE_HYBRID_SEARCH")
     
-    # Milvus Configuration
-    MILVUS_HOST: str = Field("localhost", env="MILVUS_HOST")
-    MILVUS_PORT: int = Field(19530, env="MILVUS_PORT")
-    MILVUS_COLLECTION_NAME: str = Field("rag_documents", env="MILVUS_COLLECTION_NAME")
-    MILVUS_USER: Optional[str] = Field(None, env="MILVUS_USER")
-    MILVUS_PASSWORD: Optional[str] = Field(None, env="MILVUS_PASSWORD")
+    # hybrid search vector field names
+    VECTOR_DB_DENSE_VECTOR_NAME: str = Field("dense", env="VECTOR_DB_DENSE_VECTOR_NAME")
+    VECTOR_DB_SPARSE_VECTOR_NAME: str = Field("sparse", env="VECTOR_DB_SPARSE_VECTOR_NAME")
     
-    # Ingestion Configuration
+    # ============================================================================
+    # INGESTION CONFIGURATION
+    # ============================================================================
     # Batch size for chunk ingestion to vector store (higher = faster but more memory)
     # Recommended: 1000+ for production environments
     CHUNK_INGESTION_BATCH_SIZE: int = Field(1000, env="CHUNK_INGESTION_BATCH_SIZE")
+
+    @field_validator("VECTOR_DB_PORT", "VECTOR_DB_GRPC_PORT", mode="before")
+    @classmethod
+    def validate_optional_int_fields(cls, v):
+        """Convert empty strings to None for optional int fields."""
+        if v == "" or v is None:
+            return None
+        return int(v) if isinstance(v, str) else v
+
+    @field_validator("VECTOR_DB_PREFER_GRPC", mode="before")
+    @classmethod
+    def validate_optional_bool_fields(cls, v):
+        """Convert empty strings to None for optional bool fields."""
+        if v == "" or v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on")
+        return bool(v)
 
     def validate_config(self, environment: str):
         """Validate vector database configuration based on environment."""
@@ -70,23 +98,47 @@ class VectorDBSettings(BaseSettings):
                 "Please use Qdrant, Pinecone, Weaviate, or Milvus instead."
             )
         
+        # Hybrid search validation: Check provider compatibility
+        if self.ENABLE_HYBRID_SEARCH:
+            # Providers that natively support hybrid search with RRF (Reciprocal Rank Fusion)
+            hybrid_supported_providers = {"qdrant", "weaviate", "milvus"}
+            
+            if vector_db not in hybrid_supported_providers:
+                raise ValueError(
+                    f"Hybrid search is not supported for {vector_db.upper()}. "
+                    f"ENABLE_HYBRID_SEARCH requires one of: {', '.join(sorted(hybrid_supported_providers))}. "
+                    f"Current provider: {vector_db}"
+                )
+        
         # Validate required fields for each provider
         if vector_db == "qdrant":
-            if self.QDRANT_URL and not self.QDRANT_API_KEY:
-                raise ValueError("QDRANT_API_KEY is required when using Qdrant Cloud (QDRANT_URL is set)")
+            if self.VECTOR_DB_URL and not self.VECTOR_DB_API_KEY:
+                raise ValueError("VECTOR_DB_API_KEY is required when using Qdrant Cloud (VECTOR_DB_URL is set)")
         
         elif vector_db == "pinecone":
-            if not self.PINECONE_API_KEY:
-                raise ValueError("PINECONE_API_KEY is required for Pinecone provider")
-            if not self.PINECONE_ENVIRONMENT:
-                raise ValueError("PINECONE_ENVIRONMENT is required for Pinecone provider")
+            if not self.VECTOR_DB_API_KEY:
+                raise ValueError("VECTOR_DB_API_KEY is required for Pinecone provider")
+            if not self.VECTOR_DB_ENVIRONMENT:
+                raise ValueError("VECTOR_DB_ENVIRONMENT is required for Pinecone provider")
 
     def get_vector_db_config(self) -> dict:
-        """Get vector database configuration for the selected provider."""
+        """
+        Get vector database configuration for the selected provider.
+        Uses consolidated generic fields when available, falls back to defaults.
+        
+        Returns:
+            dict with provider-specific config including hybrid_search_enabled flag
+        """
         provider = self.VECTOR_DB_PROVIDER.lower()
+        
+        # Base config included for all providers
+        base_config = {
+            "hybrid_search": self.ENABLE_HYBRID_SEARCH,
+        }
         
         if provider == "faiss":
             return {
+                **base_config,
                 "provider": "faiss",
                 "persist_directory": self.VECTOR_STORE_PERSIST_DIRECTORY,
                 "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
@@ -94,23 +146,27 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "qdrant":
             config = {
+                **base_config,
                 "provider": "qdrant",
-                "collection_name": self.QDRANT_COLLECTION_NAME,
+                "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
+                "dense_vector_name": self.VECTOR_DB_DENSE_VECTOR_NAME,
+                "sparse_vector_name": self.VECTOR_DB_SPARSE_VECTOR_NAME,
             }
             
-            if self.QDRANT_URL:
-                config["url"] = self.QDRANT_URL
-                config["api_key"] = self.QDRANT_API_KEY
+            if self.VECTOR_DB_URL:
+                config["url"] = self.VECTOR_DB_URL
+                config["api_key"] = self.VECTOR_DB_API_KEY
             else:
-                config["host"] = self.QDRANT_HOST
-                config["port"] = self.QDRANT_PORT
-                config["grpc_port"] = self.QDRANT_GRPC_PORT
-                config["prefer_grpc"] = self.QDRANT_PREFER_GRPC
+                config["host"] = self.VECTOR_DB_HOST or "localhost"
+                config["port"] = self.VECTOR_DB_PORT or 6333
+                config["grpc_port"] = self.VECTOR_DB_GRPC_PORT or 6334
+                config["prefer_grpc"] = self.VECTOR_DB_PREFER_GRPC if self.VECTOR_DB_PREFER_GRPC is not None else False
             
             return config
         
         elif provider == "chroma":
             return {
+                **base_config,
                 "provider": "chroma",
                 "persist_directory": self.VECTOR_STORE_PERSIST_DIRECTORY,
                 "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
@@ -118,34 +174,38 @@ class VectorDBSettings(BaseSettings):
         
         elif provider == "pinecone":
             return {
+                **base_config,
                 "provider": "pinecone",
-                "api_key": self.PINECONE_API_KEY,
-                "environment": self.PINECONE_ENVIRONMENT,
-                "index_name": self.PINECONE_INDEX_NAME,
+                "api_key": self.VECTOR_DB_API_KEY,
+                "environment": self.VECTOR_DB_ENVIRONMENT,
+                "index_name": self.VECTOR_DB_INDEX_NAME or "rag-documents",
             }
         
         elif provider == "weaviate":
             config = {
+                **base_config,
                 "provider": "weaviate",
-                "url": self.WEAVIATE_URL,
-                "class_name": self.WEAVIATE_CLASS_NAME,
+                "url": self.VECTOR_DB_URL or "http://localhost:8080",
+                "class_name": self.VECTOR_DB_CLASS_NAME or "Document",
             }
-            if self.WEAVIATE_API_KEY:
-                config["api_key"] = self.WEAVIATE_API_KEY
+            if self.VECTOR_DB_API_KEY:
+                config["api_key"] = self.VECTOR_DB_API_KEY
             return config
         
         elif provider == "milvus":
             config = {
+                **base_config,
                 "provider": "milvus",
-                "host": self.MILVUS_HOST,
-                "port": self.MILVUS_PORT,
-                "collection_name": self.MILVUS_COLLECTION_NAME,
+                "host": self.VECTOR_DB_HOST or "localhost",
+                "port": self.VECTOR_DB_PORT or 19530,
+                "collection_name": self.VECTOR_STORE_COLLECTION_NAME,
             }
-            if self.MILVUS_USER:
-                config["user"] = self.MILVUS_USER
-            if self.MILVUS_PASSWORD:
-                config["password"] = self.MILVUS_PASSWORD
+            if self.VECTOR_DB_USERNAME:
+                config["user"] = self.VECTOR_DB_USERNAME
+            if self.VECTOR_DB_PASSWORD:
+                config["password"] = self.VECTOR_DB_PASSWORD
             return config
         
         else:
             raise ValueError(f"Unsupported vector database provider: {provider}")
+

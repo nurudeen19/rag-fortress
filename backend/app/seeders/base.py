@@ -26,7 +26,6 @@ class BaseSeed(ABC):
         Returns:
             Dict with results: {"success": bool, "message": str, ...}
         """
-        pass
     
     async def validate_tables_exist(self, session: AsyncSession) -> tuple:
         """

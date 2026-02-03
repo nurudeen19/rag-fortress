@@ -2,6 +2,8 @@
 Embedding provider factory with singleton pattern.
 Returns configured LangChain embedding provider based on settings.
 Reuses instance if already initialized (from startup).
+
+Also provides RedisVL vectorizer for semantic cache.
 """
 
 from typing import Optional
@@ -9,10 +11,13 @@ from langchain_core.embeddings import Embeddings
 
 from app.config.settings import settings
 from app.core.exceptions import ConfigurationError
+from app.core import get_logger
+    
+logger = get_logger(__name__)
 
-
-# Global instance (initialized in startup)
+# Global instances (initialized in startup)
 _embedding_instance: Optional[Embeddings] = None
+_redisvl_vectorizer_instance: Optional[any] = None
 
 
 def get_embedding_provider() -> Embeddings:
@@ -112,3 +117,76 @@ def _create_embedding_provider() -> Embeddings:
     
     else:
         raise ConfigurationError(f"Unsupported embedding provider: {provider}")
+
+
+def get_redisvl_vectorizer():
+    """
+    Get RedisVL vectorizer for semantic cache.
+    Returns existing instance if initialized, otherwise creates new one.
+    
+    Uses configuration from settings.embedding_settings.get_redisvl_config()
+    which can either reuse existing embedding config or use separate RedisVL config.
+    
+    Returns:
+        RedisVL vectorizer instance (OpenAITextVectorizer, CohereTextVectorizer, or HuggingFaceTextVectorizer)
+    """
+    global _redisvl_vectorizer_instance
+    
+    # Return existing instance if available
+    if _redisvl_vectorizer_instance is not None:
+        return _redisvl_vectorizer_instance
+    
+    # Create new instance
+    _redisvl_vectorizer_instance = _create_redisvl_vectorizer()
+    return _redisvl_vectorizer_instance
+
+
+def _create_redisvl_vectorizer():
+    """
+    Create RedisVL vectorizer based on configuration.
+    Internal function - use get_redisvl_vectorizer() instead.
+    
+    Returns:
+        RedisVL vectorizer instance configured for the selected provider
+    """
+    
+    try:
+        from redisvl.utils.vectorize import (
+            OpenAITextVectorizer,
+            CohereTextVectorizer,
+            HFTextVectorizer,
+        )
+    except ImportError:
+        raise ConfigurationError(
+            "redisvl not installed. "
+            "Install with: pip install redisvl"
+        )
+    
+    config = settings.embedding_settings.get_redisvl_config()
+    provider = config["provider"].lower()
+    
+    logger.info(f"Creating RedisVL vectorizer for provider: {provider}")
+    
+    if provider == "openai":
+        return OpenAITextVectorizer(
+            model=config["model"],
+            api_config={"api_key": config["api_key"]}
+        )
+    
+    elif provider == "cohere":
+        return CohereTextVectorizer(
+            model=config["model"],
+            api_config={"api_key": config["api_key"]},
+            input_type=config.get("input_type", "search_query")
+        )
+    
+    elif provider == "huggingface":
+        return HFTextVectorizer(
+            model=config["model"]
+        )
+    
+    else:
+        raise ConfigurationError(
+            f"Unsupported RedisVL provider: {provider}. "
+            "Supported: openai, cohere, huggingface"
+        )

@@ -20,10 +20,289 @@ class RetrievalCoordinator:
         """
         Initialize retrieval coordinator.
         
-        Args:
-            retriever: Vector store retriever service
         """
         self.retriever = retriever
+    
+    def _determine_query_type(
+        self,
+        user_query: str,
+        decomposition_result: Optional[Any]
+    ) -> tuple[List[str], bool]:
+        """
+        Determine query type and whether multi-query processing is needed.
+
+        Returns:
+            Tuple of (queries list, is_multi_query flag)
+        """
+        if not decomposition_result:
+            # No decomposition result - use original query
+            return [user_query], False
+        elif decomposition_result.decomposed:
+            # Decomposed into multiple queries
+            return decomposition_result.queries, True
+        else:
+            # Not decomposed - use optimized single query if available
+            return decomposition_result.queries, False
+    
+    def _track_subquery_documents(
+        self,
+        docs: List[Any],
+        subquery_index: int,
+        document_map: Dict[str, List[int]]
+    ) -> None:
+        """
+        Track which documents belong to which subquery.
+        """
+        for doc in docs:
+            doc_id = doc.metadata.get("chunk_id") or doc.metadata.get("id") or doc.page_content[:100]
+            if doc_id not in document_map:
+                document_map[doc_id] = []
+            document_map[doc_id].append(subquery_index)
+    
+    def _deduplicate_documents(
+        self,
+        all_documents: List[Any]
+    ) -> List[Any]:
+        """
+        Deduplicate documents by ID.
+            
+        Returns:
+            List of unique documents
+        """
+        seen_ids = set()
+        unique_documents = []
+        
+        for doc in all_documents:
+            doc_id = doc.metadata.get("chunk_id") or doc.metadata.get("id") or doc.page_content[:100]
+            if doc_id not in seen_ids:
+                seen_ids.add(doc_id)
+                unique_documents.append(doc)
+        
+        logger.debug(f"Deduplicated: {len(unique_documents)} unique docs from {len(all_documents)} total")
+        return unique_documents
+    
+    def _rerank_combined_documents(
+        self,
+        documents: List[Any],
+        user_query: str,
+        num_queries: int
+    ) -> List[Any]:
+        """
+        Rerank combined documents against original query.
+        
+        Only applies to multi-query scenarios (num_queries > 1).
+            
+        Returns:
+            Reranked and filtered documents
+        """
+        reranker_enabled = self.retriever.settings.app_settings.ENABLE_RERANKER
+        
+        if not (self.retriever.reranker and reranker_enabled and num_queries > 1):
+            return documents
+        
+        logger.debug(f"Second reranking: {len(documents)} combined documents against original query")
+        
+        try:
+            top_k = self.retriever.settings.app_settings.TOP_K
+            reranked_docs, scores = self.retriever.reranker.rerank(
+                query=user_query,
+                documents=documents,
+                top_k=top_k
+            )
+            
+            # Filter by threshold
+            reranker_threshold = self.retriever.settings.app_settings.RERANKER_SCORE_THRESHOLD
+            filtered_documents = []
+            for doc, score in zip(reranked_docs, scores):
+                if score >= reranker_threshold:
+                    filtered_documents.append(doc)
+            
+            logger.debug(f"Second reranking complete: {len(filtered_documents)} relevant documents")
+            return filtered_documents
+            
+        except Exception as e:
+            logger.warning(f"Second reranking failed: {e}, using unranked results")
+            return documents
+    
+    def _apply_security_filtering(
+        self,
+        documents: List[Any],
+        user_clearance: PermissionLevel,
+        user_department_id: Optional[int],
+        user_dept_clearance: Optional[PermissionLevel],
+        queries: List[str],
+        subquery_document_map: Dict[str, List[int]]
+    ) -> Dict[str, Any]:
+        """
+        Apply security filtering to multi-query documents and analyze partial context.
+        
+        Note: Only called for multi-query scenarios. Single queries are handled
+        directly by the retriever and return immediately.
+            
+        Returns:
+            Final result dict with filtered documents or error, including partial context metadata
+        """
+        logger.debug(f"Applying security filtering to {len(documents)} documents")
+        
+        # Apply security filtering - returns complete metadata in one pass
+        filtered_docs, security_metadata, blocked_depts = self.retriever._filter_by_security(
+            documents=documents,
+            user_security_level=user_clearance.value,
+            user_department_id=user_department_id,
+            user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
+        )
+        
+        logger.debug(f"After security filtering: {len(filtered_docs)}/{len(documents)} documents accessible")
+        
+        # Analyze which subqueries were satisfied
+        satisfied_queries, clearance_blocked_queries, unsatisfied_queries = self._analyze_partial_context(
+            filtered_docs=filtered_docs,
+            all_documents=documents,
+            queries=queries,
+            subquery_document_map=subquery_document_map
+        )
+        
+        # Build final result with messages and metadata
+        context = self._build_result(
+            filtered_docs=filtered_docs,
+            all_documents=documents,
+            queries=queries,
+            satisfied_queries=satisfied_queries,
+            clearance_blocked_queries=clearance_blocked_queries,
+            unsatisfied_queries=unsatisfied_queries,
+            security_metadata=security_metadata,
+            blocked_depts=blocked_depts
+        )
+        
+        return context
+    
+    def _analyze_partial_context(
+        self,
+        filtered_docs: List[Any],
+        all_documents: List[Any],
+        queries: List[str],
+        subquery_document_map: Dict[str, List[int]]
+    ) -> tuple[List[str], List[str], List[str]]:
+        """
+        Analyze which subqueries were satisfied vs blocked for multi-query retrieval.
+        
+        Returns:
+            Tuple of (satisfied_queries, clearance_blocked_queries, unsatisfied_queries)
+        """
+        # Build set of document IDs that passed security filtering
+        filtered_doc_ids = set()
+        for doc in filtered_docs:
+            doc_id = doc.metadata.get("chunk_id") or doc.metadata.get("id") or doc.page_content[:100]
+            filtered_doc_ids.add(doc_id)
+        
+        # Classify each subquery
+        satisfied_queries = []
+        clearance_blocked_queries = []
+        unsatisfied_queries = []
+        
+        for idx, subquery in enumerate(queries):
+            # Find all document IDs from this subquery
+            subquery_doc_ids = [doc_id for doc_id, indices in subquery_document_map.items() if idx in indices]
+            
+            if not subquery_doc_ids:
+                # No documents retrieved (no relevant context)
+                unsatisfied_queries.append(subquery)
+            else:
+                # Check if any docs passed filtering
+                passed_filtering = any(doc_id in filtered_doc_ids for doc_id in subquery_doc_ids)
+                
+                if passed_filtering:
+                    satisfied_queries.append(subquery)
+                else:
+                    clearance_blocked_queries.append(subquery)
+        
+        logger.debug(
+            f"Subquery analysis: {len(satisfied_queries)} satisfied, "
+            f"{len(clearance_blocked_queries)} clearance-blocked, "
+            f"{len(unsatisfied_queries)} unsatisfied"
+        )
+        
+        return satisfied_queries, clearance_blocked_queries, unsatisfied_queries
+    
+    def _build_result(
+        self,
+        filtered_docs: List[Any],
+        all_documents: List[Any],
+        queries: List[str],
+        satisfied_queries: List[str],
+        clearance_blocked_queries: List[str],
+        unsatisfied_queries: List[str],
+        security_metadata: Dict[str, Any],
+        blocked_depts: Optional[List[str]]
+    ) -> Dict[str, Any]:
+        """
+        Build final result dict with appropriate messages and partial context metadata.
+        
+        Uses centralized message templates from settings.
+        
+        Returns:
+            Final result dict with success/error status and partial context metadata
+        """
+        # If all documents blocked, return error with partial context
+        # keeping max_security_level for backward compatibility
+        if not filtered_docs:
+            if blocked_depts:
+                dept_list = ", ".join(sorted(blocked_depts))
+                error_msg = self.retriever.settings.prompt_settings.RETRIEVAL_DEPT_BLOCKED_MESSAGE.format(dept_list=dept_list)
+                error_type = "no_clearance"
+            else:
+                error_msg = self.retriever.settings.prompt_settings.RETRIEVAL_SECURITY_BLOCKED_MESSAGE
+                error_type = "insufficient_clearance"
+            
+            logger.debug(f"All {len(all_documents)} documents blocked by security ({error_type})")
+            return {
+                "success": False,
+                "context": [],
+                "count": 0,
+                "error": error_type,
+                "message": error_msg,
+                "blocked_departments": list(blocked_depts) if blocked_depts else None,
+                "security_metadata": security_metadata,
+                "partial_context": {
+                    "is_partial": True,
+                    "type": "clearance",
+                    "total_queries": len(queries),
+                    "satisfied_count": len(satisfied_queries),
+                    "satisfied_queries": satisfied_queries,
+                    "clearance_blocked_queries": clearance_blocked_queries,
+                    "unsatisfied_queries": unsatisfied_queries
+                }
+            }
+        
+        # Build partial context metadata if some subqueries failed
+        has_partial_context = (len(clearance_blocked_queries) > 0 or len(unsatisfied_queries) > 0)
+        partial_context = None
+        
+        if has_partial_context:
+            context_type = "clearance" if clearance_blocked_queries else "missing"
+            partial_context = {
+                "is_partial": True,
+                "type": context_type,
+                "total_queries": len(queries),
+                "satisfied_count": len(satisfied_queries),
+                "satisfied_queries": satisfied_queries,
+                "clearance_blocked_queries": clearance_blocked_queries,
+                "unsatisfied_queries": unsatisfied_queries
+            }
+            logger.debug(f"Partial context detected: type={context_type}")
+        
+        # Success: return filtered documents with complete security metadata        
+        result = {
+            "success": True,
+            "context": filtered_docs,
+            "count": len(filtered_docs),
+            "security_metadata": security_metadata  # Complete metadata from filtering
+        }
+        
+        if partial_context:
+            result["partial_context"] = partial_context
+        
+        return result
     
     async def retrieve_context(
         self,
@@ -32,197 +311,77 @@ class RetrievalCoordinator:
         user_department_id: Optional[int],
         user_dept_clearance: Optional[PermissionLevel],
         user_id: int,
-        decomposed_queries: Optional[List[str]] = None
+        decomposition_result: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Retrieve context documents for query with optional multi-query decomposition.
         
-        If decomposed_queries is provided and contains multiple queries:
-        - Retrieves documents for each subquery independently
-        - Applies security filtering to each subquery's results
-        - Combines and reranks all results against the original query
-        - Tracks which subqueries were satisfied (got results) vs unsatisfied (blocked/empty)
-        - Returns partial context metadata for specialized prompting
+        Flow:
+        1. Determine query type (single/multi)
+        2. Retrieve documents for each query
+        3. For multi-query: deduplicate, rerank, apply security filtering
+        4. For single-query: security filtering already applied
         
-        Args:
-            user_query: User's original question (used for reranking)
-            user_clearance: User's organization-level clearance
-            user_department_id: User's department ID
-            user_dept_clearance: User's department-level clearance
-            user_id: User ID for logging
-            decomposed_queries: Optional list of decomposed queries to retrieve
-            
         Returns:
-            Retrieval result dict with:
-            - success: bool
-            - context: List[Document]
-            - count: int
-            - max_security_level: Optional[int]
-            - partial_context: Optional[Dict] with subquery satisfaction tracking
+            Retrieval result dict with success, context, count, and optional partial_context
         """
-        dept_level_str = f", dept_level={user_dept_clearance.name}" if user_dept_clearance else ""
-        logger.info(f"Retrieving context for user_id={user_id}, org_level={user_clearance.name}{dept_level_str}")
+        # Step 1: Determine query type
+        queries, is_multi_query = self._determine_query_type(user_query, decomposition_result)
         
-        # If no decomposition or only single query, use standard retrieval
-        if not decomposed_queries or len(decomposed_queries) <= 1:
-            query_to_use = decomposed_queries[0] if decomposed_queries else user_query
-            
-            retrieval_result = await self.retriever.query(
-                query_text=query_to_use,
-                user_security_level=user_clearance.value,
-                user_department_id=user_department_id,
-                user_department_security_level=user_dept_clearance.value if user_dept_clearance else None,
-                user_id=user_id
-            )
-            
-            return retrieval_result
-        
-        # Multi-query decomposition path
-        logger.info(f"Decomposed retrieval: {len(decomposed_queries)} subqueries")
-        
+        # Step 2: Unified retrieval loop
         all_documents = []
-        satisfied_queries = []
-        unsatisfied_queries = []
-        clearance_blocked_queries = []
-        all_blocked_departments = set()  # Track all departments that blocked access
+        subquery_document_map = {}
         
-        # Retrieve for each subquery
-        for idx, subquery in enumerate(decomposed_queries):
-            logger.debug(f"Retrieving subquery {idx+1}/{len(decomposed_queries)}: '{subquery[:50]}...'")
+        for idx, query in enumerate(queries):
+            if is_multi_query:
+                logger.debug(f"Retrieving subquery {idx+1}/{len(queries)}: '{query[:50]}...'")
             
             subquery_result = await self.retriever.query(
-                query_text=subquery,
+                query_text=query,
                 user_security_level=user_clearance.value,
                 user_department_id=user_department_id,
                 user_department_security_level=user_dept_clearance.value if user_dept_clearance else None,
-                user_id=user_id
+                user_id=user_id,
+                skip_security_filter=is_multi_query
             )
             
-            # Track satisfaction status
+            # Single query: return immediately (security already applied)
+            if not is_multi_query:
+                return subquery_result
+            
+            # Multi-query: collect and track documents
             if subquery_result["success"] and subquery_result.get("count", 0) > 0:
-                satisfied_queries.append(subquery)
-                all_documents.extend(subquery_result["context"])
-            else:
-                # Determine if blocked by clearance or just no matches
-                error_type = subquery_result.get("error")
-                # Match both no_clearance and insufficient_clearance as clearance blocks
-                if error_type in ("no_clearance", "insufficient_clearance"):
-                    clearance_blocked_queries.append(subquery)
-                    # Track blocked departments
-                    blocked_depts = subquery_result.get("blocked_departments")
-                    if blocked_depts:
-                        all_blocked_departments.update(blocked_depts)
-                else:
-                    unsatisfied_queries.append(subquery)
+                docs = subquery_result["context"]
+                all_documents.extend(docs)
+                self._track_subquery_documents(docs, idx, subquery_document_map)
         
-        # Deduplicate documents by ID
-        seen_ids = set()
-        unique_documents = []
-        for doc in all_documents:
-            doc_id = doc.metadata.get("chunk_id") or doc.metadata.get("id") or doc.page_content[:100]
-            if doc_id not in seen_ids:
-                seen_ids.add(doc_id)
-                unique_documents.append(doc)
+        # Step 3: Multi-query post-processing
+        if not all_documents:
+            logger.info("No documents retrieved for any subquery")
+            return {
+                "success": False,
+                "context": [],
+                "count": 0,
+                "error": "no_documents",
+                "message": "No relevant documents found for any aspect of your query."
+            }
         
-        logger.info(
-            f"Combined results: {len(unique_documents)} unique docs from {len(all_documents)} total "
-            f"({len(satisfied_queries)} satisfied, {len(clearance_blocked_queries)} clearance-blocked, "
-            f"{len(unsatisfied_queries)} no-matches)"
+        # Deduplicate combined documents
+        unique_documents = self._deduplicate_documents(all_documents)
+        
+        # Rerank against original query
+        final_documents = self._rerank_combined_documents(
+            documents=unique_documents,
+            user_query=user_query,
+            num_queries=len(queries)
         )
         
-        # If we got no documents at all, return error
-        if not unique_documents:
-            # Determine primary error type
-            if clearance_blocked_queries:
-                error_msg = "No documents found matching your clearance level for any aspect of your query."
-                if all_blocked_departments:
-                    dept_list = ", ".join(sorted(all_blocked_departments))
-                    error_msg = f"You do not have access to {dept_list} department content. To request access, please submit a permission override request for the {dept_list} department."
-                
-                return {
-                    "success": False,
-                    "context": [],
-                    "count": 0,
-                    "error": "no_clearance",
-                    "message": error_msg,
-                    "blocked_departments": list(all_blocked_departments) if all_blocked_departments else None
-                }
-            else:
-                return {
-                    "success": False,
-                    "context": [],
-                    "count": 0,
-                    "error": "no_context",
-                    "message": "No relevant documents found for any aspect of your query."
-                }
-        
-        # Rerank combined results against original query if reranker is available
-        # AND we have multiple queries (single query already went through reranking in retriever)
-        final_documents = unique_documents
-        max_security_level = None
-        
-        if self.retriever.reranker and len(decomposed_queries) > 1:
-            logger.info(f"Reranking {len(unique_documents)} documents against original query")
-            try:
-                reranked_docs, scores = self.retriever.reranker.rerank(
-                    query=user_query,  # Use original query for reranking
-                    documents=unique_documents
-                )
-                if reranked_docs:
-                    # CRITICAL: Re-apply security filtering after reranking
-                    # Reuse retriever's filtering logic for consistency
-                    filtered_reranked, _, _ = self.retriever._filter_by_security(
-                        documents=reranked_docs,
-                        user_security_level=user_clearance.value,
-                        user_department_id=user_department_id,
-                        user_department_security_level=user_dept_clearance.value if user_dept_clearance else None
-                    )
-                    
-                    final_documents = filtered_reranked
-                    logger.info(f"After security filtering: {len(final_documents)}/{len(reranked_docs)} documents retained")
-            except Exception as e:
-                logger.warning(f"Reranking failed: {e}, using unranked results")
-        else:
-            if len(decomposed_queries) == 1:
-                logger.info("Skipping coordinator reranking for single query (already reranked in retriever)")
-        
-        # Calculate max security level from final documents
-        for doc in final_documents:
-            doc_level = doc.metadata.get("security_level")
-            if doc_level is not None:
-                try:
-                    if isinstance(doc_level, int):
-                        level_value = doc_level
-                    else:
-                        level_value = PermissionLevel[str(doc_level)].value
-                    
-                    if max_security_level is None or level_value > max_security_level:
-                        max_security_level = level_value
-                except (KeyError, ValueError):
-                    pass
-        
-        # Build partial context metadata
-        partial_context_info = None
-        if clearance_blocked_queries or unsatisfied_queries:
-            partial_context_info = {
-                "is_partial": True,
-                "satisfied_queries": satisfied_queries,
-                "clearance_blocked_queries": clearance_blocked_queries,
-                "unsatisfied_queries": unsatisfied_queries,
-                "total_queries": len(decomposed_queries),
-                "satisfied_count": len(satisfied_queries),
-                "type": "clearance" if clearance_blocked_queries else "missing"
-            }
-            
-            logger.info(
-                f"Partial context: {len(satisfied_queries)}/{len(decomposed_queries)} queries satisfied "
-                f"(type={partial_context_info['type']})"
-            )
-        
-        return {
-            "success": True,
-            "context": final_documents,
-            "count": len(final_documents),
-            "max_security_level": max_security_level,
-            "partial_context": partial_context_info
-        }
+        # Step 4: Apply security filtering
+        return self._apply_security_filtering(
+            documents=final_documents,
+            user_clearance=user_clearance,
+            user_department_id=user_department_id,
+            user_dept_clearance=user_dept_clearance,
+            queries=queries,
+            subquery_document_map=subquery_document_map
+        )

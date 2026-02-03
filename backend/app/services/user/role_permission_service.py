@@ -242,7 +242,6 @@ class RolePermissionService:
             self.session.add(role)
             await self.session.flush()
             
-            logger.info(f"Role created: '{role.name}'")
             return role, None
         
         except Exception as e:
@@ -445,7 +444,6 @@ class RolePermissionService:
             self.session.add(permission)
             await self.session.flush()
             
-            logger.info(f"Permission created: '{permission.code}'")
             return permission, None
         
         except Exception as e:

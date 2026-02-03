@@ -12,7 +12,7 @@ This migration:
    - "confidential" → 3
    - "restricted" → 4
 """
-from typing import Sequence, Union
+from typing import Sequence
 
 from alembic import op
 import sqlalchemy as sa

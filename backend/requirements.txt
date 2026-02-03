@@ -68,8 +68,14 @@ llama-cpp-python>=0.2.90
 sentence-transformers>=5.1.2
 
 # Cohere
-langchain-cohere>=0.2.0
+langchain-cohere>=0.5.0
 cohere>=5.5.8
+
+# ============================================================================
+# LangChain - Document Transformers (Rerankers)
+# ============================================================================
+# Cohere Rerank (via langchain-cohere - already included above)
+# Jina Rerank (via langchain-community - already included)
 
 # ============================================================================
 # LangChain - Vector Databases
@@ -87,6 +93,7 @@ langchain-chroma>=1.0.0
 # Qdrant (Recommended for production)
 langchain-qdrant>=1.1.0
 qdrant-client>=1.10.0
+fastembed>=0.4.2
 
 # Pinecone
 langchain-pinecone>=0.0.1
@@ -127,6 +134,7 @@ fastapi-mail>=1.5.8
 # Caching (Optional - for production)
 # ============================================================================
 redis>=5.0.0
+redis-vl>=0.13.2
 
 # ============================================================================
 # Logging & Monitoring

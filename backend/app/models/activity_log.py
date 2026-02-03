@@ -8,8 +8,7 @@ Tracks:
 - System access patterns
 """
 
-from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Boolean, Text, DateTime, ForeignKey, Index
+from sqlalchemy import Column, Integer, String, Boolean, Text, ForeignKey, Index
 from sqlalchemy.orm import relationship
 
 from app.models.base import Base

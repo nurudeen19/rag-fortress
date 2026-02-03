@@ -15,11 +15,14 @@ Endpoints:
 - POST /api/v1/auth/password-reset-confirm - Confirm password reset
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from jose import jwt, JWTError
+from datetime import datetime, timezone
 
 from app.core.database import get_session
 from app.core.security import get_current_user
+from app.config.settings import settings
 from app.utils.demo_mode import prevent_in_demo_mode
 from app.schemas.user import (
     LoginRequest,
@@ -61,12 +64,14 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 @router.post("/login", response_model=LoginResponse, status_code=200)
 async def login(
     request: LoginRequest,
+    response: Response,
     session: AsyncSession = Depends(get_session)
 ):
     """
     Login with username/email and password.
     
-    Returns JWT access token on success.
+    Sets httpOnly cookies for access and refresh tokens (secure, XSS-safe).
+    Also returns tokens in response body for backwards compatibility.
     """
     result = await handle_login(request, session)
     
@@ -76,12 +81,145 @@ async def login(
             detail=result.get("error", "Invalid credentials")
         )
     
+    # Set httpOnly cookies for secure token storage
+    # These are NOT accessible via JavaScript (XSS protection)
+    # Calculate max_age in seconds from token expiration settings
+    access_token_max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    refresh_token_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    
+    response.set_cookie(
+        key="access_token",
+        value=result["token"],
+        httponly=True,
+        secure=settings.COOKIE_SECURE,  # False for HTTP dev, True for HTTPS prod
+        samesite="lax",  # CSRF protection
+        max_age=access_token_max_age,
+    )
+    
+    response.set_cookie(
+        key="refresh_token",
+        value=result["refresh_token"],
+        httponly=True,
+        secure=settings.COOKIE_SECURE,
+        samesite="lax",
+        max_age=refresh_token_max_age,
+    )
+    
     return LoginResponse(
         token=result["token"],
         token_type="bearer",
         expires_at=result["expires_at"],
         user=result["user"],
     )
+
+
+@router.post("/refresh", response_model=LoginResponse, status_code=200)
+async def refresh_access_token(
+    response: Response,
+    request: Request,
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Refresh access token using refresh token from httpOnly cookie.
+    
+    Returns new access token and updates cookies.
+    """
+    refresh_token = request.cookies.get("refresh_token")
+    
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token not found"
+        )
+    
+    from app.core.security import create_access_token, create_refresh_token
+    from sqlalchemy import select
+    
+    try:
+        # Verify refresh token
+        payload = jwt.decode(
+            refresh_token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+        
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token type"
+            )
+        
+        user_id = int(payload.get("sub"))
+        
+        # Get user from database
+        result_db = await session.execute(
+            select(User).where(User.id == user_id)
+        )
+        user = result_db.scalar_one_or_none()
+        
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive"
+            )
+        
+        # Generate new tokens
+        new_access_token = create_access_token(user.id)
+        new_refresh_token = create_refresh_token(user.id)
+        
+        # Calculate expiry
+        from datetime import timedelta
+        expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expires_at = datetime.now(timezone.utc) + expires_delta
+        
+        # Update httpOnly cookies
+        # Calculate max_age in seconds from token expiration settings
+        access_token_max_age = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        refresh_token_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+        
+        response.set_cookie(
+            key="access_token",
+            value=new_access_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=access_token_max_age,
+        )
+        
+        response.set_cookie(
+            key="refresh_token",
+            value=new_refresh_token,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+            max_age=refresh_token_max_age,
+        )
+        
+        # Build user response
+        user_response = {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "full_name": f"{user.first_name} {user.last_name}".strip(),
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "department_id": user.department_id,
+        }
+        
+        return LoginResponse(
+            token=new_access_token,
+            token_type="bearer",
+            expires_at=expires_at.isoformat(),
+            user=user_response,
+        )
+        
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token"
+        )
 
 
 @router.post("/register", response_model=UserResponse, status_code=201)
@@ -204,14 +342,14 @@ async def verify_invitation_token(
 
 @router.post("/logout", response_model=SuccessResponse, status_code=200)
 async def logout(
+    response: Response,
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
     Logout current user.
     
-    Note: JWT tokens are stateless. Logout is mainly for audit logging.
-    Client should remove token from storage.
+    Clears httpOnly cookies containing access and refresh tokens.
     """
     result = await handle_logout(session)
     
@@ -220,6 +358,10 @@ async def logout(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=result.get("error", "Failed to logout")
         )
+    
+    # Clear httpOnly cookies
+    response.delete_cookie(key="access_token", samesite="lax")
+    response.delete_cookie(key="refresh_token", samesite="lax")
     
     return SuccessResponse(message=result.get("message", "Logged out successfully"))
 

@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 """Drop all tables in the database to start fresh."""
-import os
-from pathlib import Path
 from sqlalchemy import create_engine, text, inspect
 from app.config.database_settings import DatabaseSettings
 

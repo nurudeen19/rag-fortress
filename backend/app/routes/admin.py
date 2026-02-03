@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_session
 from app.core.security import require_role
 from app.models.user import User
-from app.services.permission_service import PermissionService
 from app.utils.demo_mode import prevent_in_demo_mode
 from app.handlers.admin import handle_trigger_batch_ingestion
 

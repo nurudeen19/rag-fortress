@@ -8,16 +8,14 @@ Handles:
 - Image attachment management
 """
 
-import logging
 import json
 from datetime import datetime, timezone
 from typing import Optional, List, Tuple, Union
-from sqlalchemy import select, and_
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.error_report import ErrorReport, ErrorReportStatus, ErrorReportCategory
-from app.models.user import User
 from app.schemas.error_report import (
     ErrorReportCreateRequest,
     ErrorReportResponse,

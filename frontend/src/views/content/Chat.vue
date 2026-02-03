@@ -144,7 +144,7 @@
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.15s; animation-duration: 0.6s;"></div>
                         <div class="w-2.5 h-2.5 bg-secure/60 rounded-full animate-bounce" style="animation-delay: 0.3s; animation-duration: 0.6s;"></div>
                       </div>
-                      <span class="text-fortress-300 text-sm font-medium"></span>
+                      <span class="text-fortress-300 text-sm font-medium">Analyzing</span>
                     </div>
                     <!-- Show actual response content -->
                     <div v-else class="text-fortress-100 leading-relaxed prose-invert prose-sm max-w-none" v-html="renderMarkdown(message.content)"></div>
@@ -344,7 +344,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick, onMounted, computed, watch } from 'vue'
+import { ref, nextTick, onMounted, computed, watch, inject } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -361,6 +361,9 @@ const {
   loadChatMessages,
   createConversation
 } = useChatHistory()
+
+// Inject reset signal from parent layout (for New Chat button)
+const resetChatSignal = inject('resetChatSignal', ref(0))
 
 // State
 const messages = ref([])
@@ -504,19 +507,45 @@ const loadMessagesForConversation = async (conversationId) => {
   }
 }
 
+// Reset all component state to initial values
+const resetComponentState = () => {
+  messages.value = []
+  inputMessage.value = ''
+  loading.value = false
+  loadingMessages.value = false
+  deleting.value = false
+  deleteError.value = null
+  showChatOptions.value = false
+  showRenameModal.value = false
+  showDeleteModal.value = false
+  renameInput.value = ''
+  suppressAutoLoad.value = false
+  activeChat.value = null
+}
+
+// Watch for reset signal from parent layout (New Chat button)
+watch(resetChatSignal, () => {
+  resetComponentState()
+})
+
 // Watch for conversation changes when route changes
 watch(
   () => route.params.id,
-  async (newId) => {
+  async (newId, oldId) => {
+    // Always clear when navigating to new chat
+    if (newId === 'new') {
+      resetComponentState()
+      return
+    }
+
+    // Skip loading if we're suppressing auto-load for a non-new chat
     if (suppressAutoLoad.value && newId && newId !== 'new') {
       return
     }
 
+    // Load messages for existing conversation
     if (newId && newId !== 'new') {
       await loadMessagesForConversation(newId)
-    } else {
-      messages.value = []
-      activeChat.value = null
     }
   },
   { immediate: true }
@@ -541,6 +570,7 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
   const token = authStore.token
   const response = await fetch(`${API_BASE_URL}/v1/conversations/${conversationId}/respond`, {
     method: 'POST',
+    credentials: 'include',  // Send httpOnly cookies with request
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -615,7 +645,8 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
           content: 'I encountered an error while generating your response.',
           timestamp: new Date().toISOString(),
           sources: [],
-          error: payload.message || 'An error occurred while generating the response.'
+          error: payload.message || 'An error occurred while generating the response.',
+          isPlaceholder: false
         }
         messages.value.push(assistantMessage)
       } else {
@@ -623,7 +654,11 @@ const streamAssistantResponse = async (conversationId, userMessage) => {
         if (!assistantMessage.content) {
           assistantMessage.content = 'I encountered an error while generating your response.'
         }
+        // Deactivate placeholder/analyzing state since we have a message
+        assistantMessage.isPlaceholder = false
       }
+      // Stop loading when error occurs
+      loading.value = false
       throw new Error(assistantMessage.error)
     }
 

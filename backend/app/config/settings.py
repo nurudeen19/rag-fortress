@@ -4,7 +4,7 @@ Main settings module that composes all configuration modules.
 import json
 from typing import Any, Optional
 
-from pydantic import TypeAdapter
+from pydantic import TypeAdapter, field_validator
 from pydantic_settings import SettingsConfigDict
 
 from .app_settings import AppSettings
@@ -15,6 +15,7 @@ from .database_settings import DatabaseSettings
 from .email_settings import EmailSettings
 from .cache_settings import CacheSettings
 from .prompt_settings import PromptSettings
+from .reranker_settings import RerankerSettings
 
 
 # Database connection credentials must never be overridden by user-provided settings
@@ -30,7 +31,7 @@ FIELD_ALIASES = {
 }
 
 
-class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings, CacheSettings, PromptSettings):
+class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, DatabaseSettings, EmailSettings, CacheSettings, PromptSettings, RerankerSettings):
     """
     Main settings class that inherits from all specialized settings modules.
     
@@ -72,6 +73,30 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
         
         if cached_settings:
             self._apply_cached_settings(cached_settings)
+    
+    # Validators for empty string fields that should be None or typed conversions
+    @field_validator("VECTOR_DB_PORT", "VECTOR_DB_GRPC_PORT", "EMBEDDING_DIMENSIONS", 
+                    "LLM_TIMEOUT", "LLM_CONTEXT_SIZE", "LLM_N_THREADS", "LLM_N_BATCH",
+                    "FALLBACK_LLM_TIMEOUT", "FALLBACK_LLM_MAX_TOKENS",
+                    "CLASSIFIER_LLM_TIMEOUT", "DB_PORT", mode="before")
+    @classmethod
+    def validate_optional_int_fields(cls, v):
+        """Convert empty strings to None for optional int fields."""
+        if v == "" or v is None:
+            return None
+        return int(v) if isinstance(v, str) else v
+    
+    @field_validator("VECTOR_DB_PREFER_GRPC", mode="before")
+    @classmethod
+    def validate_optional_bool_fields(cls, v):
+        """Convert empty strings to None for optional bool fields."""
+        if v == "" or v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, str):
+            return v.lower() in ("true", "1", "yes", "on")
+        return bool(v)
     
     def __getattribute__(self, name: str):
         """
@@ -173,6 +198,11 @@ class Settings(AppSettings, LLMSettings, EmbeddingSettings, VectorDBSettings, Da
     @property
     def prompt_settings(self) -> PromptSettings:
         """Namespace alias for PromptSettings consumers."""
+        return self
+    
+    @property
+    def reranker_settings(self) -> RerankerSettings:
+        """Namespace alias for RerankerSettings consumers."""
         return self
 
     def _apply_cached_settings(self, cached_settings: dict) -> None:

@@ -5,7 +5,6 @@ Allows users to report errors they encounter, with optional image attachment.
 Admins can view, categorize, and track resolution of reported errors.
 """
 
-from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 import enum

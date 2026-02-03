@@ -5,7 +5,7 @@ Handles activity logging events asynchronously to avoid blocking
 the main request flow.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from app.events.base import BaseEventHandler
 from app.core import get_logger

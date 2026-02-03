@@ -3,7 +3,6 @@ LLM Prompt configuration settings.
 
 Simple configurable prompts for LLM behavior.
 """
-from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -104,7 +103,7 @@ Answer strictly within these constraints.""",
     )
     
     CLASSIFIER_USER_PROMPT: str = Field(
-        default="Query: {query}\n\nClassify and return JSON:",
+        default="{query}",
         env="CLASSIFIER_USER_PROMPT"
     )
     
@@ -119,6 +118,7 @@ Answer strictly within these constraints.""",
         3. Each query must be complete, standalone, and preserve exact terminology.
         4. Max 4 queries per input. Rephrase only for clarity.
         5. When unsure, prefer fewer queries.
+        6. Do not decompose if the query is simple, clear, and asks one thing
 
         Decision filter:
         “Would splitting reduce answer accuracy?”

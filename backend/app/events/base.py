@@ -44,7 +44,6 @@ class BaseEventHandler(ABC):
         This should be a unique identifier for the event type.
         Examples: "activity_log", "user_registered", "email_sent"
         """
-        pass
     
     @abstractmethod
     async def handle(self, event_data: Dict[str, Any]) -> None:
@@ -64,7 +63,6 @@ class BaseEventHandler(ABC):
                        - _emitted_at: str (ISO format timestamp)
                        Plus any custom fields passed during emission
         """
-        pass
     
     async def __call__(self, event_data: Dict[str, Any]) -> None:
         """

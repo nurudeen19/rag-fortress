@@ -1,10 +1,9 @@
 """Service layer for Conversation and Message CRUD operations."""
 
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update, and_
-from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone, timedelta
+from sqlalchemy import select, and_
+from datetime import datetime, timezone
 import uuid
 import json
 
@@ -16,6 +15,7 @@ from app.core import get_logger
 from app.core.events import get_event_bus
 from app.services.query_validator_service import get_query_validator
 from app.config.settings import settings
+from app.utils.encryption import encrypt_conversation_message, decrypt_conversation_message
 
 logger = get_logger(__name__)
 
@@ -38,22 +38,67 @@ class ConversationService:
         if not text:
             return 0
         return int(len(text.split()) * 1.3)
+    
+    async def _emit_malicious_query_blocked_event(
+        self,
+        user_id: int,
+        conversation_id: str,
+        content: str,
+        threat_type: str,
+        confidence: float,
+        reason: str
+    ) -> None:
+        """
+        Emit activity log event for blocked malicious query.
+                """
+        logger.warning(
+            f"Malicious query blocked: user_id={user_id}, "
+            f"conversation_id={conversation_id}, "
+            f"threat={threat_type}, "
+            f"confidence={confidence:.2f}"
+        )
+        
+        bus = get_event_bus()
+        await bus.emit("activity_log", {
+            "user_id": user_id,
+            "incident_type": "malicious_query_blocked",
+            "severity": "critical",
+            "description": f"Malicious query blocked: {threat_type}",
+            "details": {
+                "threat_type": threat_type,
+                "confidence": confidence,
+                "reason": reason,
+                "conversation_id": conversation_id
+            },
+            "user_query": content,
+            "threat_type": threat_type
+        })
+
+    def _estimate_tokens(self, text: str) -> int:
+        """Simple token estimation based on word count.
+        
+        Uses approximation: tokens ≈ words * 1.3
+        For accurate token counts, use tiktoken or similar.
+        """
+        if not text:
+            return 0
+        return int(len(text.split()) * 1.3)
 
     def _serialize_conversation(self, conversation: Conversation) -> Dict[str, Any]:
-        """Convert Conversation model to dict."""
+        """Convert Conversation model to dict for frontend.        
+        Only includes fields that the frontend needs.
+        """
         return {
             "id": conversation.id,
-            "user_id": conversation.user_id,
             "title": conversation.title,
             "message_count": conversation.message_count,
             "last_message_at": conversation.last_message_at.isoformat() if conversation.last_message_at else None,
             "created_at": conversation.created_at.isoformat() if conversation.created_at else None,
-            "updated_at": conversation.updated_at.isoformat() if conversation.updated_at else None,
-            "is_deleted": conversation.is_deleted,
         }
 
     def _serialize_message(self, message: Message) -> Dict[str, Any]:
-        """Convert Message model to dict."""
+        """Convert Message model to dict for frontend.
+        """
         return {
             "id": message.id,
             "conversation_id": message.conversation_id,
@@ -62,7 +107,6 @@ class ConversationService:
             "token_count": message.token_count,
             "meta": message.meta,
             "created_at": message.created_at.isoformat() if message.created_at else None,
-            "updated_at": message.updated_at.isoformat() if message.updated_at else None,
         }
 
     # ==================== Conversation Operations ====================
@@ -173,8 +217,6 @@ class ConversationService:
             result = await self.session.execute(stmt)
             conversations = result.scalars().all()
             
-            logger.info(f"Retrieved {len(conversations)} conversations for user {user_id}")
-            
             return {
                 "success": True,
                 "total": total,
@@ -280,29 +322,15 @@ class ConversationService:
                 validation = await validator.validate_query(content, user_id)
                 
                 if not validation["valid"]:
-                    logger.warning(
-                        f"Malicious query blocked: user_id={user_id}, "
-                        f"conversation_id={conversation_id}, "
-                        f"threat={validation['threat_type']}, "
-                        f"confidence={validation['confidence']:.2f}"
+                    # Emit activity log event for blocked query
+                    await self._emit_malicious_query_blocked_event(
+                        user_id=user_id,
+                        conversation_id=conversation_id,
+                        content=content,
+                        threat_type=validation["threat_type"],
+                        confidence=validation["confidence"],
+                        reason=validation["reason"]
                     )
-                    
-                    # Emit activity log event (non-blocking)
-                    bus = get_event_bus()
-                    await bus.emit("activity_log", {
-                        "user_id": user_id,
-                        "incident_type": "malicious_query_blocked",
-                        "severity": "critical",
-                        "description": f"Malicious query blocked: {validation['threat_type']}",
-                        "details": {
-                            "threat_type": validation["threat_type"],
-                            "confidence": validation["confidence"],
-                            "reason": validation["reason"],
-                            "conversation_id": conversation_id
-                        },
-                        "user_query": content,
-                        "threat_type": validation["threat_type"]
-                    })
                     
                     return {
                         "success": False,
@@ -353,15 +381,50 @@ class ConversationService:
                 "message": None
             }
 
+    def _decrypt_cached_history(self, cached_data: str) -> List[Dict[str, str]]:
+        """
+        Helper to decrypt and parse cached conversation history.
+        
+        Handles both encrypted and plaintext cache data for backward compatibility.
+        Returns empty list if decryption/parsing fails.
+        """
+        if not cached_data:
+            return []
+        
+        # If encryption is enabled, try decrypt first
+        if settings.cache_settings.ENABLE_CACHE_HISTORY_ENCRYPTION:
+            try:
+                decrypted_data = decrypt_conversation_message(cached_data)
+                return json.loads(decrypted_data)
+            except Exception as exc:
+                logger.warning(f"Failed to decrypt history cache: {exc}, trying as plaintext")
+                try:
+                    return json.loads(cached_data)
+                except Exception:
+                    logger.warning(f"Failed to parse cached history as plaintext")
+                    return []
+        else:
+            # Try plaintext first, then try decryption for backward compatibility
+            try:
+                return json.loads(cached_data)
+            except Exception:
+                try:
+                    # Might be encrypted data from previous encryption-enabled session
+                    decrypted_data = decrypt_conversation_message(cached_data)
+                    return json.loads(decrypted_data)
+                except Exception as exc:
+                    logger.warning(f"Failed to parse cached history: {exc}")
+                    return []
+    
     async def get_conversation_history(self, conversation_id: str, user_id: int) -> List[Dict[str, str]]:
         """Return the cached conversation history or fetch the recent conversation context."""
         cache_key = f"conversation:history:{conversation_id}"
         try:
             cached_data = await self.cache.get(cache_key)
             if cached_data:
-                history = json.loads(cached_data)
-                logger.info(f"Retrieved {len(history)} history messages from cache for {conversation_id}")
-                return history
+                history = self._decrypt_cached_history(cached_data)
+                if history:
+                    return history
         except Exception as exc:
             logger.warning(f"Failed to read history cache: {exc}")
 
@@ -397,6 +460,8 @@ class ConversationService:
         
         Cache is updated AFTER successful DB commit to maintain consistency.
         If DB persistence fails, cache remains untouched.
+        
+        History can be optionally encrypted in cache based on settings.ENABLE_CACHE_HISTORY_ENCRYPTION.
         """
         # If persistence to DB is requested, do it FIRST
         if persist_to_db and user_id is not None:
@@ -417,7 +482,7 @@ class ConversationService:
         cache_key = f"conversation:history:{conversation_id}"
         try:
             cached_data = await self.cache.get(cache_key)
-            history = json.loads(cached_data) if cached_data else []
+            history = self._decrypt_cached_history(cached_data) if cached_data else []
         except Exception as exc:
             logger.warning(f"Failed to read history cache before update: {exc}")
             history = []
@@ -432,16 +497,65 @@ class ConversationService:
 
         await self._cache_history(conversation_id, history)
         logger.info(f"Cached exchange for {conversation_id}")
+    
+    async def save_assistant_response(
+        self,
+        conversation_id: str,
+        user_id: int,
+        user_query: str,
+        response_text: str,
+        assistant_meta: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """
+        Save assistant response with caching and persistence.
+        
+        Cache update happens synchronously (needed for next request).
+        Database persistence happens asynchronously via event (reduces latency).
+        """
+        # Cache the exchange (updates cache with both messages)
+        await self.cache_conversation_exchange(
+            conversation_id,
+            user_query,
+            response_text,
+            user_id=user_id,
+            persist_to_db=False,
+            assistant_meta=assistant_meta
+        )
+        
+        # Emit event for background DB persistence - ASYNCHRONOUS
+        bus = get_event_bus()
+        await bus.emit("save_message", {
+            "conversation_id": conversation_id,
+            "user_id": user_id,
+            "role": "assistant",
+            "content": response_text,
+            "token_count": self._estimate_tokens(response_text),
+            "meta": assistant_meta
+        })
+        
+        logger.debug(f"Assistant message cached and queued for DB save: {conversation_id}")
 
     async def _cache_history(self, conversation_id: str, history: List[Dict[str, str]]) -> None:
-        """Helper to persist conversation history to cache with a 24-hour TTL."""
+        """
+        Helper to persist conversation history to cache.
+        
+        Uses configurable TTL from settings.CACHE_TTL_HISTORY.
+        Optionally encrypts history before storing based on settings.ENABLE_CACHE_HISTORY_ENCRYPTION.
+        """
         try:
             cache_key = f"conversation:history:{conversation_id}"
-            await self.cache.set(
-                cache_key,
-                json.dumps(history),
-                ttl=int(timedelta(hours=24).total_seconds())
-            )
+            history_json = json.dumps(history)
+            
+            # Encrypt if enabled
+            if settings.cache_settings.ENABLE_CACHE_HISTORY_ENCRYPTION:
+                cached_data = encrypt_conversation_message(history_json)
+            else:
+                cached_data = history_json
+            
+            # Use configurable TTL from settings (defaults to 1 hour)
+            ttl = settings.cache_settings.CACHE_TTL_HISTORY
+            
+            await self.cache.set(cache_key, cached_data, ttl=ttl)
         except Exception as exc:
             logger.error(f"Failed to cache history for {conversation_id}: {exc}")
 
@@ -554,8 +668,6 @@ class ConversationService:
             count_result = await self.session.execute(count_stmt)
             total = len(count_result.scalars().all())
             
-            logger.info(f"Retrieved {len(messages)} messages for conversation {conversation_id}")
-            
             return {
                 "success": True,
                 "conversation": self._serialize_conversation(conversation),
@@ -615,8 +727,6 @@ class ConversationService:
                 }
                 for m in messages
             ]
-            
-            logger.info(f"Retrieved context with {len(context)} messages for conversation {conversation_id}")
             
             return {
                 "success": True,

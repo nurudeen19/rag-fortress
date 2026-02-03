@@ -7,7 +7,6 @@ Handlers manage HTTP requests for:
 """
 
 import logging
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User

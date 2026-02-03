@@ -1,7 +1,7 @@
 """Job service for managing async jobs and background processing."""
 
 import json
-from typing import Optional, List, Any
+from typing import Optional, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,7 +39,6 @@ class JobService:
         self.session.add(job)
         await self.session.flush()
         
-        logger.info(f"Created job: {job_type.value} (id={job.id}, ref={reference_type}/{reference_id})")
         return job
     
     async def get(self, job_id: int) -> Optional[Job]:

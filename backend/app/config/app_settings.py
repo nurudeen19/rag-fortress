@@ -35,7 +35,8 @@ class AppSettings(BaseSettings):
     # Server Configuration
     HOST: str = Field("0.0.0.0", env="HOST")
     PORT: int = Field(8000, env="PORT")
-    
+    FRONTEND_URL: str = Field("http://localhost:3000", env="FRONTEND_URL")
+
     # Data Directories
     DATA_DIR: str = Field("./data", env="DATA_DIR")
     KNOWLEDGE_BASE_DIR: str = Field("./data/knowledge_base", env="KNOWLEDGE_BASE_DIR")
@@ -45,21 +46,30 @@ class AppSettings(BaseSettings):
     # RAG Configuration
     CHUNK_SIZE: int = Field(1000, env="CHUNK_SIZE")
     CHUNK_OVERLAP: int = Field(200, env="CHUNK_OVERLAP")
-    MIN_TOP_K: int = Field(5, env="MIN_TOP_K")
-    MAX_TOP_K: int = Field(15, env="MAX_TOP_K")
+    
+    # Retrieval Configuration
+    TOP_K: int = Field(3, env="TOP_K")  # Final number of results to return
+    MAX_K: int = Field(15, env="MAX_K")  # Maximum candidates to retrieve before reranking
     RETRIEVAL_SCORE_THRESHOLD: float = Field(0.5, env="RETRIEVAL_SCORE_THRESHOLD")
     SIMILARITY_THRESHOLD: float = Field(0.7, env="SIMILARITY_THRESHOLD")
     
-    # Reranker Configuration
+    # Reranker Configuration (see reranker_settings.py for provider-specific settings)
     ENABLE_RERANKER: bool = Field(True, env="ENABLE_RERANKER")
-    RERANKER_MODEL: str = Field("cross-encoder/ms-marco-MiniLM-L-6-v2", env="RERANKER_MODEL")
-    RERANKER_TOP_K: int = Field(5, env="RERANKER_TOP_K")
-    RERANKER_SCORE_THRESHOLD: float = Field(0.3, env="RERANKER_SCORE_THRESHOLD")
     
     # Security
     SECRET_KEY: str = Field(..., env="SECRET_KEY")
     ALGORITHM: str = Field("HS256", env="ALGORITHM")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")  # 7 days for refresh tokens
+    COOKIE_SECURE: bool = Field(True, env="COOKIE_SECURE")  # Set to False for HTTP development
+    
+    # Diagnostics - Key for accessing system health check endpoint
+    DIAGNOSTIC_KEY: Optional[str] = Field(None, env="DIAGNOSTIC_KEY")
+    
+    # Master encryption key for HKDF key derivation
+    # Derives purpose-specific keys: conversations, settings, etc.
+    MASTER_ENCRYPTION_KEY: str = Field(None, env="MASTER_ENCRYPTION_KEY")
+    # Legacy: kept for backwards compatibility
     SETTINGS_ENCRYPTION_KEY: str = Field(None, env="SETTINGS_ENCRYPTION_KEY")
     
     # CORS Configuration
@@ -150,7 +160,6 @@ class AppSettings(BaseSettings):
                 except json.JSONDecodeError as e:
                     # If JSON parsing fails, fall back to comma-separated
                     print(f"Warning: Failed to parse JSON array '{v}': {e}. Falling back to CSV parsing.")
-                    pass
             
             # Parse as comma-separated string
             items = [item.strip() for item in v.split(",") if item.strip()]
@@ -219,22 +228,12 @@ class AppSettings(BaseSettings):
                 f"CHUNK_SIZE ({self.CHUNK_SIZE})"
             )
         
-        if self.MIN_TOP_K < 1:
-            raise ValueError("MIN_TOP_K must be at least 1")
-        if self.MAX_TOP_K < self.MIN_TOP_K:
-            raise ValueError("MAX_TOP_K must be greater than or equal to MIN_TOP_K")
+        if self.TOP_K < 1:
+            raise ValueError("TOP_K must be at least 1")
+        if self.MAX_K < self.TOP_K:
+            raise ValueError("MAX_K must be greater than or equal to TOP_K")
         if not (0.0 <= self.RETRIEVAL_SCORE_THRESHOLD <= 1.0):
             raise ValueError("RETRIEVAL_SCORE_THRESHOLD must be between 0.0 and 1.0")
-        
-        # Reranker validation
-        if self.RERANKER_TOP_K < 1:
-            raise ValueError("RERANKER_TOP_K must be at least 1")
-        if not (0.0 <= self.RERANKER_SCORE_THRESHOLD <= 1.0):
-            raise ValueError("RERANKER_SCORE_THRESHOLD must be between 0.0 and 1.0")
-        
-        # Intent classifier validation
-        if not (0.0 <= self.INTENT_CONFIDENCE_THRESHOLD <= 1.0):
-            raise ValueError("INTENT_CONFIDENCE_THRESHOLD must be between 0.0 and 1.0")
         
         # Rate limiting validation
         if self.RATE_LIMIT_PER_MINUTE < 1:

@@ -1,6 +1,12 @@
 """
-Vector Store Factory - Creates LangChain vector stores with from_documents().
-Provider-agnostic, clean abstraction.
+Vector Store Factory - Creates LangChain vector stores with singleton pattern.
+Returns configured vector store instance based on settings.
+Reuses instance if already initialized (from startup).
+
+Hybrid Search Support (Dense + Sparse Vectors):
+- Qdrant: Native BM25 sparse vectors
+- Weaviate: Built-in BM25F (BM25 with field boosting)
+- Milvus: Native sparse vector support
 """
 
 from typing import Optional
@@ -16,8 +22,44 @@ from app.core import get_logger
 logger = get_logger(__name__)
 
 
-# Global retriever instance
+# Global instance (initialized in startup)
+_vector_store_instance: Optional[VectorStore] = None
 _retriever_instance: Optional[BaseRetriever] = None
+
+
+def _validate_hybrid_search_config(provider: str, config: dict) -> None:
+    """
+    Validate hybrid search configuration against vector store provider.
+    
+    If hybrid search is enabled but the provider doesn't support it,
+    logs a warning but does not block startup. Only vector search will be used.
+    
+    Args:
+        provider: Vector store provider name
+        config: Vector database configuration dict
+    """
+    hybrid_enabled = config.get("hybrid_search", False)
+    
+    
+    if not hybrid_enabled:
+        logger.info("Hybrid search: DISABLED")
+        return
+    
+    # Providers that natively support hybrid search (dense + sparse vectors)
+    hybrid_supported_providers = {"qdrant", "weaviate", "milvus"}
+    
+    if provider in hybrid_supported_providers:
+        logger.info(
+            f"✓ Hybrid search: ENABLED for {provider.upper()} "
+            "(dense + sparse vectors)"
+        )
+    else:
+        logger.warning(
+            f"⚠ HYBRID SEARCH WARNING: {provider.upper()} does not support hybrid search natively. "
+            f"Hybrid search is only available for: {', '.join(sorted(hybrid_supported_providers))}. "
+            f"Application will use standard vector search only. "
+            f"To enable hybrid search, switch to one of the supported providers or set ENABLE_HYBRID_SEARCH=false"
+        )
 
 
 def get_vector_store(
@@ -27,7 +69,8 @@ def get_vector_store(
     **kwargs
 ) -> VectorStore:
     """
-    Get or create a LangChain vector store instance.
+    Get LangChain vector store instance.
+    Returns existing instance if initialized, otherwise creates new one.
     
     Args:
         embeddings: Pre-initialized LangChain embeddings (from startup)
@@ -42,28 +85,56 @@ def get_vector_store(
         # Get pre-initialized embeddings from startup
         embeddings = get_embedding_provider()
 
-        # Get a configured vector store instance (provider from settings or explicit)
+        # Get vector store instance (reuses existing if available)
         store = get_vector_store(
             embeddings=embeddings,
             provider="chroma",
             collection_name="my_docs"
         )
-        
-        # Use LangChain's from_documents pattern
-        vector_store = store.from_documents(
-            documents=chunks,
-            embedding=embeddings,
-        )
     """
-    provider = (provider or settings.VECTOR_DB_PROVIDER).lower()
+    global _vector_store_instance
     
-    # Get config from composed settings
+    # Return existing instance if available
+    if _vector_store_instance is not None:
+        return _vector_store_instance
+    
+    # Create new instance
+    _vector_store_instance = _create_vector_store(embeddings, provider, collection_name, **kwargs)
+    return _vector_store_instance
+
+
+def _create_vector_store(
+    embeddings: Embeddings,
+    provider: Optional[str] = None,
+    collection_name: Optional[str] = None,
+    **kwargs
+) -> VectorStore:
+    """
+    Create LangChain vector store instance based on configuration.
+    Internal function - use get_vector_store() instead.
+    
+    Args:
+        embeddings: LangChain embeddings
+        provider: Vector store provider (faiss, chroma, qdrant, etc.)
+        collection_name: Collection/index name
+        **kwargs: Provider-specific arguments
+        
+    Returns:
+        VectorStore instance
+    """
+    # Get config from composed settings   
     config = settings.get_vector_db_config()
+    provider = (provider or config["provider"]).lower()    
+     
     if collection_name:
         config["collection_name"] = collection_name
     config.update(kwargs)
     
-    logger.info(f"Initializing vector store: {provider}")
+    # Check if hybrid search is enabled (used by all providers)
+    hybrid_enabled = config.get("hybrid_search", False)
+    
+    # Validate hybrid search configuration for this provider
+    _validate_hybrid_search_config(provider, config)
     
     # === FAISS (Default for Python 3.14+) ===
     if provider == "faiss":
@@ -87,7 +158,6 @@ def get_vector_store(
                     embeddings,
                     allow_dangerous_deserialization=True
                 )
-                logger.info(f"✓ FAISS loaded from disk: {config['collection_name']}")
             except Exception as e:
                 logger.warning(f"Failed to load FAISS index, creating new one: {e}")
                 # Create empty FAISS store with a dummy document
@@ -103,7 +173,6 @@ def get_vector_store(
                 [Document(page_content="init", metadata={"init": True})],
                 embeddings
             )
-            logger.info(f"✓ FAISS initialized (new): {config['collection_name']}")
         
         # Store the persist path for later saving
         store._persist_directory = persist_directory
@@ -130,13 +199,12 @@ def get_vector_store(
             embedding_function=embeddings,
             persist_directory=config["persist_directory"]
         )
-        logger.info(f"✓ Chroma initialized: {config['collection_name']}")
         return store
     
     # === Qdrant ===
     elif provider == "qdrant":
         try:
-            from langchain_qdrant import QdrantVectorStore
+            from langchain_qdrant import QdrantVectorStore, RetrievalMode
             from qdrant_client import QdrantClient
         except ImportError:
             raise VectorStoreError(
@@ -149,12 +217,47 @@ def get_vector_store(
             api_key=config.get("api_key")
         )
         
-        store = QdrantVectorStore(
-            client=client,
-            collection_name=config["collection_name"],
-            embedding=embeddings
-        )
-        logger.info(f"✓ Qdrant initialized: {config['collection_name']}")
+        # Hybrid search configuration for Qdrant
+        if hybrid_enabled:
+            try:
+                from langchain_qdrant import FastEmbedSparse
+                
+                logger.info("Initializing Qdrant with hybrid search (dense + sparse BM25 vectors)")
+                
+                # Initialize sparse embeddings for BM25
+                sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
+                
+                # Get vector names from config (user-configurable via env)
+                dense_name = config.get("dense_vector_name", "dense")
+                sparse_name = config.get("sparse_vector_name", "sparse")
+                
+                store = QdrantVectorStore(
+                    client=client,
+                    collection_name=config["collection_name"],
+                    embedding=embeddings,
+                    sparse_embedding=sparse_embeddings,
+                    retrieval_mode=RetrievalMode.HYBRID,
+                    vector_name=dense_name,
+                    sparse_vector_name=sparse_name
+                )
+            except ImportError:
+                logger.warning(
+                    "FastEmbed not installed for Qdrant hybrid search. "
+                    "Run: pip install fastembed. Falling back to dense vector search only."
+                )
+                store = QdrantVectorStore(
+                    client=client,
+                    collection_name=config["collection_name"],
+                    embedding=embeddings
+                )
+        else:
+            # Dense vector search only (default)
+            store = QdrantVectorStore(
+                client=client,
+                collection_name=config["collection_name"],
+                embedding=embeddings
+            )
+        
         return store
     
     # === Pinecone ===
@@ -171,7 +274,6 @@ def get_vector_store(
             index_name=config["collection_name"],
             embedding=embeddings
         )
-        logger.info(f"✓ Pinecone initialized: {config['collection_name']}")
         return store
     
     # === Weaviate ===
@@ -190,12 +292,82 @@ def get_vector_store(
             auth_client_secret=weaviate.AuthApiKey(api_key=config.get("api_key"))
         )
         
+        # Note: Weaviate uses hybrid search by default in similarity_search()
+        # You can control with alpha parameter: alpha=0 (keyword), alpha=1 (vector)
+        # No special initialization needed - hybrid is native to Weaviate
+        if hybrid_enabled:
+            logger.info(
+                "Weaviate will use hybrid search (BM25F + vectors). "
+                "Default alpha balances both. Pass alpha parameter to similarity_search() to adjust."
+            )
+        
         store = WeaviateVectorStore(
             client=client,
             index_name=config["collection_name"],
             embedding=embeddings
         )
-        logger.info(f"✓ Weaviate initialized: {config['collection_name']}")
+        return store
+    
+    # === Milvus ===
+    elif provider == "milvus":
+        try:
+            from langchain_milvus import Milvus
+        except ImportError:
+            raise VectorStoreError(
+                "langchain-milvus not installed. Run: pip install langchain-milvus pymilvus",
+                provider="milvus"
+            )
+        
+        # Build connection args using unified VECTOR_DB_* settings
+        connection_args = {
+            "host": config.get("host"),
+            "port": config.get("port")
+        }
+        
+        # Add authentication if provided (using unified settings)
+        if config.get("user"):
+            connection_args["user"] = config.get("user")
+        if config.get("password"):
+            connection_args["password"] = config.get("password")
+        
+        # Hybrid search configuration for Milvus (requires Milvus 2.5+)
+        if hybrid_enabled:
+            try:
+                from langchain_milvus import BM25BuiltInFunction
+                
+                logger.info(
+                    "Initializing Milvus with hybrid search (dense embeddings + BM25 sparse vectors). "
+                    "Note: Requires Milvus 2.5+ server. NOT available in Milvus Lite."
+                )
+                
+                # Initialize with BM25 built-in function for full-text search
+                store = Milvus(
+                    embedding_function=embeddings,
+                    builtin_function=BM25BuiltInFunction(),
+                    vector_field=["dense", "sparse"],  # Both dense and sparse vectors
+                    collection_name=config["collection_name"],
+                    connection_args=connection_args,
+                    consistency_level="Strong",
+                    drop_old=False
+                )
+            except ImportError:
+                logger.warning(
+                    "BM25BuiltInFunction not available in langchain-milvus. "
+                    "Ensure you have langchain-milvus>=0.3.0. Falling back to dense vector search only."
+                )
+                store = Milvus(
+                    embedding_function=embeddings,
+                    collection_name=config["collection_name"],
+                    connection_args=connection_args
+                )
+        else:
+            # Dense vector search only (default)
+            store = Milvus(
+                embedding_function=embeddings,
+                collection_name=config["collection_name"],
+                connection_args=connection_args
+            )
+        
         return store
     
     else:
@@ -218,7 +390,7 @@ def get_retriever(
     Args:
         embeddings: Pre-initialized embeddings (optional, uses existing if available)
         provider: Vector store provider (optional, uses settings default)
-        top_k: Number of results to return (optional, uses MIN_TOP_K from settings)
+        top_k: Number of results to return (optional, uses TOP_K from settings)
     
     Returns:
         BaseRetriever: LangChain Retriever instance
@@ -243,14 +415,13 @@ def get_retriever(
     )
     
     # Get top_k from settings or parameter
-    k = top_k or settings.app_settings.MIN_TOP_K
+    k = top_k or settings.app_settings.TOP_K
     
     # Create retriever from vector store
     _retriever_instance = vector_store.as_retriever(
         search_kwargs={"k": k}
     )
     
-    logger.info(f"✓ Retriever initialized (top_k={k})")
     return _retriever_instance
 
 
@@ -286,8 +457,6 @@ def save_vector_store(vector_store: VectorStore) -> bool:
             # Save to disk
             index_path = os.path.join(persist_dir, collection_name)
             vector_store.save_local(index_path)
-            
-            logger.info(f"✓ FAISS index saved to: {index_path}")
             return True
         else:
             # Other providers handle persistence automatically

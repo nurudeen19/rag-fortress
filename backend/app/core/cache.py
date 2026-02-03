@@ -7,7 +7,6 @@ from typing import Any, Optional, Union
 from datetime import timedelta
 
 from app.core import get_logger
-from app.config.settings import settings
 
 
 logger = get_logger(__name__)
@@ -128,6 +127,13 @@ class Cache:
     
     def __init__(self, backend):
         self.backend = backend
+    
+    @property
+    def redis_client(self):
+        """Expose underlying Redis client if using Redis backend."""
+        if isinstance(self.backend, RedisBackend):
+            return self.backend._redis
+        return None
     
     async def get(self, key: str, default: Any = None) -> Any:
         """Get value from cache."""

@@ -14,6 +14,8 @@ app/
     ├── __init__.py        # Package initialization
     ├── base.py            # BaseEventHandler class
     ├── activity_log_event.py    # Activity logging handler
+    ├── semantic_cache_event.py  # Semantic cache storage handler
+    ├── message_save_event.py    # Background message persistence (latency optimization)
     └── [your_event].py    # Add more events here
 ```
 

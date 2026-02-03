@@ -266,29 +266,26 @@ If you're using Chroma and upgrading to Python 3.14:
 
 ### 3. Qdrant (Recommended for Production)
 
-**✅ PRODUCTION RECOMMENDED**
+**✅ PRODUCTION RECOMMENDED | ✅ Hybrid Search Supported**
 
-**Local Deployment:**
+**Configuration:**
 ```bash
 VECTOR_DB_PROVIDER=qdrant
-QDRANT_HOST=localhost
-QDRANT_PORT=6333
+QDRANT_URL=https://your-cluster.qdrant.io  # or localhost:6333
+QDRANT_API_KEY=your-api-key  # optional for local
 QDRANT_COLLECTION_NAME=rag_fortress
-QDRANT_PREFER_GRPC=false
-```
 
-**Cloud Deployment:**
-```bash
-VECTOR_DB_PROVIDER=qdrant
-QDRANT_URL=https://your-cluster.qdrant.io
-QDRANT_API_KEY=your-api-key
-QDRANT_COLLECTION_NAME=rag_fortress
+# Optional: Enable hybrid search (dense + sparse/BM25)
+ENABLE_HYBRID_SEARCH=true  # Requires: pip install fastembed
+VECTOR_DB_DENSE_VECTOR_NAME=dense
+VECTOR_DB_SPARSE_VECTOR_NAME=sparse
 ```
 
 **Pros:**
 - Excellent performance
 - Self-hosted or cloud
 - Rich filtering capabilities
+- **Native hybrid search** (semantic + keyword/BM25)
 - Active development
 - Affordable
 
@@ -321,7 +318,7 @@ PINECONE_INDEX_NAME=rag-fortress
 
 ### 5. Weaviate
 
-**Open-source vector search engine**
+**✅ Hybrid Search Supported**
 
 **Configuration:**
 ```bash
@@ -329,12 +326,16 @@ VECTOR_DB_PROVIDER=weaviate
 WEAVIATE_URL=http://localhost:8080
 WEAVIATE_API_KEY=optional-key
 WEAVIATE_INDEX_NAME=RagFortress
+
+# Optional: Enable hybrid search (built-in BM25F)
+ENABLE_HYBRID_SEARCH=true  # No extra dependencies needed
 ```
 
 **Pros:**
 - Open-source
 - Self-hosted or cloud
 - GraphQL API
+- **Native BM25F hybrid search**
 - Rich schema support
 
 **Cons:**
@@ -342,7 +343,61 @@ WEAVIATE_INDEX_NAME=RagFortress
 - Steeper learning curve
 - Smaller community
 
+### 6. Milvus
 
+**✅ Hybrid Search Supported (Milvus 2.5+)**
+
+**Configuration:**
+```bash
+VECTOR_DB_PROVIDER=milvus
+MILVUS_HOST=localhost
+MILVUS_PORT=19530
+
+# Optional: Enable hybrid search (requires Milvus 2.5+)
+ENABLE_HYBRID_SEARCH=true
+VECTOR_DB_DENSE_VECTOR_NAME=dense
+VECTOR_DB_SPARSE_VECTOR_NAME=sparse
+```
+
+**Pros:**
+- Highly scalable
+- Cloud-native architecture
+- **Hybrid search with BM25**
+
+**Cons:**
+- More complex deployment
+- Requires Milvus 2.5+ for hybrid search
+
+---
+
+## Hybrid Search (Semantic + Keyword)
+
+Combines dense vectors (semantic meaning) with sparse vectors (BM25 keyword matching) for improved retrieval quality.
+
+**Supported:** Qdrant, Weaviate, Milvus | **Not Supported:** FAISS, Chroma, Pinecone
+
+**Quick Setup:**
+```bash
+ENABLE_HYBRID_SEARCH=true
+VECTOR_DB_PROVIDER=qdrant  # or weaviate, milvus
+
+# For Qdrant only:
+pip install fastembed
+```
+
+**When to Use:**
+- Technical/domain-specific content (medical, legal, engineering)
+- Queries with specific keywords or codes
+- Exact term matching alongside semantic search
+
+**How It Works:**
+1. Query runs through both dense (semantic) and sparse (BM25) search
+2. Results fused via RRF (Reciprocal Rank Fusion)
+3. Works transparently with existing retrieval flow and reranking
+
+See provider sections above for configuration details.
+
+---
 
 ## Vector Store Architecture
 

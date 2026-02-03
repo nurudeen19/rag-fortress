@@ -7,10 +7,11 @@ management, connection pooling, and migration handling.
 from typing import AsyncGenerator, Optional
 from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import NullPool
 from app.config.database_settings import DatabaseSettings
 from app.models import Base
 import logging
+import warnings
 
 logger = logging.getLogger(__name__)
 
@@ -188,9 +189,19 @@ class DatabaseManager:
         return missing
     
     async def close(self):
-        """Close database connections."""
+        """
+        Close database connections.
+        
+        Suppresses harmless aiomysql cleanup warnings that occur when connections
+        are finalized after the event loop has already been closed.
+        This is a known issue on Windows with aiomysql/asyncio cleanup timing.
+        """
         if self.async_engine:
-            await self.async_engine.dispose()
+            # Suppress the harmless "Event loop is closed" warning from aiomysql cleanup
+            # This occurs during __del__ after the event loop has already closed
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=RuntimeError)
+                await self.async_engine.dispose()
             logger.info("Database connections closed")
     
     async def close_connection(self):

@@ -6,6 +6,8 @@ Architecture:
     chunker.py  → Chunk using LangChain splitters
     factory.py  → Get/create vector store with embeddings
     storage.py  → Orchestrate: load → chunk → store
+    retriever.py → Search and retrieve documents
+    reranker.py → Rerank retrieved documents for improved relevance
 
 Usage:
     from app.services.vector_store.storage import DocumentStorageService

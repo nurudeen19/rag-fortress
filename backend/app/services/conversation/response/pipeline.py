@@ -15,11 +15,13 @@ from app.services.conversation.response.retrieval_coordinator import RetrievalCo
 from app.services.llm import LLMRouter, LLMType
 from app.services.conversation.service import ConversationService
 from app.utils.llm_error_handler import LLMErrorHandler, ErrorShouldRetry
+from app.utils.text_processing import preprocess_query
 from app.config.prompt_settings import get_prompt_settings
 from app.models.user_permission import PermissionLevel
-from app.models.message import MessageRole
 from app.config.settings import settings
 from app.core import get_logger
+from app.core.semantic_cache import get_semantic_cache
+from app.core.events import get_event_bus
 
 logger = get_logger(__name__)
 
@@ -36,12 +38,6 @@ class ResponsePipeline:
     ):
         """
         Initialize response pipeline.
-        
-        Args:
-            retriever: Vector store retriever service
-            llm_router: LLM router service
-            conversation_service: Conversation service for history/persistence
-            query_decomposer: Optional query decomposer for query optimization
         """
         self.retriever = retriever
         self.retrieval_coordinator = RetrievalCoordinator(retriever)
@@ -49,43 +45,55 @@ class ResponsePipeline:
         self.conversation_service = conversation_service
         self.query_decomposer = query_decomposer
         self.prompt_settings = get_prompt_settings()
+        self.semantic_cache = get_semantic_cache()
         
         logger.info(
             f"ResponsePipeline initialized "
             f"(decomposer={'enabled' if query_decomposer else 'disabled'})"
         )
+
+    def _preprocess_query(self, query: str) -> Dict[str, Any]:
+        """
+        Preprocess query using simple preprocessing and stop-word removal.
+
+        returns Dict with preprocessed query info
+        """
+        preprocessing_result = preprocess_query(query)
+        optimized_query = preprocessing_result.queries[0]
+        
+        return {
+            "primary_query": optimized_query,
+            "all_queries": [optimized_query],
+            "decomposition_result": preprocessing_result,
+            "strategy": "preprocessed"
+        }
+
     
     async def process_query(
         self,
-        user_query: str,
-        user_clearance_level: Optional[int] = None
+        user_query: str
     ) -> Dict[str, Any]:
         """
         Process and potentially decompose a query.
         
-        Args:
-            user_query: Original user query
-            user_clearance_level: User's security clearance level (not currently used)
-            
+        If LLM decomposer is enabled: Use LLM to decompose query
+        If decomposer is disabled: Use preprocessing for query optimization
+        
         Returns:
             Dict with processed query info:
             - 'primary_query': Main query to use for retrieval
-            - 'all_queries': List of all decomposed queries (if applicable)
-            - 'decomposition_result': Full decomposition result (if applicable)
+            - 'all_queries': List of all queries (decomposed or single optimized)
+            - 'decomposition_result': Full result (from decomposer or preprocessor)
             - 'strategy': Processing strategy used
         """
         # Check if decomposer is available and enabled in settings
         if not self.query_decomposer or not settings.llm_settings.ENABLE_QUERY_DECOMPOSER:
-            # No decomposer or disabled - use original query
-            return {
-                "primary_query": user_query,
-                "all_queries": [user_query],
-                "decomposition_result": None,
-                "strategy": "no_decomposition"
-            }
+            # No decomposer - use preprocessing instead
+            logger.debug("LLM decomposer disabled, using query preprocessing")
+            return self._preprocess_query(user_query)
         
         try:
-            # Attempt query decomposition
+            # Attempt LLM query decomposition
             decomposition_result = await self.query_decomposer.decompose(user_query)
             
             if decomposition_result and decomposition_result.queries:
@@ -93,34 +101,27 @@ class ResponsePipeline:
                 primary = all_queries[0]
                 
                 logger.info(
-                    f"Query decomposed: {len(all_queries)} queries"
+                    f"Query decomposed: {len(all_queries)} queries "
+                    f"(decomposed={decomposition_result.decomposed})"
                 )
                 
                 return {
                     "primary_query": primary,
                     "all_queries": all_queries,
                     "decomposition_result": decomposition_result,
-                    "strategy": "decomposed"
+                    "strategy": "decomposed" if decomposition_result.decomposed else "llm_optimized"
                 }
             else:
-                # Decomposition failed or returned empty - use original
-                logger.warning("Query decomposition failed or returned empty, using original query")
-                return {
-                    "primary_query": user_query,
-                    "all_queries": [user_query],
-                    "decomposition_result": None,
-                    "strategy": "decomposition_failed"
-                }
+                # Decomposition failed - fallback to preprocessing
+                logger.warning("Query decomposition returned empty, falling back to preprocessing")
+                
+                return self._preprocess_query(user_query)
         
         except Exception as e:
-            logger.error(f"Error in query processing: {e}", exc_info=True)
-            # Fallback to original query on error
-            return {
-                "primary_query": user_query,
-                "all_queries": [user_query],
-                "decomposition_result": None,
-                "strategy": "error_fallback"
-            }
+            logger.error(f"Error in query decomposition: {e}, falling back to preprocessing", exc_info=True)
+            
+            # Fallback to preprocessing on error
+            return self._preprocess_query(user_query)
     
     async def retrieve_context(
         self,
@@ -129,7 +130,7 @@ class ResponsePipeline:
         user_department_id: Optional[int],
         user_dept_clearance: Optional[PermissionLevel],
         user_id: int,
-        decomposed_queries: Optional[List[str]] = None
+        decomposition_result: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Retrieve context documents for query with optional multi-query decomposition.
@@ -142,7 +143,7 @@ class ResponsePipeline:
             user_department_id: User's department ID
             user_dept_clearance: User's department-level clearance
             user_id: User ID for logging
-            decomposed_queries: Optional list of decomposed queries to retrieve
+            decomposition_result: Optional decomposition result with queries and decomposed flag
             
         Returns:
             Retrieval result dict with success status, documents, and metadata
@@ -153,8 +154,63 @@ class ResponsePipeline:
             user_department_id=user_department_id,
             user_dept_clearance=user_dept_clearance,
             user_id=user_id,
-            decomposed_queries=decomposed_queries
+            decomposition_result=decomposition_result
         )
+    
+    async def _cache_response(
+        self,
+        user_query: str,
+        response_text: str,
+        security_metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Cache the generated response with pre-computed security metadata.
+        
+        Args:
+            user_query: Original user query
+            response_text: Generated response to cache
+            security_metadata: Pre-computed complete security metadata dict
+        """
+        # Emit cache event (non-blocking background processing)
+        # Event handler will use pre-computed metadata directly
+        try:
+            bus = get_event_bus()
+            await bus.emit("semantic_cache", {
+                "cache_type": "response",
+                "query": user_query,
+                "entry": response_text,
+                "security_metadata": security_metadata  # Pass complete metadata object
+            })
+        except Exception as e:
+            logger.error(f"Failed to emit cache event: {e}", exc_info=True)
+    
+    async def _emit_context_cache(
+        self,
+        user_query: str,
+        documents: List[Any],
+        security_metadata: Optional[Dict[str, Any]] = None
+    ):
+        """
+        Emit context cache event with pre-computed complete security metadata.
+        
+        Event handler will format context text using already-computed metadata
+        without any document iteration for security extraction.
+        
+        Args:
+            user_query: Original user query
+            documents: Raw documents to cache
+            security_metadata: Pre-computed complete security metadata dict
+        """
+        try:
+            bus = get_event_bus()
+            await bus.emit("semantic_cache", {
+                "cache_type": "context",
+                "query": user_query,
+                "documents": documents,
+                "security_metadata": security_metadata  # Pass complete metadata object
+            })
+        except Exception as e:
+            logger.error(f"Failed to emit context cache event: {e}", exc_info=True)
     
     def select_llm(self, max_doc_level: Optional[int]) -> Tuple[Any, LLMType]:
         """
@@ -183,10 +239,12 @@ class ResponsePipeline:
         llm: Any,
         llm_type: LLMType,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         conversation_id: str,
         user_id: int,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Generate streaming RAG response with fallback on error.
@@ -217,10 +275,12 @@ class ResponsePipeline:
                 llm=llm,
                 user_query=user_query,
                 documents=documents,
+                cached_context_text=cached_context_text,
                 history=history,
                 conversation_id=conversation_id,
                 user_id=user_id,
-                partial_context=partial_context
+                partial_context=partial_context,
+                security_metadata=security_metadata
             ):
                 yield item
             return
@@ -229,35 +289,41 @@ class ResponsePipeline:
             primary_exception = e
             logger.error(f"Primary LLM error ({llm_type.value}): {e}", exc_info=True)
             
-            # Determine if we should try fallback
-            should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
-                e,
-                fallback_configured=self.llm_router.is_fallback_configured()
-            )
-            
-            logger.info(f"Fallback decision: {reason}")
-            
-            if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
-                fallback_llm = self.llm_router.get_fallback_llm()
-                if fallback_llm:
-                    attempted_fallback = True
-                    logger.info("Attempting fallback LLM")
-                    try:
-                        async for item in self._try_stream(
-                            llm=fallback_llm,
-                            user_query=user_query,
-                            documents=documents,
-                            history=history,
-                            conversation_id=conversation_id,
-                            user_id=user_id,
-                            is_fallback=True,
-                            partial_context=partial_context
-                        ):
-                            yield item
-                        return
-                    except Exception as fallback_err:
-                        fallback_exception = fallback_err
-                        logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
+            # Check if fallback is enabled before attempting
+            if not self.llm_router.is_fallback_enabled():
+                logger.info("Fallback LLM not enabled, skipping retry")
+            else:
+                # Determine if we should try fallback
+                should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
+                    e,
+                    fallback_configured=self.llm_router.is_fallback_configured()
+                )
+                
+                logger.info(f"Fallback decision: {reason}")
+                
+                if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
+                    fallback_llm = self.llm_router.get_fallback_llm()
+                    if fallback_llm:
+                        attempted_fallback = True
+                        logger.info("Attempting fallback LLM")
+                        try:
+                            async for item in self._try_stream(
+                                llm=fallback_llm,
+                                user_query=user_query,
+                                documents=documents,
+                                cached_context_text=cached_context_text,
+                                history=history,
+                                conversation_id=conversation_id,
+                                user_id=user_id,
+                                is_fallback=True,
+                                partial_context=partial_context,
+                                security_metadata=security_metadata
+                            ):
+                                yield item
+                            return
+                        except Exception as fallback_err:
+                            fallback_exception = fallback_err
+                            logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
         
         # If we get here, both primary and potentially fallback failed
         error_response = LLMErrorHandler.format_error_response(
@@ -274,22 +340,15 @@ class ResponsePipeline:
         llm: Any,
         llm_type: LLMType,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         conversation_id: str,
         user_id: int,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Generate complete RAG response (non-streaming) with fallback.
-        
-        Args:
-            llm: Primary LLM instance
-            llm_type: Primary LLM type
-            user_query: User's question
-            documents: Retrieved context documents
-            conversation_id: Conversation ID
-            user_id: User ID
-            partial_context: Optional partial context metadata for specialized prompting
             
         Returns:
             Generated response text
@@ -309,40 +368,48 @@ class ResponsePipeline:
                 llm=llm,
                 user_query=user_query,
                 documents=documents,
+                cached_context_text=cached_context_text,
                 history=history,
                 is_fallback=False,
-                partial_context=partial_context
+                partial_context=partial_context,
+                security_metadata=security_metadata
             )
         
         except Exception as e:
             primary_exception = e
             logger.error(f"Primary LLM error ({llm_type.value}): {e}", exc_info=True)
             
-            # Determine if we should try fallback
-            should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
-                e,
-                fallback_configured=self.llm_router.is_fallback_configured()
-            )
-            
-            logger.info(f"Fallback decision: {reason}")
-            
-            if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
-                fallback_llm = self.llm_router.get_fallback_llm()
-                if fallback_llm:
-                    attempted_fallback = True
-                    logger.info("Attempting fallback LLM")
-                    try:
-                        return await self._try_generate(
-                            llm=fallback_llm,
-                            user_query=user_query,
-                            documents=documents,
-                            history=history,
-                            is_fallback=True,
-                            partial_context=partial_context
-                        )
-                    except Exception as fallback_err:
-                        fallback_exception = fallback_err
-                        logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
+            # Check if fallback is enabled before attempting
+            if not self.llm_router.is_fallback_enabled():
+                logger.info("Fallback LLM not enabled, skipping retry")
+            else:
+                # Determine if we should try fallback
+                should_retry, reason = LLMErrorHandler.should_retry_with_fallback(
+                    e,
+                    fallback_configured=self.llm_router.is_fallback_configured()
+                )
+                
+                logger.info(f"Fallback decision: {reason}")
+                
+                if should_retry in [ErrorShouldRetry.YES, ErrorShouldRetry.LAST_RESORT]:
+                    fallback_llm = self.llm_router.get_fallback_llm()
+                    if fallback_llm:
+                        attempted_fallback = True
+                        logger.info("Attempting fallback LLM")
+                        try:
+                            return await self._try_generate(
+                                llm=fallback_llm,
+                                user_query=user_query,
+                                documents=documents,
+                                cached_context_text=cached_context_text,
+                                history=history,
+                                is_fallback=True,
+                                partial_context=partial_context,
+                                security_metadata=security_metadata
+                            )
+                        except Exception as fallback_err:
+                            fallback_exception = fallback_err
+                            logger.error(f"Fallback LLM also failed: {fallback_err}", exc_info=True)
             
             # If we get here, both failed or we shouldn't retry
             error_response = LLMErrorHandler.format_error_response(
@@ -358,23 +425,36 @@ class ResponsePipeline:
         self,
         llm: Any,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         history: List[Dict[str, str]],
         conversation_id: str,
         user_id: int,
         is_fallback: bool = False,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Attempt streaming response generation with given LLM.
         
+        Uses cached context if available, otherwise builds from documents.
         Yields tokens and metadata. Persists successful response to DB.
         """
-        # Build context from documents
-        context_text = "\n\n".join([
-            f"{doc.page_content}"
-            for doc in documents
-        ])
+        # Use cached context if available, otherwise build from documents
+        if cached_context_text:
+            context_text = cached_context_text
+            logger.debug(f"Using cached context: {len(context_text)} chars")
+        elif documents:
+            # Build context from documents and emit cache event
+            context_text = "\n\n".join([f"{doc.page_content}" for doc in documents])
+            await self._emit_context_cache(user_query, documents)
+            logger.debug(f"Built context from {len(documents)} documents: {len(context_text)} chars")
+        else:
+            context_text = ""
+            logger.warning("No context available (no cache and no documents)")
+        
+        if not context_text.strip():
+            logger.warning("Empty context being passed to LLM streaming!")
         
         # Select appropriate system prompt based on partial context
         system_prompt = self._select_prompt(partial_context)
@@ -403,32 +483,28 @@ class ResponsePipeline:
             full_response += content
             yield {"type": "token", "content": content}
         
-        sources = self._build_sources_payload(documents)
+        logger.info(f"Streaming complete: '{full_response[:100]}...'")
         
-        # Cache the exchange (updates cache with both messages)
-        await self.conversation_service.cache_conversation_exchange(
-            conversation_id,
-            user_query,
-            full_response,
-            user_id=user_id,
-            persist_to_db=False,  # Don't persist user message again
-            assistant_meta={"sources": sources} if sources else None
-        )
+        # Build sources only if we have documents (not from cache)
+        sources = self._build_sources_payload(documents) if documents else []
         
-        # Persist only the assistant message to DB
+        # Build metadata
         meta = {"sources": sources} if sources else {}
         if is_fallback:
             meta["used_fallback_llm"] = True
         if partial_context:
             meta["partial_context"] = partial_context
         
-        await self.conversation_service.add_message(
+        # Cache the complete response after streaming
+        await self._cache_response(user_query, full_response, security_metadata)
+        
+        # Save response (cache + persist)
+        await self.conversation_service.save_assistant_response(
             conversation_id=conversation_id,
             user_id=user_id,
-            role=MessageRole.ASSISTANT,
-            content=full_response,
-            token_count=None,
-            meta=meta
+            user_query=user_query,
+            response_text=full_response,
+            assistant_meta=meta if meta else None
         )
         
         if sources:
@@ -440,23 +516,37 @@ class ResponsePipeline:
         self,
         llm: Any,
         user_query: str,
-        documents: List[Any],
+        documents: Optional[List[Any]],
+        cached_context_text: Optional[str],
         history: List[Dict[str, str]],
         is_fallback: bool = False,
-        partial_context: Optional[Dict[str, Any]] = None
+        partial_context: Optional[Dict[str, Any]] = None,
+        security_metadata: Optional[Dict[str, Any]] = None
     ) -> str:
         """Attempt response generation with given LLM."""
-        # Build context
-        context_text = "\n\n".join([
-            f"{doc.page_content}"
-            for doc in documents
-        ])
+        # Use cached context if available, otherwise build from documents
+        if cached_context_text:
+            context_text = cached_context_text
+            logger.debug(f"Using cached context: {len(context_text)} chars")
+        elif documents:
+            # Build context from documents and emit cache event
+            context_text = "\n\n".join([f"{doc.page_content}" for doc in documents])
+            await self._emit_context_cache(user_query, documents, security_metadata)
+            logger.debug(f"Built context from {len(documents)} documents: {len(context_text)} chars")
+        else:
+            context_text = ""
+            logger.warning("No context available (no cache and no documents)")
+        
+        if not context_text.strip():
+            logger.warning("Empty context being passed to LLM generation!")
         
         # Select appropriate system prompt based on partial context
         system_prompt = self._select_prompt(partial_context)
         
         # Build human message with partial context details if applicable
         human_message = self._build_human_message(user_query, context_text, partial_context)
+        
+        logger.debug(f"Human message length: {len(human_message)} chars")
         
         prompt = ChatPromptTemplate.from_messages([
             SystemMessage(content=system_prompt),
@@ -473,7 +563,14 @@ class ResponsePipeline:
             "history": history_messages
         })
         
-        return response.content if hasattr(response, 'content') else str(response)
+        response_text = response.content if hasattr(response, 'content') else str(response)
+        
+        logger.info(f"Generated response: '{response_text[:100]}...'")
+        
+        # Cache the response
+        await self._cache_response(user_query, response_text, security_metadata)
+        
+        return response_text
     
     def _convert_history_to_messages(self, history: List[Dict[str, str]]) -> List[Any]:
         """Convert history dicts to LangChain message objects."""

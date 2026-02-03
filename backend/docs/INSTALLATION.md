@@ -139,8 +139,56 @@ RAG Fortress is an open-source, flexible, and secure Retrieval-Augmented Generat
 ### "uv: command not found"
 Ensure `uv` is installed and added to your PATH. Restart your terminal after installation.
 
+### Installing Development Packages with uv
+
+If you want to install development/testing packages alongside production dependencies:
+
+```bash
+uv sync --extra dev
+```
+
+This installs additional development tools like:
+- Testing frameworks (pytest, coverage)
+- Code quality tools (pylint, black, mypy)
+- Development utilities
+
 ### "Python 3.11+ not found"  
 Install Python 3.11 or higher from [python.org](https://www.python.org)
+
+### Package Build Failing (Compilation Error)
+
+If you encounter errors like `error: Microsoft Visual C++ 14.0 is required` or compilation failures during `uv sync` or `pip install`, you need C++ build tools:
+
+**Windows:**
+1. Download and install [Visual Studio Installer](https://visualstudio.microsoft.com/visual-studio-installer/)
+2. Open Visual Studio Installer and click "Create new" or "Modify"
+3. **For a lightweight installation:** Under "Individual components", search for and select:
+   - **Windows SDK** (Windows 11 SDK or your Windows version SDK)
+   - **MSBuild tools**
+   - Click "Install" to proceed
+4. **Alternative (full workload):** If you prefer a complete C++ setup, select "Modify" and check "Desktop development with C++" under Workloads
+5. Restart your terminal and retry `uv sync`
+
+*Note: Installing individual components (SDK + MSBuild) is recommended for minimal disk space usage.*
+
+**macOS:**
+```bash
+xcode-select --install
+```
+This installs Xcode Command Line Tools which includes necessary C++ build tools.
+
+**Linux:**
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install build-essential
+
+# Fedora/RHEL
+sudo dnf install gcc gcc-c++ make
+
+# Arch
+sudo pacman -S base-devel
+```
 
 ### Module not found
 Ensure you've run `uv sync` and activated the virtual environment.

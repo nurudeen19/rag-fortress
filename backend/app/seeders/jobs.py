@@ -1,7 +1,6 @@
 """Data ingestion job seeder - creates initial job queue entry."""
 
 import logging
-from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 

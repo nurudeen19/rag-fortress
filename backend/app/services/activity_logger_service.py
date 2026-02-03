@@ -7,11 +7,10 @@ Provides comprehensive audit trail with database persistence.
 
 import json
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime, timedelta, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, desc, func
-from sqlalchemy.orm import joinedload
 
 from app.models.activity_log import ActivityLog
 from app.utils import with_activity_log_relations

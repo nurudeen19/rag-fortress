@@ -1,14 +1,11 @@
 """File upload operation handlers - business logic for file operations."""
 
-import os
-from typing import Optional, List
+from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
 
 from app.services.file_upload import FileUploadService
-from app.schemas.file_upload import FileUploadCreate, FileUploadApproveRequest, FileUploadRejectRequest
+from app.schemas.file_upload import FileUploadCreate
 from app.models.user import User
-from app.models.file_upload import FileUpload, FileStatus
 from app.config.cache_settings import cache_settings
 from app.core.cache import get_cache
 from app.core import get_logger
@@ -230,7 +227,7 @@ async def handle_reject_file(
     """Reject file from processing."""
     try:
         service = FileUploadService(session)
-        old_status = (await service.get_file(file_id)).status
+        (await service.get_file(file_id)).status
         file_upload = await service.reject(file_id, admin.id, reason=reason)
         
         await session.commit()

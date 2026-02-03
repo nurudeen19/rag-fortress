@@ -1,6 +1,7 @@
 """
 Document Storage Service - Orchestrates load → chunk → store pipeline.
 Manages ingestion from FileUpload model through vector store.
+Supports hybrid search (dense + sparse vectors) for compatible providers.
 """
 
 from typing import List, Dict, Any, Tuple
@@ -15,6 +16,7 @@ from app.services.vector_store.loader import DocumentLoader
 from app.services.vector_store.chunker import DocumentChunker
 from app.core.vector_store_factory import get_vector_store
 from app.core.embedding_factory import get_embedding_provider
+from app.core.vector_store_factory import save_vector_store
 from app.models.file_upload import FileUpload, FileStatus
 from app.config.settings import settings
 from app.core import get_logger
@@ -22,15 +24,18 @@ from app.core import get_logger
 
 logger = get_logger(__name__)
 
+# Providers that support hybrid search (dense + sparse vectors)
+HYBRID_SEARCH_SUPPORTED_PROVIDERS = {"qdrant", "weaviate", "milvus"}
+
 
 class DocumentStorageService:
     """
-    Orchestrates load → chunk → store pipeline.
+    Orchestrates load → chunk → store pipeline with optional hybrid search.
     
     Flow:
     1. Load approved files from FileUpload model
     2. Chunk documents using DocumentChunker
-    3. Store chunks in vector DB with batching
+    3. Store chunks in vector DB with batching (dense vectors only or hybrid if supported)
     4. Update file statuses (PROCESSED or FAILED)
     """
     
@@ -50,9 +55,22 @@ class DocumentStorageService:
             embeddings=self.embeddings,
             provider=settings.VECTOR_DB_PROVIDER,
         )
-        logger.info("DocumentStorageService initialized")
+        
+        # Check if hybrid search is enabled and provider supports it
+        # Note: Providers like Qdrant, Weaviate, and Milvus handle sparse vectors natively
+        self.hybrid_search_enabled = settings.ENABLE_HYBRID_SEARCH
+        self.provider = settings.VECTOR_DB_PROVIDER.lower()
+        self.supports_hybrid = self.provider in HYBRID_SEARCH_SUPPORTED_PROVIDERS
+        
+        # Only log warning if there's a configuration mismatch
+        if self.hybrid_search_enabled and not self.supports_hybrid:
+            logger.warning(
+                f"Hybrid search requested but {self.provider.upper()} doesn't support it. "
+                f"Only dense vector search will be used. "
+                f"Supported providers: {', '.join(sorted(HYBRID_SEARCH_SUPPORTED_PROVIDERS))}"
+            )
     
-    async def ingest_pending_files(self, batch_size: int = 100, file_ids: List[int] = None) -> Dict[str, Any]:
+    async def ingest_pending_files(self, batch_size: int = 1000, file_ids: List[int] = None) -> Dict[str, Any]:
         """
         Load, chunk, and store pending approved files or specific files.
         
@@ -65,16 +83,12 @@ class DocumentStorageService:
         Returns:
             Dict with counts: total_files, successfully_stored, chunks_generated, errors
         """
-        logger.info(f"Starting ingestion pipeline (file_ids={file_ids})")
-        
+
         # Step 1: Load files from database
         # Pass file_ids to loader - if provided, only those are loaded
         files = await self.loader.load_pending_files(file_ids=file_ids)
         if not files:
-            logger.info("No pending files to process")
             return {"total_files": 0, "successfully_stored": 0, "chunks_generated": 0, "errors": []}
-        
-        logger.info(f"Loaded {len(files)} files")
         
         # Step 2: Chunk files
         chunks = self.chunker.chunk_loaded_files(files)
@@ -89,7 +103,7 @@ class DocumentStorageService:
             logger.warning("No chunks generated from files")
             return {"total_files": len(files), "successfully_stored": 0, "chunks_generated": 0, "errors": []}
         
-        logger.info(f"Generated {len(chunks)} chunks")
+        logger.info(f"Generated {len(chunks)} chunks from {len(files)} files")
         
         # Step 3: Store chunks in vector DB
         file_ids_result, errors = await self._store_and_track(chunks, batch_size)
@@ -110,6 +124,7 @@ class DocumentStorageService:
     async def _store_and_track(self, chunks: List[Document], batch_size: int) -> Tuple[set, Dict]:
         """
         Store chunks in vector DB with batching and track results.
+        Includes hybrid search support for compatible providers.        
         
         Returns:
             Tuple of (set of successful file_ids, dict of error file_ids)
@@ -137,8 +152,7 @@ class DocumentStorageService:
             try:
                 self.vector_store.add_documents(batch)
                 
-                # Persist to disk if using FAISS or other local providers
-                from app.core.vector_store_factory import save_vector_store
+                # Persist to disk if using FAISS or other local providers                
                 save_vector_store(self.vector_store)
                 
                 # Mark files in this batch as successful
@@ -147,7 +161,8 @@ class DocumentStorageService:
                     if file_id:
                         successful_file_ids.add(file_id)
                 
-                logger.info(f"✓ Stored batch {batch_num}: {len(batch)} chunks")
+                search_type = "(hybrid search)" if (self.hybrid_search_enabled and self.supports_hybrid) else ""
+                logger.info(f"✓ Stored batch {batch_num}: {len(batch)} chunks {search_type}")
             except Exception as e:
                 logger.error(f"✗ Failed storing batch {batch_num}: {e}")
                 

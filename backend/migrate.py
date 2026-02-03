@@ -11,7 +11,6 @@ Usage:
     python migrate.py revision -m "message"  # Create new migration
 """
 import sys
-import os
 from pathlib import Path
 from click import command, argument, option
 from alembic.config import Config

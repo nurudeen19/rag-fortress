@@ -3,22 +3,16 @@ import { ref, computed } from 'vue'
 import api from '../services/api'
 
 export const useAuthStore = defineStore('auth', () => {
-  // State
-  const user = ref(JSON.parse(localStorage.getItem('user') || 'null'))
-  const token = ref(localStorage.getItem('token') || null)
-  const tokenExpiresAt = ref(localStorage.getItem('tokenExpiresAt') || null)
+  // State - user data only (no tokens in localStorage)
+  // Tokens are stored in httpOnly cookies (secure, XSS-safe)
+  const user = ref(null)
   const loading = ref(false)
   const error = ref(null)
   const initialized = ref(false)
 
   // Getters
-  const isTokenExpired = computed(() => {
-    if (!tokenExpiresAt.value) return true
-    return new Date() > new Date(tokenExpiresAt.value)
-  })
-  
   const isAuthenticated = computed(() => {
-    return !!token.value && !!user.value && !isTokenExpired.value
+    return !!user.value
   })
   const isAdmin = computed(() => {
     if (!user.value) return false
@@ -53,11 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
         password: credentials.password
       })
       
-      // Store token and expiry
-      token.value = response.token
-      tokenExpiresAt.value = response.expires_at
-      
-      // Store user data from the user object in response
+      // Store user data only (tokens are in httpOnly cookies)
       user.value = {
         id: response.user.id,
         username: response.user.username,
@@ -75,11 +65,6 @@ export const useAuthStore = defineStore('auth', () => {
         department_security_level: response.user.department_security_level || null,
         dept_clearance_value: response.user.dept_clearance_value || null,
       }
-      
-      // Persist token, expiry, and user
-      localStorage.setItem('token', response.token)
-      localStorage.setItem('tokenExpiresAt', response.expires_at)
-      localStorage.setItem('user', JSON.stringify(user.value))
       
       return { success: true }
     } catch (err) {
@@ -115,22 +100,21 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchProfile() {
-    if (!token.value) return
-    
     try {
       const response = await api.get('/v1/auth/me')
       user.value = {
         ...user.value,
         ...response,
       }
-      // Persist updated user data
-      localStorage.setItem('user', JSON.stringify(user.value))
+      return { success: true }
     } catch (err) {
       console.error('Failed to fetch profile:', err)
-      // Token might be invalid, logout
-      if (err.response?.status === 401) {
-        logout()
+      // If 401 during manual refresh (not initialization), clear state
+      // During initialization, let router handle redirect
+      if (err.response?.status === 401 && initialized.value) {
+        user.value = null
       }
+      return { success: false, error: err }
     }
   }
 
@@ -146,8 +130,6 @@ export const useAuthStore = defineStore('auth', () => {
       })
       
       user.value = { ...user.value, ...response }
-      // Persist updated user data
-      localStorage.setItem('user', JSON.stringify(user.value))
       return { success: true }
     } catch (err) {
       error.value = err.response?.data?.detail || 'Update failed'
@@ -235,11 +217,12 @@ export const useAuthStore = defineStore('auth', () => {
       }
       
       error.value = errorMessage
-      console.error('Password reset error:', {
-        status: err.response?.status,
-        data: err.response?.data,
-        extractedMessage: errorMessage
-      })
+      if (import.meta.env.DEV) {
+        console.error('Password reset error:', {
+          status: err.response?.status,
+          message: errorMessage
+        })
+      }
       throw err
     } finally {
       loading.value = false
@@ -247,20 +230,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function logout() {
-    loading.value = true
-    
     try {
+      // Call backend logout to clear httpOnly cookies
       await api.post('/v1/auth/logout')
     } catch (err) {
-      console.error('Logout API call failed:', err)
+      console.error('Logout error:', err)
     } finally {
-      // Clear local state regardless of API call result
-      token.value = null
+      // Clear user state (cookies are cleared by backend)
       user.value = null
-      tokenExpiresAt.value = null
-      localStorage.removeItem('token')
-      localStorage.removeItem('user')
-      localStorage.removeItem('tokenExpiresAt')
       loading.value = false
     }
   }
@@ -269,25 +246,18 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
-  // Initialize: fetch profile if token exists
-  if (token.value) {
-    fetchProfile().finally(() => {
-      initialized.value = true
-    })
-  } else {
+  // Initialize: try to fetch profile (will work if httpOnly cookie exists)
+  fetchProfile().finally(() => {
     initialized.value = true
-  }
+  })
 
   return {
     // State
     user,
-    token,
-    tokenExpiresAt,
     loading,
     error,
     initialized,
     // Getters
-    isTokenExpired,
     isAuthenticated,
     isAdmin,
     isManager,

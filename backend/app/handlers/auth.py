@@ -11,9 +11,8 @@ Handlers manage business logic for:
 import logging
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
-from jose import jwt
 
-from app.core.security import create_access_token, hash_password
+from app.core.security import create_access_token, create_refresh_token
 from app.config.settings import settings
 from app.models.user import User
 from app.models.user_permission import PermissionLevel, UserPermission
@@ -82,8 +81,9 @@ async def handle_login(
                 "user": None
             }
         
-        # Generate JWT token
+        # Generate JWT tokens
         token = create_access_token(user.id)
+        refresh_token = create_refresh_token(user.id)
         
         # Calculate token expiry timestamp
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -136,6 +136,7 @@ async def handle_login(
         return {
             "success": True,
             "token": token,
+            "refresh_token": refresh_token,
             "expires_at": expires_at.isoformat(),
             "user": user_response
         }
@@ -791,9 +792,9 @@ async def handle_signup_with_invite(
     try:
         logger.info(f"Signup attempt with invitation token for username: {request.username}")
         
-        password_service = PasswordService(session)
+        PasswordService(session)
         user_account_service = UserAccountService(session)
-        auth_service = AuthService(session)
+        AuthService(session)
         
         # Verify invitation token and extract email
         from app.models.user_invitation import UserInvitation

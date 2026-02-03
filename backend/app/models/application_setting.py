@@ -4,7 +4,7 @@ Application settings model for storing configuration in the database.
 This model stores application-level settings that can be modified at runtime
 and persisted to the database.
 """
-from sqlalchemy import Column, String, Text, Boolean, Integer
+from sqlalchemy import String, Text, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 

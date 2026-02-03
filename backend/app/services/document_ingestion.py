@@ -7,7 +7,6 @@ Manages the document ingestion pipeline by coordinating with existing services:
 """
 
 from typing import Dict
-import asyncio
 
 from app.models.file_upload import FileUpload, FileStatus
 from app.services.vector_store.storage import DocumentStorageService
@@ -23,7 +22,6 @@ class DocumentIngestionService:
     
     def __init__(self):
         """Initialize ingestion service (session managed per operation)."""
-        pass
     
     async def ingest_single_file(self, file_id: int) -> Dict:
         """
@@ -43,8 +41,6 @@ class DocumentIngestionService:
             Dict with ingestion result containing status and metadata
         """
         try:
-            logger.info(f"Starting ingestion for file_id={file_id}")
-            
             # Get fresh session factory bound to CURRENT event loop
             # CRITICAL: This creates a new engine for isolated event loops (background jobs)
             session_factory = await get_fresh_async_session_factory()
@@ -66,8 +62,6 @@ class DocumentIngestionService:
                         "status": "error",
                         "error": f"File status is {file_record.status.value}, not APPROVED"
                     }
-                
-                logger.info(f"File {file_id} ({file_record.file_name}) is approved, starting ingestion")
                 
                 try:
                     # Create storage service with fresh session

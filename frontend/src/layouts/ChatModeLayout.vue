@@ -242,7 +242,7 @@
 
       <!-- Main Chat View -->
       <main class="flex-1 overflow-hidden h-[calc(100vh-4rem)]">
-        <router-view :key="route.path" />
+        <router-view />
       </main>
 
       <!-- Mobile Sidebar Overlay -->
@@ -256,7 +256,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useChatHistory } from '../composables/useChatHistory'
@@ -269,6 +269,10 @@ const { chats, activeChat, selectChat, openNewChat, loadChats } = useChatHistory
 const sidebarOpen = ref(false)
 const userMenuOpen = ref(false)
 const chatSettingsOpen = ref(false)
+const resetChatSignal = ref(0) // Signal to reset Chat component state
+
+// Provide reset signal to child components
+provide('resetChatSignal', resetChatSignal)
 
 const userInitials = computed(() => {
   if (!authStore.user) return '?'
@@ -323,6 +327,8 @@ watch(() => route.path, () => {
 })
 
 const newChat = async () => {
+  // Emit reset signal to Chat component to clear all state
+  resetChatSignal.value++
   await openNewChat()
   sidebarOpen.value = false
 }

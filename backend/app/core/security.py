@@ -13,7 +13,7 @@ from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import Depends, HTTPException, status, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.models.department import Department
@@ -72,6 +72,7 @@ def create_access_token(
         "sub": str(user_id),
         "exp": expire,
         "iat": datetime.now(timezone.utc),
+        "type": "access"
     }
     
     encoded_jwt = jwt.encode(
@@ -85,6 +86,48 @@ def create_access_token(
         encoded_jwt = encoded_jwt.decode('utf-8')
     
     logger.debug(f"Created access token for user {user_id}")
+    return encoded_jwt
+
+
+def create_refresh_token(
+    user_id: int,
+    expires_delta: Optional[timedelta] = None
+) -> str:
+    """
+    Create a JWT refresh token.
+    
+    Args:
+        user_id: User ID to encode in token
+        expires_delta: Custom expiration time (uses settings default if None)
+    
+    Returns:
+        Encoded JWT refresh token
+    """
+    if expires_delta is None:
+        expires_delta = timedelta(
+            days=settings.REFRESH_TOKEN_EXPIRE_DAYS
+        )
+    
+    expire = datetime.now(timezone.utc) + expires_delta
+    
+    to_encode = {
+        "sub": str(user_id),
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "refresh"
+    }
+    
+    encoded_jwt = jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+    
+    # Ensure token is a string
+    if isinstance(encoded_jwt, bytes):
+        encoded_jwt = encoded_jwt.decode('utf-8')
+    
+    logger.debug(f"Created refresh token for user {user_id}")
     return encoded_jwt
 
 
@@ -131,12 +174,15 @@ def verify_token(token: str) -> Optional[int]:
 # ============================================================================
 
 async def get_current_user_id(
+    request: Request,
     authorization: Optional[str] = Header(None)
 ) -> int:
     """
-    Extract and validate user ID from Authorization header.
+    Extract and validate user ID from httpOnly cookie or Authorization header.
     
-    Header format: Authorization: Bearer <token>
+    Priority:
+    1. httpOnly cookie (most secure, preferred)
+    2. Authorization header (backwards compatibility)
     
     Returns:
         User ID
@@ -144,24 +190,25 @@ async def get_current_user_id(
     Raises:
         HTTPException if token is missing or invalid
     """
-    # Get token from Authorization header
-    if not authorization:
+    token = None
+    
+    # Try httpOnly cookie first (most secure)
+    token = request.cookies.get("access_token")
+    
+    # Fallback to Authorization header (backwards compatibility)
+    if not token and authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
+    
+    # No token found
+    if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing authorization header",
+            detail="Missing authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Parse "Bearer <token>" format
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header format",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    token = parts[1]
     user_id = verify_token(token)
     
     if not user_id:

@@ -2,7 +2,7 @@
 Dashboard metrics service - provides admin and user dashboard statistics.
 """
 
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 

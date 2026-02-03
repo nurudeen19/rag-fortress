@@ -2,9 +2,7 @@
 
 from typing import List, Optional, Tuple, Any
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
-from sqlalchemy.orm import selectinload
-from datetime import datetime, timezone
+from sqlalchemy import select
 
 from app.models.notification import Notification
 from app.models.user import User
@@ -37,7 +35,6 @@ class NotificationService:
         )
         self.session.add(notif)
         await self.session.flush()  # obtain id early
-        logger.info(f"Created notification {notif.id} for user {user_id}")
         await self._invalidate_notification_cache(user_id)
         return notif
 

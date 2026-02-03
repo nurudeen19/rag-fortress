@@ -33,6 +33,13 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Fallback strategies
   - Service architecture
 
+- [Semantic Cache Guide](SEMANTIC_CACHE_GUIDE.md) - Intelligent caching with vector similarity
+  - Vector-based cache hits (not exact match)
+  - Security-aware caching (clearance + department)
+  - Redis VL integration
+  - Performance tuning
+  - Configuration options
+
 - [Reranker Guide](RERANKER_GUIDE.md) - Cross-encoder reranking
   - How reranking works
   - Configuration options
@@ -51,6 +58,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Embedding providers comparison
   - Vector database comparison
   - Provider selection guide
+  - **Hybrid Search** (dense + sparse vectors) - Qdrant, Weaviate, Milvus
   - Metadata filtering
   - Migration between providers
 
@@ -70,6 +78,19 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
   - Configuration and tuning
   - Monitoring and troubleshooting
 
+#### Performance & Caching
+- [Caching Guide](CACHING_GUIDE.md) - Cache infrastructure
+  - Redis and in-memory backends
+  - TTL configuration
+  - Conversation history encryption
+  - Cache invalidation strategies
+
+- [Semantic Cache Guide](SEMANTIC_CACHE_GUIDE.md) - Vector-based intelligent caching
+  - Similarity-based cache hits
+  - Security-aware (clearance + department)
+  - Performance tuning
+  - Redis VL setup
+  
 ### System Operations
 
 #### Database

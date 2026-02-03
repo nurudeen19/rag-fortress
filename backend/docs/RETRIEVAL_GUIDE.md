@@ -32,11 +32,10 @@ User Query
 │          └─ MISS → Continue to Step 4             │
 │                                                     │
 │  Step 4: Adaptive retrieval                        │
-│          ├─ Start with MIN_TOP_K documents        │
-│          ├─ Check quality (threshold)             │
-│          ├─ Apply reranking if quality low        │
-│          ├─ Increase k if needed (up to MAX_TOP_K)│
-│          └─ Return results                        │
+│          ├─ Retrieve MAX_K candidates             │
+│          ├─ Apply reranking if enabled            │
+│          ├─ Filter by threshold                   │
+│          └─ Return top TOP_K results              │
 │          ↓                                         │
 │  Step 5: Cache successful results (5 min TTL)     │
 │          ↓                                         │
@@ -54,57 +53,48 @@ LLM Generation & Streaming
 
 ### How It Works
 
-Instead of retrieving a fixed number of documents, the system:
+The retrieval system uses a streamlined process:
 
-1. **Starts small**: Begins with `MIN_TOP_K` documents (default: 3)
-2. **Checks quality**: Evaluates if documents meet `RETRIEVAL_SCORE_THRESHOLD` (default: 0.5)
-3. **Reranking fallback**: If initial results are poor AND reranker enabled:
-   - Retrieves `MAX_TOP_K` documents (default: 10)
-   - Uses cross-encoder model to rerank
-   - Returns top `RERANKER_TOP_K` documents (default: 3)
-4. **Adaptive scaling**: If reranker disabled/unavailable, increases top-k incrementally (by 2)
-5. **Returns intelligently**: 
-   - High-quality results → returns them
-   - Single good result among poor ones → returns just that one
-   - No quality results after all attempts → returns empty with error message
+1. **Retrieve candidates**: Fetches `MAX_K` documents from vector store (default: 15)
+2. **Apply security filter**: Removes documents user doesn't have access to
+3. **Rerank if enabled**: Uses cross-encoder model to re-score for better relevance
+4. **Filter by threshold**: Keeps only documents above quality threshold
+5. **Return final results**: Returns top `TOP_K` documents (default: 5)
 
 ### Configuration
 
 ```env
-# Adaptive Retrieval Settings
-MIN_TOP_K=3                     # Initial number of documents
-MAX_TOP_K=10                    # Maximum documents before giving up
+# Retrieval Settings
+TOP_K=5                         # Final number of results to return
+MAX_K=15                        # Maximum candidates to retrieve
 RETRIEVAL_SCORE_THRESHOLD=0.5   # Minimum quality score (0.0-1.0)
 
 # Reranker Settings
-ENABLE_RERANKER=True            # Enable reranking fallback
+ENABLE_RERANKER=True            # Enable reranking
 RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
-RERANKER_TOP_K=3                # Documents to return after reranking
-RERANKER_SCORE_THRESHOLD=0.3    # Minimum reranker score (0.0-1.0)
+RERANKER_SCORE_THRESHOLD=0.5    # Minimum reranker score (0.0-1.0)
 ```
 
 ### Retrieval Flow
 
 ```
-1. Start with current_k = MIN_TOP_K
-2. Retrieve documents with scores from vector store
-3. Apply security filtering (remove inaccessible docs)
-4. Check if any documents meet RETRIEVAL_SCORE_THRESHOLD
-5. If yes:
-   - Check for single high-quality doc edge case
-   - Return quality results
-6. If no quality results:
-   - If reranker enabled and first iteration:
-     a. Retrieve MAX_TOP_K documents
-     b. Apply security filtering
-     c. Rerank using cross-encoder
-     d. Return top RERANKER_TOP_K if above threshold
-     e. If still no quality: return empty with error
-   - Else if current_k < MAX_TOP_K:
-     - Increase by 2 and retry
-   - Else:
-     - Return empty with error
+1. Retrieve MAX_K candidates from vector store
+   - Uses hybrid search (dense + sparse) if ENABLE_HYBRID_SEARCH=True
+   - Hybrid results automatically fused via RRF (Reciprocal Rank Fusion)
+   - Falls back to dense-only if hybrid not configured
+2. Apply security filtering (remove inaccessible docs)
+3. If reranker enabled:
+   a. Rerank all candidates using cross-encoder
+   b. Filter by RERANKER_SCORE_THRESHOLD
+   c. Return top TOP_K documents
+4. If reranker disabled:
+   a. Filter by RETRIEVAL_SCORE_THRESHOLD
+   b. Return top TOP_K documents
+5. If no quality results:
+   - Return empty with no context message
 ```
+
+**Note:** Hybrid search is transparent - when enabled via `ENABLE_HYBRID_SEARCH=true`, the vector store automatically combines dense (semantic) and sparse (keyword/BM25) search. No code changes needed in retrieval logic. See [VECTOR_STORES_GUIDE.md](VECTOR_STORES_GUIDE.md#hybrid-search-dense--sparse-vectors) for configuration details.
 
 ## Reranking System
 
@@ -123,44 +113,46 @@ RERANKER_SCORE_THRESHOLD=0.3    # Minimum reranker score (0.0-1.0)
 
 ### When Reranking Activates
 
-Reranking triggers when:
-- Initial `MIN_TOP_K` retrieval yields poor quality scores
-- Reranker is enabled (`ENABLE_RERANKER=True`)
-- System immediately retrieves `MAX_TOP_K` documents and applies reranking
+Reranking activates when:
+- `ENABLE_RERANKER=True` in configuration
+- System retrieves MAX_K candidates and reranks all of them
 
 ### Reranking Process
 
 ```python
-# 1. Initial retrieval fails quality check
-initial_results = vector_store.query(query, k=MIN_TOP_K)
-if max(scores) < RETRIEVAL_SCORE_THRESHOLD:
-    
-    # 2. Retrieve more documents
-    extended_results = vector_store.query(query, k=MAX_TOP_K)
-    
-    # 3. Apply security filtering
-    accessible_docs = filter_by_security(extended_results, user)
-    
-    # 4. Rerank with cross-encoder
+# 1. Retrieve candidates
+candidates = vector_store.query(query, k=MAX_K)
+
+# 2. Apply security filtering
+accessible_docs = filter_by_security(candidates, user)
+
+# 3. Rerank with cross-encoder if enabled
+if reranker_enabled:
     reranked = cross_encoder.predict([
         (query, doc.content) for doc in accessible_docs
     ])
     
-    # 5. Sort by reranker score and filter
+    # 4. Sort by reranker score and filter
     top_docs = [
         doc for doc, score in sorted(reranked, reverse=True)
         if score >= RERANKER_SCORE_THRESHOLD
-    ][:RERANKER_TOP_K]
-    
-    return top_docs
+    ][:TOP_K]
+else:
+    # 5. Use similarity scores
+    top_docs = [
+        doc for doc, score in accessible_docs
+        if score >= RETRIEVAL_SCORE_THRESHOLD
+    ][:TOP_K]
+
+return top_docs
 ```
 
 ### Fallback Without Reranker
 
-If reranker is disabled or fails:
-- Falls back to incremental top-k scaling (3 → 5 → 7 → 9 → 10)
+If reranker is disabled:
 - Uses only vector similarity scores
-- Continues until quality results found or MAX_TOP_K reached
+- Filters by RETRIEVAL_SCORE_THRESHOLD
+- Returns top TOP_K documents
 
 ## Security-Aware Caching
 
@@ -224,15 +216,10 @@ CACHE_TTL=300                          # 5 minutes
 - Reranker: Not called
 - Latency: < 10ms (Redis roundtrip)
 
-**Cache Miss with Quality Results:**
-- Vector store: Called once (MIN_TOP_K)
-- Reranker: Not called
-- Latency: 100-500ms
-
-**Cache Miss with Reranking:**
-- Vector store: Called once (MAX_TOP_K)
-- Reranker: Called once
-- Latency: 500-2000ms
+**Cache Miss:**
+- Vector store: Called once (MAX_K)
+- Reranker: Called if enabled
+- Latency: 100-500ms (no reranker) or 500-2000ms (with reranker)
 
 ## Service Architecture
 
@@ -244,7 +231,7 @@ CACHE_TTL=300                          # 5 minutes
 async def query(
     self,
     query_text: str,                              # User query
-    top_k: Optional[int] = None,                  # Override MIN_TOP_K
+    top_k: Optional[int] = None,                  # Override TOP_K
     user_security_level: Optional[int] = None,   # Org-wide clearance (1-4)
     user_department_id: Optional[int] = None,    # User's department
     user_department_security_level: Optional[int] = None,  # Dept clearance
@@ -330,7 +317,7 @@ Benefits:
 - Does NOT increase top-k (prevents diluting quality)
 
 **No Quality Results:**
-- System reaches MAX_TOP_K without finding quality documents
+- No relevant documents found (after filtering by threshold)
 - Reranker also fails to find quality results
 - Returns empty context with error: "No relevant documents found"
 - Rationale: Better to return nothing than false positives
@@ -346,7 +333,7 @@ Security filtering is applied AFTER quality checks but BEFORE returning:
 
 ```python
 # 1. Retrieve documents with scores
-results = vector_store.query(query, k=MIN_TOP_K)
+results = vector_store.query(query, k=MAX_K)
 
 # 2. Check quality
 quality_docs = [doc for doc, score in results if score >= threshold]
@@ -515,7 +502,7 @@ async def test_adaptive_retrieval():
     )
     
     assert result["success"] == True
-    assert len(result["context"]) <= RERANKER_TOP_K
+    assert len(result["context"]) <= TOP_K
     assert all(doc.score >= RERANKER_SCORE_THRESHOLD for doc in result["context"])
 ```
 
@@ -530,11 +517,10 @@ TOP_K_RESULTS=5
 
 **After:**
 ```env
-MIN_TOP_K=3
-MAX_TOP_K=10
+TOP_K=5
+MAX_K=15
 RETRIEVAL_SCORE_THRESHOLD=0.5
 ENABLE_RERANKER=True
-RERANKER_TOP_K=3
 RERANKER_SCORE_THRESHOLD=0.3
 ```
 
@@ -549,7 +535,7 @@ result = retriever.query(query_text, top_k=5)
 **After:**
 ```python
 # Adaptively retrieves 3-10 documents based on quality
-result = await retriever.query(query_text)  # Uses MIN_TOP_K by default
+result = await retriever.query(query_text)  # Uses TOP_K by default
 ```
 
 ## File Structure
@@ -609,7 +595,7 @@ logging.getLogger('app.services.reranker').setLevel(logging.DEBUG)
 ### Slow retrieval
 - Check vector store performance
 - Verify cache is enabled and working
-- Consider increasing MIN_TOP_K if always scaling up
+- Consider adjusting TOP_K and MAX_K based on your use case
 
 ### No results returned
 - Check `RETRIEVAL_SCORE_THRESHOLD` (may be too high)

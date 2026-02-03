@@ -4,7 +4,6 @@ import logging
 import hashlib
 import csv
 import json
-import os
 from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -12,7 +11,6 @@ from sqlalchemy.future import select
 from app.models.file_upload import FileUpload, FileStatus, SecurityLevel
 from app.models.department import Department
 from app.seeders.base import BaseSeed
-from app.services.file_upload import FileStorage
 
 logger = logging.getLogger(__name__)
 
