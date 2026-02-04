@@ -1,7 +1,7 @@
 <template>
-  <div class="min-h-screen bg-fortress-950">
+  <div class="h-screen bg-fortress-950 flex flex-col overflow-hidden">
     <!-- Top Navigation Bar -->
-    <nav class="bg-fortress-900 border-b border-fortress-800 fixed top-0 left-0 right-0 z-50">
+    <nav class="bg-fortress-900 border-b border-fortress-800 z-50">
       <div class="px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16">
           <!-- Left: Logo & App Name -->
@@ -133,11 +133,11 @@
       </div>
     </nav>
 
-    <div class="flex pt-16 h-[calc(100vh-64px)]">
+    <div class="flex flex-1 overflow-hidden">
       <!-- Sidebar -->
       <aside
         :class="[
-          'fixed lg:relative inset-y-0 left-0 z-40 w-64 bg-fortress-900 border-r border-fortress-800 pt-16 lg:pt-0 transform transition-transform duration-300',
+          'fixed lg:relative inset-y-0 left-0 z-40 w-64 bg-fortress-900 border-r border-fortress-800 pt-16 lg:pt-0 transform transition-transform duration-300 flex flex-col h-[calc(100vh-4rem)] lg:h-full',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         ]"
       >
@@ -166,10 +166,24 @@
       </aside>
 
       <!-- Main Content -->
-      <main class="flex-1 overflow-x-hidden overflow-y-auto">
-        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <router-view />
+      <main class="flex-1 overflow-hidden flex flex-col">
+        <div class="flex-1 overflow-x-hidden overflow-y-auto">
+          <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <router-view />
+          </div>
         </div>
+        
+        <!-- Demo Mode Footer -->
+        <footer v-if="isDemoMode" class="py-4 px-4 sm:px-6 lg:px-8 border-t border-fortress-800 bg-fortress-900/50 flex-shrink-0">
+          <div class="container mx-auto">
+            <div class="flex items-center justify-center gap-2 text-sm text-amber-500/80">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <span>Demo Mode: Some features may be limited due to backend service provider restrictions.</span>
+            </div>
+          </div>
+        </footer>
       </main>
     </div>
 
@@ -215,6 +229,9 @@ const userInitials = computed(() => {
   const last = authStore.user.last_name?.[0] || ''
   return (first + last).toUpperCase()
 })
+
+// Check if demo mode is enabled
+const isDemoMode = ref(import.meta.env.VITE_DEMO_MODE === 'true')
 
 // Get navigation items based on user roles
 const navigation = computed(() => getAvailableNav())

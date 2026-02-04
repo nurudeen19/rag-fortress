@@ -241,8 +241,20 @@
       </aside>
 
       <!-- Main Chat View -->
-      <main class="flex-1 overflow-hidden h-[calc(100vh-4rem)]">
-        <router-view />
+      <main class="flex-1 overflow-hidden h-[calc(100vh-4rem)] flex flex-col">
+        <div class="flex-1 overflow-hidden">
+          <router-view />
+        </div>
+        
+        <!-- Demo Mode Footer -->
+        <footer v-if="isDemoMode" class="py-3 px-4 sm:px-6 border-t border-fortress-800 bg-fortress-900/50">
+          <div class="flex items-center justify-center gap-2 text-xs sm:text-sm text-amber-500/80">
+            <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <span class="text-center">Demo Mode: Some features may be limited due to backend service provider restrictions.</span>
+          </div>
+        </footer>
       </main>
 
       <!-- Mobile Sidebar Overlay -->
@@ -280,6 +292,9 @@ const userInitials = computed(() => {
   const last = authStore.user.last_name?.[0] || ''
   return (first + last).toUpperCase()
 })
+
+// Check if demo mode is enabled
+const isDemoMode = ref(import.meta.env.VITE_DEMO_MODE === 'true')
 
 // Return all chats (search removed)
 const filteredChats = computed(() => {

@@ -211,7 +211,6 @@ router.beforeEach(async (to, from, next) => {
 
   // Wait for auth initialization to complete
   if (!authStore.initialized) {
-    // Wait for fetchProfile to complete
     await new Promise(resolve => {
       const unwatch = authStore.$subscribe(() => {
         if (authStore.initialized) {
