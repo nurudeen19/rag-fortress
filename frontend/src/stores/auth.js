@@ -66,6 +66,9 @@ export const useAuthStore = defineStore('auth', () => {
         dept_clearance_value: response.user.dept_clearance_value || null,
       }
       
+      // Set auth flag in localStorage to indicate active session
+      localStorage.setItem('auth_active', 'true')
+      
       return { success: true }
     } catch (err) {
       error.value = err.response?.data?.detail || 'Login failed'
@@ -106,13 +109,20 @@ export const useAuthStore = defineStore('auth', () => {
         ...user.value,
         ...response,
       }
+      // Set auth flag on successful profile fetch
+      localStorage.setItem('auth_active', 'true')
       return { success: true }
     } catch (err) {
       console.error('Failed to fetch profile:', err)
-      // If 401 during manual refresh (not initialization), clear state
-      // During initialization, let router handle redirect
-      if (err.response?.status === 401 && initialized.value) {
+      // Clear user state and auth flag on authentication errors
+      if (err.response?.status === 401) {
         user.value = null
+        localStorage.removeItem('auth_active')
+      }
+      // For 404 or other errors during initialization, still clear to prevent blank page
+      if (!initialized.value && err.response?.status) {
+        user.value = null
+        localStorage.removeItem('auth_active')
       }
       return { success: false, error: err }
     }
@@ -236,9 +246,10 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
-      // Clear user state (cookies are cleared by backend)
+      // Clear user state and auth flag (cookies are cleared by backend)
       user.value = null
       loading.value = false
+      localStorage.removeItem('auth_active')
     }
   }
 
@@ -246,10 +257,9 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
-  // Initialize: try to fetch profile (will work if httpOnly cookie exists)
-  fetchProfile().finally(() => {
-    initialized.value = true
-  })
+  // Mark as initialized immediately - no automatic profile fetch
+  // Profile will be fetched on-demand when navigating to protected routes
+  initialized.value = true
 
   return {
     // State

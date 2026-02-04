@@ -209,17 +209,31 @@ router.beforeEach(async (to, from, next) => {
     })
   }
 
-  // Wait for auth initialization to complete
-  if (!authStore.initialized) {
-    // Wait for fetchProfile to complete
-    await new Promise(resolve => {
-      const unwatch = authStore.$subscribe(() => {
-        if (authStore.initialized) {
-          unwatch()
-          resolve()
+  // For protected routes, check authentication state
+  if (requiresAuth && !authStore.isAuthenticated) {
+    // Check if user has previous session (localStorage flag indicates httpOnly cookie might exist)
+    const hasAuthFlag = localStorage.getItem('auth_active') === 'true'
+    
+    if (hasAuthFlag && !authStore.loading) {
+      // Previous session exists, try to fetch profile to validate cookie
+      const result = await authStore.fetchProfile()
+      
+      // If fetch failed, redirect to login
+      if (!result.success) {
+        if (import.meta.env.DEV) {
+          console.log(`[Router Guard] Session expired, redirecting to login`)
         }
-      })
-    })
+        next({ name: 'login', query: { redirect: to.fullPath } })
+        return
+      }
+    } else {
+      // No previous session, redirect to login immediately (skip API call)
+      if (import.meta.env.DEV) {
+        console.log(`[Router Guard] No auth flag, redirecting to login`)
+      }
+      next({ name: 'login', query: { redirect: to.fullPath } })
+      return
+    }
   }
 
   // Check if route requires authentication
