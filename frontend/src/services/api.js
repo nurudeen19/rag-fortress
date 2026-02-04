@@ -42,16 +42,7 @@ api.interceptors.response.use(
     const originalRequest = error.config
     
     // Handle 401 Unauthorized - try to refresh token
-    // Skip refresh for initial /auth/me check if no auth flag exists
-    const hasAuthFlag = localStorage.getItem('auth_active') === 'true'
-    const isAuthMeRequest = originalRequest.url?.includes('/auth/me')
-    
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // For initial /auth/me check without auth flag, fail immediately (new user)
-      if (isAuthMeRequest && !hasAuthFlag) {
-        return Promise.reject(error)
-      }
-      
       if (isRefreshing) {
         // If already refreshing, queue this request
         return new Promise((resolve, reject) => {

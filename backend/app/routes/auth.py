@@ -92,7 +92,7 @@ async def login(
         value=result["token"],
         httponly=True,
         secure=settings.COOKIE_SECURE,  # False for HTTP dev, True for HTTPS prod
-        samesite="lax",  # CSRF protection
+        samesite=settings.COOKIE_SAMESITE,  # Configurable: lax, strict, or none
         max_age=access_token_max_age,
     )
     
@@ -101,7 +101,7 @@ async def login(
         value=result["refresh_token"],
         httponly=True,
         secure=settings.COOKIE_SECURE,
-        samesite="lax",
+        samesite=settings.COOKIE_SAMESITE,  # Configurable: lax, strict, or none
         max_age=refresh_token_max_age,
     )
     
@@ -182,7 +182,7 @@ async def refresh_access_token(
             value=new_access_token,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite=settings.COOKIE_SAMESITE,  # Configurable: lax, strict, or none
             max_age=access_token_max_age,
         )
         
@@ -191,7 +191,7 @@ async def refresh_access_token(
             value=new_refresh_token,
             httponly=True,
             secure=True,
-            samesite="lax",
+            samesite=settings.COOKIE_SAMESITE,  # Configurable: lax, strict, or none
             max_age=refresh_token_max_age,
         )
         
@@ -360,8 +360,8 @@ async def logout(
         )
     
     # Clear httpOnly cookies
-    response.delete_cookie(key="access_token", samesite="lax")
-    response.delete_cookie(key="refresh_token", samesite="lax")
+    response.delete_cookie(key="access_token", samesite=settings.COOKIE_SAMESITE)
+    response.delete_cookie(key="refresh_token", samesite=settings.COOKIE_SAMESITE)
     
     return SuccessResponse(message=result.get("message", "Logged out successfully"))
 

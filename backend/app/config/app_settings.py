@@ -62,6 +62,7 @@ class AppSettings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(30, env="ACCESS_TOKEN_EXPIRE_MINUTES")
     REFRESH_TOKEN_EXPIRE_DAYS: int = Field(7, env="REFRESH_TOKEN_EXPIRE_DAYS")  # 7 days for refresh tokens
     COOKIE_SECURE: bool = Field(True, env="COOKIE_SECURE")  # Set to False for HTTP development
+    COOKIE_SAMESITE: str = Field("lax", env="COOKIE_SAMESITE")  # Options: "lax", "strict", "none" (use "none" for cross-origin)
     
     # Diagnostics - Key for accessing system health check endpoint
     DIAGNOSTIC_KEY: Optional[str] = Field(None, env="DIAGNOSTIC_KEY")
