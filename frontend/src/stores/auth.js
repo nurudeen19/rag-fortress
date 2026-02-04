@@ -66,6 +66,9 @@ export const useAuthStore = defineStore('auth', () => {
         dept_clearance_value: response.user.dept_clearance_value || null,
       }
       
+      // Set session flag to enable auto-restore on refresh
+      localStorage.setItem('auth_session', 'true')
+      
       return { success: true }
     } catch (err) {
       error.value = err.response?.data?.detail || 'Login failed'
@@ -109,11 +112,9 @@ export const useAuthStore = defineStore('auth', () => {
       return { success: true }
     } catch (err) {
       console.error('Failed to fetch profile:', err)
-      // If 401 during manual refresh (not initialization), clear state
-      // During initialization, let router handle redirect
-      if (err.response?.status === 401 && initialized.value) {
-        user.value = null
-      }
+      // Clear session flag and user data on any auth error
+      user.value = null
+      localStorage.removeItem('auth_session')
       return { success: false, error: err }
     }
   }
@@ -236,9 +237,10 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (err) {
       console.error('Logout error:', err)
     } finally {
-      // Clear user state (cookies are cleared by backend)
+      // Clear user state and session flag (cookies cleared by backend)
       user.value = null
       loading.value = false
+      localStorage.removeItem('auth_session')
     }
   }
 
@@ -246,10 +248,17 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
   }
 
-  // Initialize: try to fetch profile (will work if httpOnly cookie exists)
-  fetchProfile().finally(() => {
+  // Initialize: only fetch profile if session flag exists (user previously logged in)
+  const hasSession = localStorage.getItem('auth_session') === 'true'
+  if (hasSession) {
+    // Try to restore session from httpOnly cookie
+    fetchProfile().finally(() => {
+      initialized.value = true
+    })
+  } else {
+    // No session, mark as initialized immediately (fast, no API call)
     initialized.value = true
-  })
+  }
 
   return {
     // State
