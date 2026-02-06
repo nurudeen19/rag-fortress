@@ -121,16 +121,41 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(
-        description="Seed the database with initial data"
+        description="Seed the database with initial data",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=f"""
+Available seeders:
+  {', '.join(SEEDERS.keys())}
+
+Examples:
+  python run_seeders.py admin                    # Run only admin seeder
+  python run_seeders.py admin roles_permissions # Run multiple seeders
+  python run_seeders.py --all                   # Run all seeders
+"""
     )
     parser.add_argument(
         "seeders",
         nargs="*",
-        help="Specific seeders to run (e.g., admin app). If empty, runs all."
+        help="Specific seeders to run"
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run all available seeders"
     )
     
     args = parser.parse_args()
-    seeder_names = args.seeders if args.seeders else None
+    
+    # Determine which seeders to run
+    if args.all:
+        seeder_names = list(SEEDERS.keys())
+    elif args.seeders:
+        seeder_names = args.seeders
+    else:
+        parser.print_help()
+        logger.warning("\n❌ No seeders specified. Use --all flag or specify seeders to run.")
+        logger.info(f"Available seeders: {', '.join(SEEDERS.keys())}")
+        sys.exit(1)
     
     exit_code = asyncio.run(run_seeders(seeder_names))
     sys.exit(exit_code)

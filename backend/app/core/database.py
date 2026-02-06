@@ -200,7 +200,7 @@ class DatabaseManager:
             # Suppress the harmless "Event loop is closed" warning from aiomysql cleanup
             # This occurs during __del__ after the event loop has already closed
             with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=RuntimeError)
+                warnings.filterwarnings("ignore", category=RuntimeWarning)
                 await self.async_engine.dispose()
             logger.info("Database connections closed")
     
