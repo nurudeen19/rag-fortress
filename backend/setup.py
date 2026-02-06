@@ -3,29 +3,24 @@
 Setup script for RAG Fortress application.
 
 Usage:
-    python setup.py                          # Run full setup (all 8 seeders by default)
+    python setup.py --all                    # Run full setup (all seeders)
+    python setup.py --only-seeder admin,roles_permissions  # Run only specified seeders
+    python setup.py --skip-seeder departments  # Run all seeders except specified
     python setup.py --verify                 # Verify setup is complete
     python setup.py --clear-db               # Clear database (for recovery/restart)
-    python setup.py --list-seeders           # Show available seeders and current config
-    python setup.py --only-seeder admin,roles_permissions  # Run only specified seeders
-    python setup.py --skip-seeder departments  # Run all except specified seeders
-
-Environment Variables (optional):
-    ENABLED_SEEDERS                          # Comma-separated seeders to run (empty = all)
-    DISABLED_SEEDERS                         # Comma-separated seeders to skip (empty = none)
+    python setup.py --list-seeders           # Show available seeders
 
 Available Seeders:
     admin, roles_permissions, departments, application_settings, jobs, 
     knowledge_base, conversations, activity_logs
 
-NOTE: If both ENABLED_SEEDERS and DISABLED_SEEDERS are set, ENABLED_SEEDERS takes priority.
-      CLI flags (--only-seeder, --skip-seeder) override environment variables.
+NOTE: Must specify --all, --only-seeder, or --skip-seeder to run seeders.
+      No default seeders run without explicit options.
 """
 
 import asyncio
 import sys
 import logging
-import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -76,14 +71,14 @@ USAGE:
     python setup.py [OPTIONS]
 
 OPTIONS:
-    (no arguments)              Run full setup: migrations + seeders + verification
-                                Uses ENABLED_SEEDERS or DISABLED_SEEDERS from .env
-                                Default: runs all seeders if env vars not set
+    (no arguments)              Show help (must specify seeder options)
 
     --help                      Show this help message
 
-    --list-seeders              Display available seeders and current configuration
-                                Shows which seeders will run based on env settings
+    --list-seeders              Display available seeders
+
+    --all                       Run full setup: migrations + all seeders + verification
+                                Example: python setup.py --all
 
     --verify                    Verify setup is complete
                                 Checks if database has tables (indicates migrations ran)
@@ -92,31 +87,17 @@ OPTIONS:
                                 DANGEROUS: Requires 'yes' confirmation
                                 Use this to reset and start fresh
 
-    --only-seeder NAMES         Run only specified seeders (overrides env vars)
+    --only-seeder NAMES         Run only specified seeders
                                 NAMES: comma-separated list, e.g., admin,roles_permissions
                                 Example: python setup.py --only-seeder admin,roles_permissions
 
-    --skip-seeder NAMES         Run all seeders except specified (overrides env vars)
+    --skip-seeder NAMES         Run all seeders except specified
                                 NAMES: comma-separated list, e.g., departments,jobs
                                 Example: python setup.py --skip-seeder departments,jobs
 
-ENVIRONMENT VARIABLES (optional):
-    ENABLED_SEEDERS             Comma-separated list of seeders to run
-                                If set, ONLY these seeders will run (ignores all others)
-                                Example: ENABLED_SEEDERS=admin,roles_permissions
-                                Default: (empty) runs all seeders
-
-    DISABLED_SEEDERS            Comma-separated list of seeders to skip
-                                Runs all seeders EXCEPT these (only if ENABLED_SEEDERS not set)
-                                Example: DISABLED_SEEDERS=departments,jobs
-                                Default: (empty) skips nothing
-
-PRIORITY ORDER (what takes precedence):
-    1. CLI flags (--only-seeder, --skip-seeder) - Highest priority
-    2. Environment variables (ENABLED_SEEDERS, DISABLED_SEEDERS)
-    3. Default behavior (run all seeders) - Lowest priority
-
-    Note: If both ENABLED_SEEDERS and DISABLED_SEEDERS are set, ENABLED_SEEDERS wins
+PRIORITY ORDER (CLI only):
+    --all, --only-seeder, and --skip-seeder are mutually exclusive.
+    One of these must be specified to run seeders.
 
 AVAILABLE SEEDERS:
     • admin                 Create admin user account (critical)
@@ -133,17 +114,17 @@ DEPENDENCIES:
     • Other seeders have no dependencies
 
 EXAMPLES:
-    # Run everything (default, all 8 seeders)
-    python setup.py
+    # Run all seeders
+    python setup.py --all
 
-    # View what will run based on current config
+    # View available seeders
     python setup.py --list-seeders
 
     # Production setup (minimal, only critical seeders)
-    ENABLED_SEEDERS=admin,roles_permissions python setup.py
+    python setup.py --only-seeder admin,roles_permissions
 
     # Development without optional data
-    DISABLED_SEEDERS=conversations,activity_logs python setup.py
+    python setup.py --skip-seeder conversations,activity_logs
 
     # Test specific seeders
     python setup.py --only-seeder admin,roles_permissions
@@ -157,32 +138,12 @@ EXAMPLES:
     print(help_text)
 
 
-def get_seeders_to_run() -> list:
-    """Get list of seeders to run based on environment configuration.
+def get_all_seeders() -> list:
+    """Get list of all available seeders.
     
-    Priority:
-    1. ENABLED_SEEDERS (if set, runs only these)
-    2. DISABLED_SEEDERS (if set, runs all except these)
-    3. Default (if both empty, runs all)
-    
-    Returns list of seeder names.
+    Returns list of all seeder names.
     """
-    all_seeders = list(SEEDERS.keys())
-    
-    # Check ENABLED_SEEDERS first (highest priority)
-    enabled = os.getenv("ENABLED_SEEDERS", "").strip()
-    if enabled:
-        seeders = [s.strip() for s in enabled.split(",") if s.strip()]
-        return seeders
-    
-    # Check DISABLED_SEEDERS second
-    disabled = os.getenv("DISABLED_SEEDERS", "").strip()
-    if disabled:
-        skip_list = [s.strip() for s in disabled.split(",") if s.strip()]
-        return [s for s in all_seeders if s not in skip_list]
-    
-    # Default: run all seeders
-    return all_seeders
+    return list(SEEDERS.keys())
 
 
 def parse_cli_seeders(args: list) -> tuple:
@@ -211,27 +172,15 @@ def parse_cli_seeders(args: list) -> tuple:
 
 
 def list_seeders() -> None:
-    """Display available seeders and current configuration."""
-    seeders_to_run = get_seeders_to_run()
-    all_seeders = list(SEEDERS.keys())
+    """Display available seeders."""
+    all_seeders = get_all_seeders()
     
     logger.info("Available seeders:")
-    for seeder_name in all_seeders:
-        status = "✓" if seeder_name in seeders_to_run else "✗"
-        logger.info(f"  {status} {seeder_name}")
+    for i, seeder_name in enumerate(all_seeders, 1):
+        logger.info(f"  {i}. {seeder_name}")
     
-    logger.info(f"\nSeeders to run: {', '.join(seeders_to_run)}")
-    
-    # Show environment configuration
-    enabled = os.getenv("ENABLED_SEEDERS", "").strip()
-    disabled = os.getenv("DISABLED_SEEDERS", "").strip()
-    
-    if enabled:
-        logger.info(f"Configuration: ENABLED_SEEDERS={enabled}")
-    elif disabled:
-        logger.info(f"Configuration: DISABLED_SEEDERS={disabled}")
-    else:
-        logger.info("Configuration: Default (no env vars set)")
+    logger.info(f"\nTotal: {len(all_seeders)} seeders available")
+    logger.info("\nUsage: python setup.py --all  (or --only-seeder / --skip-seeder)")
 
 
 async def cleanup_postgres_enums() -> None:
@@ -500,13 +449,19 @@ async def main(args):
     only_seeders, skip_seeders = parse_cli_seeders(args)
     
     # Determine which seeders to run
-    if only_seeders is not None:
+    if "--all" in args:
+        seeders_to_run = get_all_seeders()
+    elif only_seeders is not None:
         seeders_to_run = only_seeders
     elif skip_seeders is not None:
-        default_seeders = get_seeders_to_run()
-        seeders_to_run = [s for s in default_seeders if s not in skip_seeders]
+        all_seeders = get_all_seeders()
+        seeders_to_run = [s for s in all_seeders if s not in skip_seeders]
     else:
-        seeders_to_run = None  # Use environment defaults in run_seeders()
+        # No seeder option specified
+        show_help()
+        logger.error("\n❌ Must specify --all, --only-seeder, or --skip-seeder to run seeders")
+        logger.info(f"Available seeders: {', '.join(get_all_seeders())}")
+        return 1
     
     # Full setup: migrate -> seed
     logger.info("Setting up RAG Fortress...\n")
