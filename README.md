@@ -19,7 +19,7 @@ Enterprise-grade Retrieval-Augmented Generation (RAG) platform with role-based a
 
 ## 🚀 Quick Start
 
-See **[Installation Guide](backend/INSTALLATION.md)** for complete setup instructions.
+See **[Installation Guide](backend/docs/INSTALLATION.md)** for complete setup instructions.
 
 ### TL;DR
 
@@ -30,14 +30,18 @@ uv sync                    # Install dependencies
 cp .env.example .env       # Configure your API keys and database
 
 # Option 1: Using uv run (recommended - no activation needed)
-uv run setup.py     # Initialize database with migrations and seeders
-uv run run.py       # Start server on http://localhost:8000
+uv run setup.py --all      # Initialize database with migrations and all seeders or
+uv run setup.py --only-seeder admin #to run only the admin seeder
+uv run startup.py          # Start server on http://localhost:8000
+
+# Option 1a: Development with auto-reload
+uv run startup.py --reload # Start with hot-reload
 
 # Option 2: Activate environment first
 .venv\Scripts\Activate     # Windows
 source .venv/bin/activate  # macOS/Linux
-python setup.py
-python run.py
+python setup.py --all / python setup.py --only-seeder admin
+python startup.py
 ```
 
 **Frontend:**
@@ -49,7 +53,7 @@ npm run dev                # Start on http://localhost:5173
 ```
 
 **Default Credentials:**
-- Admin: `admin@ragfortress.com` / `admin@Rag1`
+- Admin: `admin@ragfortress.com` / `admin@RAGFortress123`
 
 ## 📚 Documentation
 
