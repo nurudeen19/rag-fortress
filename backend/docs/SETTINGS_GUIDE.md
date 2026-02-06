@@ -101,15 +101,23 @@ Below are the primary environment variables used by each config module. Defaults
 
 ## Seeder control
 
-- Seeders are controlled via `setup.py` and `run_seeders.py`. You can limit or skip seeders using environment variables or CLI flags:
+Seeders are controlled via CLI flags with `setup.py` and `run_seeders.py`:
 
 ```bash
-ENABLED_SEEDERS=admin,roles_permissions   # only these seeders will run (comma-separated)
-DISABLED_SEEDERS=knowledge_base          # skip these seeders
-# CLI flags override env vars: python setup.py --only-seeder admin,roles_permissions
+# Run all seeders
+python setup.py --all
+
+# Run only specific seeders
+python setup.py --only-seeder admin,roles_permissions
+
+# Run all except specific seeders
+python setup.py --skip-seeder knowledge_base
+
+# List available seeders
+python setup.py --list-seeders
 ```
 
-Note: `ENABLED_SEEDERS` takes priority when both are set.
+**Note:** Environment variables are no longer supported for seeder control. Use CLI flags instead.
 
 ## Examples: development vs production
 

@@ -67,44 +67,79 @@ Edit `.env` with your configuration:
 **Note:** If you plan to use **PostgreSQL** or **MySQL**, make sure the database server is installed and a database is created and reachable before running the setup. The connection details are taken from your database settings `DB_HOST`,`DB_PORT` etc. in `.env`. For **SQLite** no external database server is required — the database file will be created automatically when migrations run.
 
 ```bash
-python setup.py
+python setup.py --all
 ```
 
-This single command will:
+This command will:
 - Run all database migrations
-- Load initial seed data (demo users, roles, permissions)
+- Load all initial seed data (roles, permissions, admin user, etc.)
 - Set up the database schema
 
-**Optional:** To run migrations and seeders separately:
+**Available setup options:**
+
 ```bash
-python migrate.py      # Run migrations only
-python run_seeders.py  # Run seeders only
+# Run all seeders (full setup)
+python setup.py --all
+
+# Run only specific seeders
+python setup.py --only-seeder admin,roles_permissions
+
+# Run all seeders except specified ones
+python setup.py --skip-seeder departments,jobs,conversations
+
+# View available seeders
+python setup.py --list-seeders
+
+# Verify database setup is complete
+python setup.py --verify
+
+# Clear database (for recovery/reset)
+python setup.py --clear-db
 ```
 
-### Seeders (selective control)
+**To run seeders separately:**
 
-- **Run all seeders (default):** `python setup.py` runs migrations then all seeders.
-- **Run seeders only:** `python run_seeders.py` runs all seeders unless you pass specific names.
-- **Run specific seeders (CLI):** pass seeder names to `run_seeders.py` or use `setup.py` flags.
-	- Example: `python run_seeders.py admin` — runs only the `admin` seeder.
-	- Example: `python run_seeders.py admin app` — runs `admin` and `app` (order follows seeding order).
-- **Using `setup.py` for selective seeding:**
-	- `python setup.py --only-seeder admin,roles_permissions` — run only those seeders.
-	- `python setup.py --skip-seeder departments,jobs` — run all except those.
-- **Environment variables to control seeders:**
-	- `ENABLED_SEEDERS` — comma-separated list of seeders to run (highest priority).
-	- `DISABLED_SEEDERS` — comma-separated list of seeders to skip (used if ENABLED_SEEDERS not set).
-	- CLI flags (`--only-seeder`, `--skip-seeder`) override these environment variables.
-- **Admin seeder configuration:** the admin seeder reads credentials from AppSettings / environment variables:
-	- `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (optional: `ADMIN_FIRSTNAME`, `ADMIN_LASTNAME`).
-	- Set these in your `.env` before running seeders to control the created admin account.
+```bash
+# Run all seeders
+python run_seeders.py --all
 
-Note: Seeders are implemented to be idempotent where possible. If a seeder detects existing records (unique constraints), it will skip or warn rather than duplicate data.
+# Run specific seeders
+python run_seeders.py --only-seeder admin,roles_permissions
+
+# Skip certain seeders
+python run_seeders.py --skip-seeder departments
+```
+
+**Available seeders:**
+- `admin` - Creates admin user account from environment variables
+- `roles_permissions` - Creates system roles and permissions
+- `departments` - Creates department records
+- `application_settings` - Creates application-level settings
+- `jobs` - Creates sample job records
+- `knowledge_base` - Creates sample knowledge base entries
+- `conversations` - Creates sample conversations
+- `activity_logs` - Creates sample activity logs
+
+**Admin seeder configuration:**
+
+The admin seeder reads credentials from environment variables. Set these in `.env` before running setup:
+- `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`
+- Optional: `ADMIN_FIRSTNAME`, `ADMIN_LASTNAME`
+
+**Note:** Seeders are implemented to be idempotent where possible. If a seeder detects existing records (unique constraints), it will skip or warn rather than duplicate data.
 
 ### 6. Start the Server
 
 ```bash
-python run.py
+# Production mode (no auto-reload)
+python startup.py
+
+# Development mode (with auto-reload)
+python startup.py --reload
+python startup.py --dev
+
+# Set environment via environment variable
+ENVIRONMENT=development python startup.py
 ```
 
 The API will be available at `http://localhost:8000`
