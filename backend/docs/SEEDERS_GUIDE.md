@@ -109,90 +109,81 @@ class DepartmentsSeeder(BaseSeed):
 
 ### Configuration Methods
 
-#### Method 1: Environment Variables (Persistent)
-
-Edit `.env` to set permanent defaults:
-
-```env
-# Option A: Run only these seeders
-ENABLED_SEEDERS=admin,roles_permissions
-
-# Option B: Run all except these (only if ENABLED_SEEDERS is empty)
-DISABLED_SEEDERS=departments,jobs
-
-# Option C: Leave both empty to run all (default)
-ENABLED_SEEDERS=
-DISABLED_SEEDERS=
-```
-
-#### Method 2: CLI Flags (Runtime Override)
+**CLI Flags Only** - Seeders are controlled exclusively via command-line arguments. Environment variables are no longer supported.
 
 ```bash
+# Run all seeders (migration + full setup)
+python setup.py --all
+
 # Run only specified seeders
-python setup.py --only-seeder admin,roles_permissions,jobs
+python setup.py --only-seeder admin,roles_permissions
 
 # Run all except specified seeders
-python setup.py --skip-seeder departments
+python setup.py --skip-seeder departments,jobs
 
-# View what will run
+# View available seeders
 python setup.py --list-seeders
+
+# Verify database setup is complete
+python setup.py --verify
+
+# Clear database for reset
+python setup.py --clear-db
 ```
 
-#### Method 3: Priority Order
+Or run seeders directly:
 
-1. **CLI flags** (highest priority - always overrides everything)
-   - `--only-seeder` or `--skip-seeder`
-2. **Environment variables**
-   - `ENABLED_SEEDERS` (if set, takes priority over DISABLED_SEEDERS)
-   - `DISABLED_SEEDERS` (used if ENABLED_SEEDERS is empty)
-3. **Default** (lowest priority)
-   - If nothing is set, runs all available seeders
+```bash
+# Run all seeders
+python run_seeders.py --all
+
+# Run only specific seeders
+python run_seeders.py --only-seeder admin,roles_permissions
+
+# Skip specific seeders
+python run_seeders.py --skip-seeder departments
+```
 
 ## Common Commands
 
-### Full Setup (with environment defaults)
+### Full Setup (migrations + all seeders)
 ```bash
-python setup.py
+python setup.py --all
 ```
-Runs migrations, seeders (based on configuration), and verification.
+Runs migrations, all seeders, and verification.
 
 ### List Seeders
 ```bash
 python setup.py --list-seeders
 ```
-Shows available seeders and which ones will run based on current configuration.
+Shows all available seeders.
 
 **Output:**
 ```
 Available seeders:
-  ✓ admin
-  ✓ roles_permissions
-  ✗ departments
-  ✗ knowledge_base
-  ✗ jobs
+  1. admin
+  2. roles_permissions
+  3. departments
+  4. application_settings
+  5. jobs
+  6. knowledge_base
+  7. conversations
+  8. activity_logs
 
-Configuration: ENABLED_SEEDERS=admin,roles_permissions
-Seeders to run: admin, roles_permissions
-
-Seeder dependencies:
-  • roles_permissions: No dependencies
-  • departments: Optional
-  • admin: Requires roles_permissions
-  • jobs: Optional
-  • knowledge_base: Optional
+Total: 8 seeders available
 ```
 
 ### Run Only Specific Seeders
 ```bash
 python setup.py --only-seeder admin,roles_permissions
 ```
-Ignores environment defaults and runs only specified seeders.
+Runs only the specified seeders (useful for production setup).
 
 ### Skip Specific Seeders
 ```bash
-python setup.py --skip-seeder departments
+python setup.py --skip-seeder departments,jobs
 ```
-Runs all default seeders except the specified ones.
+Runs all seeders except the specified ones.
 
 ### Verify Setup
 ```bash
@@ -209,43 +200,27 @@ Drops all tables (requires confirmation).
 ## Configuration Examples
 
 ### Development: Run Everything
-```env
-# .env - leave both empty (default)
-ENABLED_SEEDERS=
-DISABLED_SEEDERS=
-```
 ```bash
-python setup.py
-# Runs all 5 seeders
+python setup.py --all
+# Runs all seeders
 ```
 
 ### Production: Minimal Setup
-```env
-# .env - only critical seeders
-ENABLED_SEEDERS=admin,roles_permissions
-DISABLED_SEEDERS=
-```
 ```bash
-python setup.py
-# Runs only admin and roles_permissions
+python setup.py --only-seeder admin,roles_permissions
+# Runs only admin and roles_permissions (critical seeders)
 ```
 
 ### Staging: Most Features Except Optional
-```env
-# .env - skip only heavy/optional seeders
-ENABLED_SEEDERS=
-DISABLED_SEEDERS=knowledge_base
-```
 ```bash
-python setup.py
-# Runs: roles_permissions, departments, admin, jobs (skips knowledge_base)
+python setup.py --skip-seeder knowledge_base
+# Runs all except knowledge_base
 ```
 
-### Custom at Runtime
+### Custom Combination
 ```bash
-# Use CLI to override .env temporarily
-python setup.py --only-seeder admin,roles_permissions,departments
-# Runs: admin, roles_permissions, departments (ignores .env)
+python setup.py --only-seeder admin,roles_permissions,departments,jobs
+# Runs only specified seeders
 ```
 
 ## Seeder Behavior by Scenario
@@ -382,7 +357,7 @@ SEEDERS = {
 # No setup.py changes needed!
 python setup.py --only-seeder my_seeder
 python setup.py --skip-seeder my_seeder
-ENABLED_SEEDERS=my_seeder python setup.py
+python run_seeders.py --only-seeder my_seeder
 ```
 
 ## Base Seeder API
@@ -478,17 +453,13 @@ ERROR: Database health check failed
 ```bash
 # Start from scratch with everything
 python setup.py --clear-db
-python setup.py
-# Result: All 5 seeders run, full setup
+python setup.py --all
+# Result: All seeders run, full setup
 ```
 
 ### Example 2: Production Deployment
-```env
-# .env
-ENABLED_SEEDERS=admin,roles_permissions
-```
 ```bash
-python setup.py
+python setup.py --only-seeder admin,roles_permissions
 # Result: Minimal setup with only critical seeders
 ```
 

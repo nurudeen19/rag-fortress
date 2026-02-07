@@ -4,17 +4,52 @@ Directory for database seeder modules. Each seeder handles one specific seeding 
 
 ## Usage
 
-Run all seeders:
+**Quick Start:**
 ```bash
-python run_seeders.py
+# Run all seeders (via setup script)
+python setup.py --all
+
+# Or run seeders directly
+python run_seeders.py --all
 ```
 
-Run specific seeders:
+**Selective Seeding:**
 ```bash
-python run_seeders.py admin
-python run_seeders.py roles_permissions
-python run_seeders.py admin roles_permissions
+# Run only specific seeders
+python run_seeders.py --only-seeder admin,roles_permissions
+
+# Run all except specified seeders
+python run_seeders.py --skip-seeder departments,conversations
+
+# List available seeders
+python run_seeders.py --help
 ```
+
+**Via setup.py:**
+```bash
+# Full setup: migrations + all seeders
+python setup.py --all
+
+# Run only specific seeders
+python setup.py --only-seeder admin,roles_permissions
+
+# Run all except specified
+python setup.py --skip-seeder departments
+
+# View available seeders
+python setup.py --list-seeders
+```
+
+## Available Seeders
+
+- **admin**: Creates admin user account from environment variables (`ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`)
+- **roles_permissions**: Creates system roles (admin, manager, user, viewer) and default permissions
+- **departments**: Creates sample department records
+- **application_settings**: Creates application-level settings and configurations
+- **jobs**: Creates sample background job records
+- **knowledge_base**: Creates sample knowledge base entries
+- **conversations**: Creates sample conversation threads
+- **activity_logs**: Creates sample activity log entries
 
 ## Creating New Seeders
 
@@ -49,7 +84,8 @@ SEEDERS = {
 }
 ```
 
-## Available Seeders
+## Important Notes
 
-- **admin**: Creates default admin account from .env credentials
-- **roles_permissions**: Creates system roles (admin, user, viewer) and 10 default permissions
+- **Idempotent by Design**: Seeders are designed to be safe to run multiple times. Existing records are skipped to prevent duplicates.
+- **No Default Behavior**: Seeder commands require explicit options (`--all`, `--only-seeder`, or `--skip-seeder`). Running without options shows help.
+- **CLI Only**: Seeders are controlled via command-line flags. Environment variables are not supported.
