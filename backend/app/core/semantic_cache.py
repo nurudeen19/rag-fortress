@@ -81,12 +81,12 @@ class SemanticCache:
                 self.response_cache = RedisVLSemanticCache(
                     name="rag_response_cache",
                     redis_url=redis_url,
-                    distance_threshold=self.config["response"]["similarity_threshold"],
+                    distance_threshold=self.config["response"]["distance_threshold"],
                     ttl=self.config["response"]["ttl_seconds"],
                     vectorizer=vectorizer
                 )
                 logger.info(
-                    f"Response cache initialized (distance_threshold={self.config['response']['similarity_threshold']}, "
+                    f"Response cache initialized (distance_threshold={self.config['response']['distance_threshold']}, "
                     f"TTL={self.config['response']['ttl_seconds']}s, encrypt={self.config['response']['encrypt']})"
                 )
             
@@ -95,12 +95,12 @@ class SemanticCache:
                 self.context_cache = RedisVLSemanticCache(
                     name="rag_context_cache",
                     redis_url=redis_url,
-                    distance_threshold=self.config["context"]["similarity_threshold"],
+                    distance_threshold=self.config["context"]["distance_threshold"],
                     ttl=self.config["context"]["ttl_seconds"],
                     vectorizer=vectorizer
                 )
                 logger.info(
-                    f"Context cache initialized (distance_threshold={self.config['context']['similarity_threshold']}, "
+                    f"Context cache initialized (distance_threshold={self.config['context']['distance_threshold']}, "
                     f"TTL={self.config['context']['ttl_seconds']}s, encrypt={self.config['context']['encrypt']})"
                 )
         

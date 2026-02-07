@@ -67,14 +67,14 @@ class CacheSettings(BaseSettings):
     ENABLE_RESPONSE_CACHE: bool = Field(False, env="ENABLE_RESPONSE_CACHE")
     RESPONSE_CACHE_TTL_MINUTES: int = Field(60, env="RESPONSE_CACHE_TTL_MINUTES")  # 60 minutes (1 hour)
     RESPONSE_CACHE_MAX_ENTRIES: int = Field(1, env="RESPONSE_CACHE_MAX_ENTRIES")  # Max variations per cluster (1=single, >1=variations)
-    RESPONSE_CACHE_SIMILARITY_THRESHOLD: float = Field(0.1, env="RESPONSE_CACHE_SIMILARITY_THRESHOLD")  # More lenient
+    RESPONSE_CACHE_DISTANCE_THRESHOLD: float = Field(0.1, env="RESPONSE_CACHE_DISTANCE_THRESHOLD")  # More lenient
     RESPONSE_CACHE_ENCRYPT: bool = Field(False, env="RESPONSE_CACHE_ENCRYPT")
     
     # Context-level cache (caches retrieved documents before LLM)
     ENABLE_CONTEXT_CACHE: bool = Field(False, env="ENABLE_CONTEXT_CACHE")
     CONTEXT_CACHE_TTL_MINUTES: int = Field(120, env="CONTEXT_CACHE_TTL_MINUTES")  # 120 minutes (2 hours)
     CONTEXT_CACHE_MAX_ENTRIES: int = Field(1, env="CONTEXT_CACHE_MAX_ENTRIES")  # Max variations per cluster (1=single, >1=variations)
-    CONTEXT_CACHE_SIMILARITY_THRESHOLD: float = Field(0.05, env="CONTEXT_CACHE_SIMILARITY_THRESHOLD")  # Stricter
+    CONTEXT_CACHE_DISTANCE_THRESHOLD: float = Field(0.05, env="CONTEXT_CACHE_DISTANCE_THRESHOLD")  # Stricter
     CONTEXT_CACHE_ENCRYPT: bool = Field(False, env="CONTEXT_CACHE_ENCRYPT")
     
     def get_redis_url(self) -> str:
@@ -118,7 +118,7 @@ class CacheSettings(BaseSettings):
                 "enabled": self.ENABLE_RESPONSE_CACHE,
                 "ttl_seconds": self.RESPONSE_CACHE_TTL_MINUTES * 60,
                 "max_entries": self.RESPONSE_CACHE_MAX_ENTRIES,
-                "similarity_threshold": self.RESPONSE_CACHE_SIMILARITY_THRESHOLD,
+                "distance_threshold": self.RESPONSE_CACHE_DISTANCE_THRESHOLD,
                 "encrypt": self.RESPONSE_CACHE_ENCRYPT,
             },
             
@@ -127,7 +127,7 @@ class CacheSettings(BaseSettings):
                 "enabled": self.ENABLE_CONTEXT_CACHE,
                 "ttl_seconds": self.CONTEXT_CACHE_TTL_MINUTES * 60,
                 "max_entries": self.CONTEXT_CACHE_MAX_ENTRIES,
-                "similarity_threshold": self.CONTEXT_CACHE_SIMILARITY_THRESHOLD,
+                "distance_threshold": self.CONTEXT_CACHE_DISTANCE_THRESHOLD,
                 "encrypt": self.CONTEXT_CACHE_ENCRYPT,
             }
         }
