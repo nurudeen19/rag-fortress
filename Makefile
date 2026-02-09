@@ -21,7 +21,8 @@ help:
 	@echo "$(BLUE)RAG Fortress - Docker Commands$(NC)"
 	@echo ""
 	@echo "$(GREEN)Setup:$(NC)"
-	@echo "  make setup          - Initial setup (copy env files)"
+	@echo "  make setup          - Setup for Docker deployment (.env.docker)"
+	@echo "  make setup-local    - Setup for local development (.env)"
 	@echo "  make build          - Build all Docker images"
 	@echo "  make build-backend  - Build backend image only"
 	@echo "  make build-frontend - Build frontend image only"
@@ -45,6 +46,8 @@ help:
 	@echo ""
 	@echo "$(GREEN)Database:$(NC)"
 	@echo "  make db-migrate     - Run database migrations"
+	@echo "  make db-seed        - Run database seeders"
+	@echo "  make db-setup       - Run migrations + seeders (first-time)"
 	@echo "  make db-backup      - Backup PostgreSQL database"
 	@echo "  make db-restore     - Restore PostgreSQL database"
 	@echo "  make db-shell       - Open PostgreSQL shell"
@@ -56,12 +59,19 @@ help:
 	@echo "  make update         - Pull latest images and rebuild"
 	@echo ""
 
-## setup: Initial setup - copy environment files
+## setup: Initial setup for Docker - copy Docker environment files
 setup:
-	@echo "$(BLUE)Setting up environment files...$(NC)"
+	@echo "$(BLUE)Setting up Docker environment files...$(NC)"
 	@test -f .env || (cp .env.docker.example .env && echo "$(GREEN)Created .env$(NC)")
+	@test -f backend/.env.docker || (cp backend/.env.docker.example backend/.env.docker && echo "$(GREEN)Created backend/.env.docker$(NC)")
+	@echo "$(GREEN)Docker setup complete! Edit .env and backend/.env.docker with your configuration.$(NC)"
+
+## setup-local: Setup for local development - copy local environment files
+setup-local:
+	@echo "$(BLUE)Setting up local development environment files...$(NC)"
 	@test -f backend/.env || (cp backend/.env.example backend/.env && echo "$(GREEN)Created backend/.env$(NC)")
-	@echo "$(GREEN)Setup complete! Edit .env files with your configuration.$(NC)"
+	@test -f frontend/.env || (cp frontend/.env.example frontend/.env && echo "$(GREEN)Created frontend/.env$(NC)")
+	@echo "$(GREEN)Local setup complete! Edit backend/.env and frontend/.env with your configuration.$(NC)"
 
 ## build: Build all Docker images
 build:
@@ -144,8 +154,18 @@ ps:
 ## db-migrate: Run database migrations
 db-migrate:
 	@echo "$(BLUE)Running database migrations...$(NC)"
-	docker compose exec backend alembic upgrade head
+	docker compose exec backend python migrate.py upgrade
 	@echo "$(GREEN)Migrations complete!$(NC)"
+
+## db-seed: Run database seeders (first-time setup)
+db-seed:
+	@echo "$(BLUE)Running database seeders...$(NC)"
+	docker compose exec backend python setup.py --all
+	@echo "$(GREEN)Seeders complete!$(NC)"
+
+## db-setup: Run migrations + seeders (first-time setup)
+db-setup: db-migrate db-seed
+	@echo "$(GREEN)Database setup complete!$(NC)"
 
 ## db-backup: Backup PostgreSQL database
 db-backup:
