@@ -1,0 +1,37 @@
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Documentation
+*.md
+!README.md
+!DOCKER.md
+docs/
+
+# Environment files
+.env
+.env.*
+!.env.docker.example
+
+# Build artifacts are handled in subdirectory dockerignores
+# Parent directories that don't need to be in the build context
+rag_fortress_landing/
+
+# Action items and project management
+Action items
+LICENSE
+
+# Logs and temporary files
+*.log
+.cache/
+.temp/
+.tmp/

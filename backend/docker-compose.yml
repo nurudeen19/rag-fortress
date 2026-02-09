@@ -1,0 +1,188 @@
+version: '3.8'
+
+# ==============================================================================
+# RAG Fortress - Backend Services
+# ==============================================================================
+# Production-ready backend stack with sane defaults:
+#   - PostgreSQL for database
+#   - Redis Stack for caching and semantic cache
+#   - Qdrant for vector search
+#
+# Usage:
+#   docker compose up -d
+#
+# This compose can run independently from the frontend
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Backend Application
+  # ============================================================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag-fortress-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Application
+      - APP_NAME=RAG Fortress
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - FRONTEND_URL=http://localhost:3000
+      
+      # Database - PostgreSQL
+      - DATABASE_PROVIDER=postgresql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-rag_fortress}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-rag_fortress_secure_pwd}
+      - DB_NAME=${POSTGRES_DB:-rag_fortress}
+      - DB_POOL_SIZE=10
+      - DB_MAX_OVERFLOW=20
+      
+      # Cache & Rate Limiting - Redis Stack
+      - CACHE_BACKEND=redis
+      - CACHE_ENABLED=true
+      - CACHE_REDIS_URL=redis://redis:6379/0
+      - RATE_LIMIT_REDIS_URL=redis://redis:6379/1
+      
+      # Security (CHANGE IN PRODUCTION!)
+      - SECRET_KEY=${SECRET_KEY:-change_this_secret_key_in_production_min_32_chars}
+      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-change_this_master_key_32_chars_min}
+      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-change_settings_key_32_chars_min}
+      
+      # LLM Configuration (override with your values)
+      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
+      
+      # Embedding Configuration
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-huggingface}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      
+      # Vector Store (Qdrant)
+      - VECTOR_DB_PROVIDER=qdrant
+      - VECTOR_DB_HOST=qdrant
+      - VECTOR_DB_PORT=6333
+      
+    volumes:
+      # Persistent data
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # PostgreSQL Database (Default - Always Available)
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag-fortress-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-rag_fortress}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-rag_fortress_secure_pwd}
+      - POSTGRES_DB=${POSTGRES_DB:-rag_fortress}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_fortress}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to expose PostgreSQL port for external access
+    # ports:
+    #   - "5432:5432"
+
+  # ============================================================================
+  # Redis Stack (Cache + Semantic Cache with Vector Support)
+  # ============================================================================
+  redis:
+    image: redis/redis-stack-server:7.4.0-v2
+    container_name: rag-fortress-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to expose Redis port for external access
+    # ports:
+    #   - "6379:6379"
+
+  # ============================================================================
+  # Qdrant Vector Database (Optional - for production vector search)
+  # ============================================================================
+  # Uncomment if using Qdrant as VECTOR_DB_PROVIDER
+  qdrant:
+    image: qdrant/qdrant:v1.11.3
+    container_name: rag-fortress-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6333:6333"
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  rag-fortress-network:
+    name: rag-fortress-network
+    driver: bridge
+
+# ==============================================================================
+# Volumes
+  # ============================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.11.3
+    container_name: rag-fortress-qdrant
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "6333:6333"
+      - "6334:6334redis_data:
+    name: rag_fortress_redis_data
+  qdrant_data:
+ 

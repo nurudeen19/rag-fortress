@@ -1,0 +1,187 @@
+version: '3.8'
+
+# ==============================================================================
+# RAG Fortress - Complete Application Stack
+# ==============================================================================
+# Production-ready stack with sane defaults:
+#   - PostgreSQL for database
+#   - Redis Stack for caching and semantic cache
+#   - Qdrant for vector search
+#
+# Usage:
+#   docker compose up -d
+#
+# Environment variables can be set in .env file
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Backend Application
+  # ============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rag-fortress-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      # Database connection (PostgreSQL)
+      - DATABASE_PROVIDER=postgresql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-rag_fortress}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-rag_fortress_secure_pwd}
+      - DB_NAME=${POSTGRES_DB:-rag_fortress}
+      
+      # Redis connection
+      - CACHE_REDIS_URL=redis://redis:6379/0
+      - RATE_LIMIT_REDIS_URL=redis://redis:6379/1
+      
+      # Frontend URL
+      - FRONTEND_URL=http://localhost:${FRONTEND_PORT:-3000}
+      
+      # Vector store (Qdrant)
+      - VECTOR_DB_PROVIDER=qdrant
+      - VECTOR_DB_HOST=qdrant
+      - VECTOR_DB_PORT=6333
+      
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ============================================================================
+  # Frontend Application
+  # ============================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://localhost:${BACKEND_PORT:-8000}
+    container_name: rag-fortress-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
+  # PostgreSQL Database (Default)
+  # ============================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: rag-fortress-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-rag_fortress}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-rag_fortress_secure_pwd}
+      - POSTGRES_DB=${POSTGRES_DB:-rag_fortress}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_fortress}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to expose PostgreSQL for external tools
+    # ports:
+    #   - "5432:5432"
+
+  # ============================================================================
+  # Redis Stack (Cache + Semantic Cache with Vector Support)
+  # ============================================================================
+  redis:
+    image: redis/redis-stack-server:7.4.0-v2
+    container_name: rag-fortress-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAX_MEMORY:-512mb} --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to expose Redis for external tools
+    # ports:
+    #   - "6379:6379"
+
+  # ============================================================================
+  # Qdrant Vector Database (Optional - Profile: qdrant)
+  # ============================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.11.3
+    container_name: rag-fortress-qdrant
+    restart: unless-stopped
+    profiles:
+      - qdrant
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  rag-fortress-network:
+    name: rag-fortress-network
+    driver: bridge
+
+  # ============================================================================
+  qdrant:
+    image: qdrant/qdrant:v1.11.3
+    container_name: rag-fortress-qdrant
+    restart: unless-stopped:
+    name: rag_fortress_backend_logs
+  postgres_data:
+    name: rag_fortress_postgres_data
+  mysql_data:
+    name: rag_fortress_mysql_data
+  redis_data:
+    name: rag_fortress_redis_data
+  qdrant_data:
+    name: rag_fortress_qdrant_data
