@@ -36,13 +36,14 @@ htmlcov/
 .env.*
 !.env.example
 
-# Data and logs (mounted as volumes)
-data/
-logs/
-dump.rdb
-*.db
-*.sqlite
-*.sqlite3
+# Data files (but not directory structure)
+data/**/*.db
+data/**/*.sqlite
+data/**/*.sqlite3
+data/**/dump.rdb
+
+# Log files
+logs/**/*.log
 
 # Documentation
 docs/

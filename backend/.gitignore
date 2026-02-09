@@ -43,6 +43,7 @@ venv_backup/
 .env
 .env.local
 .env.*.local
+.env.docker
 
 # Database
 *.db

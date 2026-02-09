@@ -25,50 +25,8 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    environment:
-      # Application
-      - APP_NAME=RAG Fortress
-      - ENVIRONMENT=production
-      - DEBUG=false
-      - HOST=0.0.0.0
-      - PORT=8000
-      - FRONTEND_URL=http://localhost:3000
-      
-      # Database - PostgreSQL
-      - DATABASE_PROVIDER=postgresql
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=${POSTGRES_USER:-rag_fortress}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-rag_fortress_secure_pwd}
-      - DB_NAME=${POSTGRES_DB:-rag_fortress}
-      - DB_POOL_SIZE=10
-      - DB_MAX_OVERFLOW=20
-      
-      # Cache & Rate Limiting - Redis Stack
-      - CACHE_BACKEND=redis
-      - CACHE_ENABLED=true
-      - CACHE_REDIS_URL=redis://redis:6379/0
-      - RATE_LIMIT_REDIS_URL=redis://redis:6379/1
-      
-      # Security (CHANGE IN PRODUCTION!)
-      - SECRET_KEY=${SECRET_KEY:-change_this_secret_key_in_production_min_32_chars}
-      - MASTER_ENCRYPTION_KEY=${MASTER_ENCRYPTION_KEY:-change_this_master_key_32_chars_min}
-      - SETTINGS_ENCRYPTION_KEY=${SETTINGS_ENCRYPTION_KEY:-change_settings_key_32_chars_min}
-      
-      # LLM Configuration (override with your values)
-      - LLM_PROVIDER=${LLM_PROVIDER:-openai}
-      - LLM_API_KEY=${LLM_API_KEY:-}
-      - LLM_MODEL=${LLM_MODEL:-gpt-4o-mini}
-      
-      # Embedding Configuration
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-huggingface}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
-      
-      # Vector Store (Qdrant)
-      - VECTOR_DB_PROVIDER=qdrant
-      - VECTOR_DB_HOST=qdrant
-      - VECTOR_DB_PORT=6333
-      
+    env_file:
+      - .env.docker
     volumes:
       # Persistent data
       - backend_data:/app/data
@@ -93,7 +51,7 @@ services:
   # PostgreSQL Database (Default - Always Available)
   # ============================================================================
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: rag-fortress-postgres
     restart: unless-stopped
     environment:
@@ -118,7 +76,7 @@ services:
   # Redis Stack (Cache + Semantic Cache with Vector Support)
   # ============================================================================
   redis:
-    image: redis/redis-stack-server:7.4.0-v2
+    image: redis/redis-stack:7.4.0-v8
     container_name: rag-fortress-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
@@ -181,7 +139,7 @@ networks:
       retries: 5
     ports:
       - "6333:6333"
-      - "6334:6334redis_data:
+      - "6334:6334"
     name: rag_fortress_redis_data
   qdrant_data:
  
