@@ -6,9 +6,14 @@
 #   - PostgreSQL for database
 #   - Redis Stack for caching and semantic cache
 #   - Qdrant for vector search
+#   - Mailpit for email testing (SMTP + Web UI)
 #
 # Usage:
 #   docker compose up -d
+#
+# Access Points:
+#   - Backend API: http://localhost:8000
+#   - Mailpit UI: http://localhost:8025
 #
 # This compose can run independently from the frontend
 # ==============================================================================
@@ -94,35 +99,7 @@ services:
     #   - "6379:6379"
 
   # ============================================================================
-  # Qdrant Vector Database (Optional - for production vector search)
-  # ============================================================================
-  # Uncomment if using Qdrant as VECTOR_DB_PROVIDER
-  qdrant:
-    image: qdrant/qdrant:v1.11.3
-    container_name: rag-fortress-qdrant
-    restart: unless-stopped
-    volumes:
-      - qdrant_data:/qdrant/storage
-    networks:
-      - rag-fortress-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    ports:
-      - "6333:6333"
-
-# ==============================================================================
-# Networks
-# ==============================================================================
-networks:
-  rag-fortress-network:
-    name: rag-fortress-network
-    driver: bridge
-
-# ==============================================================================
-# Volumes
+  # Qdrant Vector Database
   # ============================================================================
   qdrant:
     image: qdrant/qdrant:v1.11.3
@@ -140,6 +117,48 @@ networks:
     ports:
       - "6333:6333"
       - "6334:6334"
+
+  # ============================================================================
+  # Mailpit (Email Testing - SMTP Server + Web UI)
+  # ============================================================================
+  mailpit:
+    image: axllent/mailpit:v1.20
+    container_name: rag-fortress-mailpit
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    environment:
+      - MP_MAX_MESSAGES=5000
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  rag-fortress-network:
+    name: rag-fortress-network
+    driver: bridge
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  backend_data:
+    name: rag_fortress_backend_data
+  backend_logs:
+    name: rag_fortress_backend_logs
+  postgres_data:
+    name: rag_fortress_postgres_data
+  redis_data:
     name: rag_fortress_redis_data
   qdrant_data:
- 
+    name: rag_fortress_qdrant_data
