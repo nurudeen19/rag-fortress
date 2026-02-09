@@ -4,7 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -39,7 +38,6 @@ coverage/
 Dockerfile
 docker-compose*.yml
 .dockerignore
-nginx.conf
 
 # Documentation
 *.md

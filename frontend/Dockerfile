@@ -3,33 +3,42 @@
 # ==============================================================================
 # Stage 1: Build stage
 # ==============================================================================
-FROM node:20-alpine AS builder
+FROM node:24-alpine AS builder
 
 WORKDIR /build
+
+ARG VITE_API_BASE_URL=http://localhost:8000/api
 
 # Copy package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies with caching
+# Install all dependencies (including dev) needed for build
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --only=production --ignore-scripts
+    npm ci --ignore-scripts
 
-# Copy source files
-COPY . .
+# Copy configuration files
+COPY vite.config.js tailwind.config.js postcss.config.js index.html ./
 
-# Build the application
-RUN npm run build
+# Copy source and public directories
+COPY src ./src
+COPY public ./public
+
+# Copy environment file if it exists (for build-time configuration)
+COPY .env* ./
+
+# Build the application with environment variables
+RUN VITE_API_BASE_URL=$VITE_API_BASE_URL npm run build
 
 # ==============================================================================
 # Stage 2: Production stage with Nginx
 # ==============================================================================
-FROM nginx:1.27-alpine AS production
+FROM nginx:1.28-alpine AS production
 
 # Install curl for health checks
 RUN apk add --no-cache curl
 
-# Copy custom nginx configuration
-COPY --from=builder /build/nginx.conf /etc/nginx/nginx.conf
+# Copy custom nginx configuration from source
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Copy built application from builder
 COPY --from=builder /build/dist /usr/share/nginx/html
