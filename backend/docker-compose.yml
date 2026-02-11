@@ -26,7 +26,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rag-fortress-backend
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -57,7 +56,6 @@ services:
   # ============================================================================
   postgres:
     image: postgres:18-alpine
-    container_name: rag-fortress-postgres
     restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-rag_fortress}
@@ -82,7 +80,6 @@ services:
   # ============================================================================
   redis:
     image: redis/redis-stack:7.4.0-v8
-    container_name: rag-fortress-redis
     restart: unless-stopped
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     volumes:
@@ -103,7 +100,6 @@ services:
   # ============================================================================
   qdrant:
     image: qdrant/qdrant:v1.16
-    container_name: rag-fortress-qdrant
     restart: unless-stopped
     volumes:
       - qdrant_data:/qdrant/storage
@@ -123,7 +119,6 @@ services:
   # ============================================================================
   mailpit:
     image: axllent/mailpit:v1.29
-    container_name: rag-fortress-mailpit
     restart: unless-stopped
     ports:
       - "1025:1025"  # SMTP server
@@ -145,7 +140,6 @@ services:
 # ==============================================================================
 networks:
   rag-fortress-network:
-    name: rag-fortress-network
     driver: bridge
 
 # ==============================================================================
@@ -153,12 +147,7 @@ networks:
 # ==============================================================================
 volumes:
   backend_data:
-    name: rag_fortress_backend_data
   backend_logs:
-    name: rag_fortress_backend_logs
   postgres_data:
-    name: rag_fortress_postgres_data
   redis_data:
-    name: rag_fortress_redis_data
   qdrant_data:
-    name: rag_fortress_qdrant_data

@@ -19,7 +19,6 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000}
-    container_name: rag-fortress-frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
@@ -41,5 +40,4 @@ services:
 # ==============================================================================
 networks:
   rag-fortress-network:
-    name: rag-fortress-network
     driver: bridge
