@@ -163,6 +163,15 @@ LinkedIn = "https://www.linkedin.com/in/nurudeen-habibu/"
 [tool.setuptools]
 packages = ["app"]
 
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
 [tool.setuptools.package-dir]
 "" = "."
 
@@ -240,7 +249,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true

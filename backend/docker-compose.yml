@@ -74,8 +74,8 @@ services:
       timeout: 5s
       retries: 5
     # Uncomment to expose PostgreSQL port for external access
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "5432:5432"
 
   # ============================================================================
   # Redis Stack (Cache + Semantic Cache with Vector Support)
@@ -95,14 +95,14 @@ services:
       timeout: 5s
       retries: 5
     # Uncomment to expose Redis port for external access
-    # ports:
-    #   - "6379:6379"
+    ports:
+      - "6379:6379"
 
   # ============================================================================
   # Qdrant Vector Database
   # ============================================================================
   qdrant:
-    image: qdrant/qdrant:v1.11.3
+    image: qdrant/qdrant:v1.16
     container_name: rag-fortress-qdrant
     restart: unless-stopped
     volumes:
@@ -122,7 +122,7 @@ services:
   # Mailpit (Email Testing - SMTP Server + Web UI)
   # ============================================================================
   mailpit:
-    image: axllent/mailpit:v1.20
+    image: axllent/mailpit:v1.29
     container_name: rag-fortress-mailpit
     restart: unless-stopped
     ports:
