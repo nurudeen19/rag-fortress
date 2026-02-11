@@ -102,8 +102,8 @@ app-setup:
 
 qdrant-dense:
 	@echo "$(BLUE)Creating Qdrant dense collection...$(NC)"
-	@COLLECTION=$${QDRANT_COLLECTION:-rag_fortress}; \
-	VECTOR_SIZE=$${QDRANT_VECTOR_SIZE:-384}; \
+	@COLLECTION=$${VECTOR_STORE_COLLECTION_NAME:-rag_fortress}; \
+	VECTOR_SIZE=$${EMBEDDING_DIMENSIONS:-384}; \
 	DISTANCE=$${QDRANT_DISTANCE:-Cosine}; \
 	docker compose exec -T backend curl -s -X PUT \
 	  -H "Content-Type: application/json" \
@@ -125,11 +125,11 @@ qdrant-dense:
 
 qdrant-hybrid:
 	@echo "$(BLUE)Creating Qdrant hybrid collection...$(NC)"
-	@COLLECTION=$${QDRANT_COLLECTION:-rag_fortress}; \
-	VECTOR_SIZE=$${QDRANT_VECTOR_SIZE:-384}; \
+	@COLLECTION=$${VECTOR_STORE_COLLECTION_NAME:-rag_fortress}; \
+	VECTOR_SIZE=$${EMBEDDING_DIMENSIONS:-384}; \
 	DISTANCE=$${QDRANT_DISTANCE:-Cosine}; \
-	DENSE_NAME=$${QDRANT_DENSE_NAME:-dense}; \
-	SPARSE_NAME=$${QDRANT_SPARSE_NAME:-sparse}; \
+	DENSE_NAME=$${VECTOR_DB_DENSE_VECTOR_NAME:-dense}; \
+	SPARSE_NAME=$${VECTOR_DB_SPARSE_VECTOR_NAME:-sparse}; \
 	docker compose exec -T backend curl -s -X PUT \
 	  -H "Content-Type: application/json" \
 	  -d "{\"vectors\":{\"$${DENSE_NAME}\":{\"size\":$${VECTOR_SIZE},\"distance\":\"$${DISTANCE}\"}},\"sparse_vectors\":{\"$${SPARSE_NAME}\":{}}}" \

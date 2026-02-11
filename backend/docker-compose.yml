@@ -35,13 +35,14 @@ services:
       # Persistent data
       - backend_data:/app/data
       - backend_logs:/app/logs
+      - huggingface_cache:/app/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     networks:
       - rag-fortress-network
     healthcheck:
@@ -81,7 +82,12 @@ services:
   redis:
     image: redis/redis-stack:7.4.0-v8
     restart: unless-stopped
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --protected-mode no
     volumes:
       - redis_data:/data
     networks:
@@ -143,6 +149,7 @@ networks:
 volumes:
   backend_data:
   backend_logs:
+  huggingface_cache:
   postgres_data:
   redis_data:
   qdrant_data:

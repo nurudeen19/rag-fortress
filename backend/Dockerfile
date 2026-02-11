@@ -1,17 +1,18 @@
 # syntax=docker/dockerfile:1.4
 
 # ==============================================================================
-# Stage 1: Build stage with UV
+# Stage 1: Builder - Install dependencies
 # ==============================================================================
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
+ENV UV_LINK_MODE=copy
+
 WORKDIR /build
 
-# Install build dependencies for compiling Python packages
+# Install build dependencies needed for compiling packages
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
     gcc \
     g++ \
     libpq-dev \
@@ -19,34 +20,25 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files first for better caching
+# Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Set environment variables to force CPU-only packages
-ENV CUDA_VISIBLE_DEVICES="" \
-    TORCH_CUDA_ARCH_LIST="" \
-    FORCE_CUDA="0" \
-    PIP_EXTRA_INDEX_URL="https://download.pytorch.org/whl/cpu" \
-    CMAKE_ARGS="-DLLAMA_CUBLAS=OFF -DLLAMA_METAL=OFF"
-
-# Install dependencies from pyproject.toml with CPU-only packages
+# Create venv at /opt/venv for consistent paths between build and runtime
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install --system --no-cache \
-    --index-url https://pypi.org/simple \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    . && \
-    uv pip install --system --no-cache --force-reinstall --no-deps \
-    --index-url https://download.pytorch.org/whl/cpu \
-    torch torchvision torchaudio 2>/dev/null || true
+    uv venv /opt/venv && \
+    uv sync --locked --no-dev --extra cpu
+
 # ==============================================================================
-# Stage 2: Runtime stage
+# Stage 2: Runtime - Minimal production image
 # ==============================================================================
 FROM python:3.13-slim-bookworm AS runtime
 
-# Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    VIRTUAL_ENV=/opt/venv \
+    HF_HOME=/app/.cache/huggingface
 
 # Install runtime dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -56,15 +48,14 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Create non-root user
-RUN groupadd -r appuser && useradd -r -g appuser -u 1000 appuser
+# Create non-root user with home directory
+RUN groupadd -r appuser && \
+    useradd -r -g appuser -u 1000 -m -d /home/appuser appuser
 
-# Set working directory
 WORKDIR /app
 
-# Copy Python packages from builder (installed to system python)
-COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Copy application code
 COPY --chown=appuser:appuser app/ ./app/
@@ -74,16 +65,16 @@ COPY --chown=appuser:appuser migrations/ ./migrations/
 # Copy setup scripts
 COPY --chown=appuser:appuser migrate.py startup.py setup.py ./
 
-# Copy data directory structure (will be overridden by volumes)
+# Copy data directory structure (volumes will override)
 COPY --chown=appuser:appuser data/ ./data/
 
-# Create logs directory
-RUN mkdir -p /app/logs && chown -R appuser:appuser /app/data /app/logs
+# Create logs and cache directories
+RUN mkdir -p /app/logs /app/.cache/huggingface && \
+    chown -R appuser:appuser /app/data /app/logs /app/.cache
 
 # Switch to non-root user
 USER appuser
 
-# Expose port
 EXPOSE 8000
 
 # Health check
