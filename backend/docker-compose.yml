@@ -32,27 +32,29 @@
 services:
   # ============================================================================
   # Encryption Key Generator (Run this FIRST!)
+  # docker compose --profile keygen run --rm keygen
+  # ============================================================================
   keygen:
+    profiles: [keygen]
     image: rag-fortress-backend:latest
     command: ["python", "generate_fernet_key.py"]
 
-    # ============================================================================
+  # ============================================================================
   # Database Setup Service (Profile: setupdb)
   # ============================================================================
-  # STEP 2: One-time database initialization (migrations + seeders)
+  # One-time database initialization (migrations + seeders)
   #
   # PREREQUISITE: Run 'docker compose run --rm keygen' and update .env.docker first!
   #
   # Usage:
-  #   docker compose --profile setupdb run --rm db-setup    # Run migrations + all seeders
+  #   docker compose --profile setupdb run --rm db-setup                   # Run migrations + seeders
   #
-  #   Custom seeder options:
+  #   Custom options:
   #     docker compose --profile setupdb run --rm db-setup python setup.py --only-seeder admin,roles_permissions
   #     docker compose --profile setupdb run --rm db-setup python setup.py --verify
   db-setup:
     profiles: [setupdb]
     image: rag-fortress-backend:latest
-    restart: "no"
     env_file:
       - .env.docker
     volumes:
@@ -60,8 +62,6 @@ services:
       - backend_logs:/app/logs
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
     networks:
       - rag-fortress-network
