@@ -12,6 +12,9 @@ ARG VITE_API_BASE_URL=http://localhost:8000/api
 # Copy package files
 COPY package.json package-lock.json* ./
 
+# Verify package-lock.json exists (frozen lockfile sanity check)
+RUN test -f package-lock.json || (echo "ERROR: package-lock.json not found" && exit 1)
+
 # Install all dependencies (including dev) needed for build
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --ignore-scripts

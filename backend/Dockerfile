@@ -3,7 +3,7 @@
 # ==============================================================================
 # Stage 1: Builder - Install dependencies
 # ==============================================================================
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:0.10.2-python3.12-alpine AS builder
 
 ENV UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv
@@ -48,8 +48,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 # Create non-root user with home directory
 RUN groupadd -r appuser && \

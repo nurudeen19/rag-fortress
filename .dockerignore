@@ -18,8 +18,6 @@
 docs/
 
 # Environment files
-.env
-.env.*
 !.env.docker.example
 
 # Build artifacts are handled in subdirectory dockerignores

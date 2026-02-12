@@ -14,17 +14,17 @@
 #
 #   2. Generate encryption keys (REQUIRED):
 #      docker compose --profile keygen run --rm keygen
-#      Copy output keys to .env.docker (SECRET_KEY, MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY)
+#      Copy output keys to .env.docker (SECRET_KEY, MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY)#
 #
-#   3. Start all services:
-#      docker compose up -d
-#
-#   4. Run database setup with seeders:
+#   3. Run database setup with seeders:
 #      docker compose --profile setupdb run --rm db-setup
 #
-#   5. (Optional) Initialize Qdrant collection:
+#   4.Initialize Qdrant collection:
 #      docker compose --profile qdrant-setup run --rm qdrant-setup
-#      Note: Backend will auto-create collection on startup if it doesn't exist
+#
+#   5. Start all services:
+#      docker compose up -d
+
 #
 # Access Points:
 #   - Backend API: http://localhost:8000
@@ -38,6 +38,7 @@ services:
   # ============================================================================
   # Encryption Key Generator (Run this FIRST!)
   # docker compose --profile keygen run --rm keygen
+  # IMPORTANT: run docker compose build first to build the backend image
   # ============================================================================
   keygen:
     profiles: [keygen]
@@ -129,6 +130,13 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 1G
 
   # ============================================================================
   # PostgreSQL Database (Default - Always Available)
@@ -153,10 +161,16 @@ services:
     # Uncomment to expose PostgreSQL port for external access
     ports:
       - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
 
   # ============================================================================
   # Redis Stack (Cache + Semantic Cache with Vector Support)
-  # redis/redis-stack-server:7.4.0-v8
   # ============================================================================
   redis:
     image: redis/redis-stack-server:7.4.0-v8
@@ -179,6 +193,13 @@ services:
     # Uncomment to expose Redis port for external access
     ports:
       - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
 
   # ============================================================================
   # Qdrant Vector Database
@@ -201,6 +222,13 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+          cpus: '1'
+        reservations:
+          memory: 512M
 
   # ============================================================================
   # Mailpit (Email Testing - SMTP Server + Web UI)
@@ -222,6 +250,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
 
 # ==============================================================================
 # Networks
