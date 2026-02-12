@@ -45,6 +45,10 @@ venv_backup/
 .env.*.local
 .env.docker
 
+# Docker secrets (sensitive data)
+secrets/
+!secrets/.gitkeep
+
 # Database
 *.db
 *.sqlite

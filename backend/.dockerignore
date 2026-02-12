@@ -36,6 +36,9 @@ htmlcov/
 .env.*
 !.env.example
 
+# Docker secrets (excluded from build context)
+secrets/
+
 # Data files (but not directory structure)
 data/**/*.db
 data/**/*.sqlite

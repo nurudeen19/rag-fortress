@@ -14,12 +14,12 @@
 #
 #   2. Generate encryption keys (REQUIRED):
 #      docker compose --profile keygen run --rm keygen
-#      Copy output keys to .env.docker (SECRET_KEY, MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY)#
+#      Copy output keys to .env.docker (SECRET_KEY, MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY)
 #
 #   3. Run database setup with seeders:
 #      docker compose --profile setupdb run --rm db-setup
 #
-#   4.Initialize Qdrant collection:
+#   4. Initialize Qdrant collection:
 #      docker compose --profile qdrant-setup run --rm qdrant-setup
 #
 #   5. Start all services:
@@ -257,6 +257,54 @@ services:
           cpus: '0.25'
         reservations:
           memory: 128M
+
+# ==============================================================================
+# Docker Secrets (Optional)
+# ==============================================================================
+# Uncomment to use file-based secrets instead of environment variables.
+# Create a 'secrets/' directory and add your sensitive data as files.
+# Each file should contain only the secret value (no newlines).#
+# ==============================================================================
+
+
+# secrets:
+#   # Application secrets
+#   secret_key:
+#     file: ./secrets/secret_key.txt
+#   master_encryption_key:
+#     file: ./secrets/master_encryption_key.txt
+#   settings_encryption_key:
+#     file: ./secrets/settings_encryption_key.txt
+  
+#   # Database
+#   db_password:
+#     file: ./secrets/db_password.txt
+  
+#   # LLM API Keys
+#   llm_api_key:
+#     file: ./secrets/llm_api_key.txt
+#   fallback_llm_api_key:
+#     file: ./secrets/fallback_llm_api_key.txt
+#   classifier_llm_api_key:
+#     file: ./secrets/classifier_llm_api_key.txt
+#   internal_llm_api_key:
+#     file: ./secrets/internal_llm_api_key.txt
+  
+#   # Other API Keys
+#   embedding_api_key:
+#     file: ./secrets/embedding_api_key.txt
+#   reranker_api_key:
+#     file: ./secrets/reranker_api_key.txt
+#   vector_db_api_key:
+#     file: ./secrets/vector_db_api_key.txt
+  
+#   # Email
+#   smtp_password:
+#     file: ./secrets/smtp_password.txt
+  
+#   # Admin
+#   admin_password:
+#     file: ./secrets/admin_password.txt
 
 # ==============================================================================
 # Networks
