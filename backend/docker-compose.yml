@@ -42,7 +42,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     networks:
       - rag-fortress-network
     healthcheck:
@@ -78,12 +78,13 @@ services:
 
   # ============================================================================
   # Redis Stack (Cache + Semantic Cache with Vector Support)
+  # redis/redis-stack-server:7.4.0-v8
   # ============================================================================
   redis:
-    image: redis/redis-stack:7.4.0-v8
+    image: redis/redis-stack-server:7.4.0-v0
     restart: unless-stopped
     command: >
-      redis-server
+      redis-stack-server
       --appendonly yes
       --maxmemory 512mb
       --maxmemory-policy allkeys-lru
@@ -105,7 +106,9 @@ services:
   # Qdrant Vector Database
   # ============================================================================
   qdrant:
-    image: qdrant/qdrant:v1.16
+    build:
+      context: .
+      dockerfile: Dockerfile.qdrant
     restart: unless-stopped
     volumes:
       - qdrant_data:/qdrant/storage
@@ -114,6 +117,12 @@ services:
     ports:
       - "6333:6333"
       - "6334:6334"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # ============================================================================
   # Mailpit (Email Testing - SMTP Server + Web UI)
