@@ -13,18 +13,23 @@
 #      docker compose build
 #
 #   2. Generate encryption keys (REQUIRED):
-#      docker compose run --rm keygen
-#      Copy output keys to .env.docker (MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY, SECRET_KEY)
+#      docker compose --profile keygen run --rm keygen
+#      Copy output keys to .env.docker (SECRET_KEY, MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY)
 #
-#   3. Run database setup with seeders:
+#   3. Start all services:
+#      docker compose up -d
+#
+#   4. Run database setup with seeders:
 #      docker compose --profile setupdb run --rm db-setup
 #
-#   4. Start all services:
-#      docker compose up -d
+#   5. (Optional) Initialize Qdrant collection:
+#      docker compose --profile qdrant-setup run --rm qdrant-setup
+#      Note: Backend will auto-create collection on startup if it doesn't exist
 #
 # Access Points:
 #   - Backend API: http://localhost:8000
 #   - Mailpit UI: http://localhost:8025
+#   - Qdrant Dashboard: http://localhost:6333/dashboard
 #
 # This compose can run independently from the frontend
 # ==============================================================================
@@ -66,6 +71,28 @@ services:
     networks:
       - rag-fortress-network
     command: ["python", "setup.py", "--all"]
+
+  # ============================================================================
+  # Qdrant Collection Setup (Profile: qdrant-setup)
+  # ============================================================================
+  # One-time Qdrant collection initialization
+  #
+  # Usage:
+  #   docker compose --profile qdrant-setup run --rm qdrant-setup           # Create collection
+  #
+  # This creates the vector store collection in Qdrant with proper configuration
+  # (hybrid search support if enabled in .env.docker)
+  qdrant-setup:
+    profiles: [qdrant-setup]
+    image: rag-fortress-backend:latest
+    env_file:
+      - .env.docker
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    command: ["python", "init_qdrant.py"]
 
   # ============================================================================
   # Backend Application

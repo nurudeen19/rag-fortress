@@ -66,7 +66,7 @@ COPY --chown=appuser:appuser alembic.ini ./
 COPY --chown=appuser:appuser migrations/ ./migrations/
 
 # Copy setup scripts
-COPY --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py ./
+COPY --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py init_qdrant.py ./
 
 # Copy data directory structure (volumes will override)
 COPY --chown=appuser:appuser data/ ./data/
