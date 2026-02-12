@@ -8,8 +8,19 @@
 #   - Qdrant for vector search
 #   - Mailpit for email testing (SMTP + Web UI)
 #
-# Usage:
-#   docker compose up -d
+# FIRST-TIME SETUP:
+#   1. Build images:
+#      docker compose build
+#
+#   2. Generate encryption keys (REQUIRED):
+#      docker compose run --rm keygen
+#      Copy output keys to .env.docker (MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY, SECRET_KEY)
+#
+#   3. Run database setup with seeders:
+#      docker compose --profile setupdb run --rm db-setup
+#
+#   4. Start all services:
+#      docker compose up -d
 #
 # Access Points:
 #   - Backend API: http://localhost:8000
@@ -20,12 +31,52 @@
 
 services:
   # ============================================================================
+  # Encryption Key Generator (Run this FIRST!)
+  keygen:
+    image: rag-fortress-backend:latest
+    command: ["python", "generate_fernet_key.py"]
+
+    # ============================================================================
+  # Database Setup Service (Profile: setupdb)
+  # ============================================================================
+  # STEP 2: One-time database initialization (migrations + seeders)
+  #
+  # PREREQUISITE: Run 'docker compose run --rm keygen' and update .env.docker first!
+  #
+  # Usage:
+  #   docker compose --profile setupdb run --rm db-setup    # Run migrations + all seeders
+  #
+  #   Custom seeder options:
+  #     docker compose --profile setupdb run --rm db-setup python setup.py --only-seeder admin,roles_permissions
+  #     docker compose --profile setupdb run --rm db-setup python setup.py --verify
+  db-setup:
+    profiles: [setupdb]
+    image: rag-fortress-backend:latest
+    restart: "no"
+    env_file:
+      - .env.docker
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    command: ["python", "setup.py", "--all"]
+
+  # ============================================================================
   # Backend Application
   # ============================================================================
+  # NOTE: Requires encryption keys to be set in .env.docker
+  # Run 'docker compose run --rm keygen' first if you haven't generated keys
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+    image: rag-fortress-backend:latest
     restart: unless-stopped
     ports:
       - "8000:8000"

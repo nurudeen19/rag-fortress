@@ -69,5 +69,4 @@ tests/
 pytest.ini
 check_schema.py
 drop_tables.py
-generate_fernet_key.py
 Action items

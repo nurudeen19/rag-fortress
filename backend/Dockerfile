@@ -66,7 +66,7 @@ COPY --chown=appuser:appuser alembic.ini ./
 COPY --chown=appuser:appuser migrations/ ./migrations/
 
 # Copy setup scripts
-COPY --chown=appuser:appuser migrate.py startup.py setup.py ./
+COPY --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py ./
 
 # Copy data directory structure (volumes will override)
 COPY --chown=appuser:appuser data/ ./data/
@@ -84,5 +84,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Run the application (use full path to ensure it's found)
+# Run the application (migrations happen in startup lifespan)
 CMD ["/opt/venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

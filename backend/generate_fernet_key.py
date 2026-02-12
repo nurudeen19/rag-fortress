@@ -2,17 +2,18 @@
 """
 Fernet Key Generator
 
-Generates a secure Fernet encryption key for any encryption field in the application.
-Run this script whenever you need to generate a new encryption key.
+Generates secure Fernet encryption keys for application.
+Run this script to generate all required encryption keys at once.
 
 Usage:
     python generate_fernet_key.py
 
-The generated key can be used for any encryption field in your .env file, such as:
-    - SETTINGS_ENCRYPTION_KEY (for encrypting sensitive settings)
-    - Any other field requiring Fernet encryption
+The generated keys should be copied to your .env file:
+    - SECRET_KEY (for JWT token signing)
+    - MASTER_ENCRYPTION_KEY (for encrypting sensitive data)
+    - SETTINGS_ENCRYPTION_KEY (for encrypting settings)
 
-IMPORTANT: Keep this key secure and never commit it to version control!
+IMPORTANT: Keep these keys secure and never commit them to version control!
 """
 
 from cryptography.fernet import Fernet
@@ -25,23 +26,31 @@ def generate_key() -> str:
 
 
 if __name__ == "__main__":
-    key = generate_key()
+    # Generate three separate keys for different purposes
+    secret_key = generate_key()
+    master_key = generate_key()
+    settings_key = generate_key()
     
-    print("=" * 70)
-    print("FERNET ENCRYPTION KEY GENERATOR")
-    print("=" * 70)
+    print("=" * 80)
+    print("ENCRYPTION KEY GENERATOR FOR RAG FORTRESS")
+    print("=" * 80)
     print()
-    print("Generated Key:")
-    print(f"Use this key for any encryption field in your .env file:")
-    print(f"  SETTINGS_ENCRYPTION_KEY={key}")
-    print(f"  <OTHER_ENCRYPTION_FIELD>={key}")
+    print("Copy these keys to your .env.docker or .env file:")
     print()
+    print("# JWT token signing key")
+    print(f"SECRET_KEY={secret_key}")
+    print()
+    print("# Master encryption key for sensitive data")
+    print(f"MASTER_ENCRYPTION_KEY={master_key}")
+    print()
+    print("# Settings encryption key")
+    print(f"SETTINGS_ENCRYPTION_KEY={settings_key}")
+    print()
+    print("=" * 80)
     print("⚠️  SECURITY WARNING:")
-    print("  - Keep this key secure and private")
-    print("  - Never commit it to version control")
-    print("  - Store it in a secure location (password manager, vault, etc.)")
-    print("  - Changing this key will invalidate all encrypted data using it")
-    print("  - Each encryption field can use a different key for isolation")
-    print("  - Store it in a secure location (password manager, vault, etc.)")
-    print("  - Changing this key will invalidate all encrypted settings")
-    print("=" * 70)
+    print("  • Keep these keys secure and private")
+    print("  • Never commit them to version control")
+    print("  • Store them in a secure location (password manager, vault, etc.)")
+    print("  • Changing these keys will invalidate all encrypted data")
+    print("  • Each key serves a different purpose - do not reuse them")
+    print("=" * 80)
