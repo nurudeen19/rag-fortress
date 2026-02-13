@@ -19,7 +19,9 @@ Enterprise-grade Retrieval-Augmented Generation (RAG) platform with role-based a
 
 ## 🚀 Quick Start
 
-See **[Installation Guide](backend/docs/INSTALLATION.md)** for complete setup instructions.
+**Prefer Docker?** See **[Docker Guide](backend/docs/DOCKER.md)** for containerized deployment.
+
+Otherwise, see **[Installation Guide](backend/docs/INSTALLATION.md)** for complete setup instructions.
 
 ### TL;DR
 
@@ -58,6 +60,7 @@ npm run dev                # Start on http://localhost:5173
 ## 📚 Documentation
 
 - **[Installation Guide](backend/docs/INSTALLATION.md)** - Complete setup with uv, prerequisites, and troubleshooting
+- **[Docker Guide](backend/docs/DOCKER.md)** - Containerized deployment with Docker Compose
 - **[Document Management](backend/docs/DOCUMENT_MANAGEMENT_GUIDE.md)** - Document upload workflow
 - **[Settings Guide](backend/docs/SETTINGS_GUIDE.md)** - Configuration reference
 - **[LLM Guide](backend/docs/LLM_GUIDE.md)** - Primary, Internal, and Fallback LLM configuration

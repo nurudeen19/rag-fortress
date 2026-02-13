@@ -1,5 +1,7 @@
 # Installation Guide
 
+> **Prefer Docker?** See **[Docker Guide](DOCKER.md)** for containerized deployment with Docker Compose.
+
 ## Prerequisites
 
 - Python 3.11 or higher
