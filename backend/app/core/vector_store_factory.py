@@ -212,10 +212,22 @@ def _create_vector_store(
                 provider="qdrant"
             )
         
-        client = QdrantClient(
-            url=config.get("url"),
-            api_key=config.get("api_key")
-        )
+        # Support both URL-based and host/port-based connections
+        if config.get("url"):
+            # Cloud/URL-based connection
+            client = QdrantClient(
+                url=config.get("url"),
+                api_key=config.get("api_key")
+            )
+        else:
+            # Host/port-based connection (Docker, local deployments)
+            client = QdrantClient(
+                host=config.get("host", "localhost"),
+                port=config.get("port", 6333),
+                grpc_port=config.get("grpc_port", 6334),
+                prefer_grpc=config.get("prefer_grpc", False),
+                api_key=config.get("api_key")
+            )
         
         # Hybrid search configuration for Qdrant
         if hybrid_enabled:

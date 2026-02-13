@@ -1,0 +1,21 @@
+# ==============================================================================
+# RAG Fortress - Complete Application Stack
+# ==============================================================================
+# This compose file orchestrates the complete RAG Fortress stack by including
+# the backend and frontend services from their respective compose files.
+#
+# Usage:
+#   docker compose up -d
+#
+# Access Points:
+#   - Frontend: http://localhost:3000
+#   - Backend API: http://localhost:8000
+#   - Mailpit UI: http://localhost:8025
+#   - Qdrant Dashboard: http://localhost:6333/dashboard
+#
+# Environment variables can be set in .env file
+# ==============================================================================
+
+include:
+  - path: ./backend/docker-compose.yml
+  - path: ./frontend/docker-compose.yml

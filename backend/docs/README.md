@@ -6,6 +6,7 @@ Complete documentation for RAG Fortress - Enterprise-grade RAG platform with rol
 
 ### Getting Started
 - [Installation Guide](INSTALLATION.md) - Setup, dependencies, and first-time configuration
+- **[Docker Guide](DOCKER.md)** - Complete Docker setup and deployment guide
 
 ### Core Guides
 

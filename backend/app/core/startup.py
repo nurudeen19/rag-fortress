@@ -157,7 +157,7 @@ class StartupController:
             raise
     
     async def _initialize_database(self):
-        """Initialize database connection and create tables (without seeding)."""
+        """Initialize database connection."""
 
         try:
             # Create database manager
