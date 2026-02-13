@@ -4,18 +4,43 @@ Enterprise-grade Retrieval-Augmented Generation (RAG) platform with role-based a
 
 ## ✨ Key Features
 
-- **Role-Based Access Control (RBAC)**: Department-based permissions with admin, manager, and user roles
-- **Multi-Tier Invitation System**: Email invitations with organization and department assignment
-- **Adaptive Retrieval**: Automatic fallback strategies (vector → hybrid → full-text → LLM-only)
+### 🔌 Vendor-Agnostic Architecture
 - **Multi-Provider Support**: OpenAI, Google Gemini, HuggingFace, Llama.cpp with automatic fallback
-- **4 Vector Databases**: Chroma (dev only), Qdrant, Pinecone, Weaviate
-- **Document Management**: Upload tracking, folder-based organization, reprocessing jobs
-- **Smart Caching**: Query result caching with configurable TTL
-- **Reranking**: Cross-encoder rerankers for improved retrieval accuracy
+- **6 Vector Databases**: Qdrant, Milvus, Pinecone, Weaviate, Faiss, Chroma (dev only)
+- **Flexible Embeddings**: HuggingFace, OpenAI, Google, Cohere, Voyage AI
+- **Unified Configuration**: Switch providers effortlessly with environment variables
+
+### 🔒 Enterprise-Grade Security
+- **Role-Based Access Control (RBAC)**: Department-based permissions with multi-level security clearance
+- **Message Encryption**: Conversation history encrypted at rest with optional cache encryption
+- **HTTPOnly Cookie Auth**: Secure authentication with automatic log sanitization
+- **Multi-Tier Invitations**: Email invitations with organization and department assignment
+- **Document Approval Workflow**: Control document access and processing
+
+### ⚡ Performance & Intelligence
+- **Semantic Caching**: RedisVL-powered cache reduces LLM costs by up to 80%
+- **Adaptive Retrieval**: Automatic fallback strategies (vector → hybrid → full-text → LLM-only)
+- **Hybrid Search**: Vector + keyword search with configurable weights
+- **Cross-Encoder Reranking**: Improved retrieval accuracy with reranking models
+
+### 📄 Document Management
+- **Multi-Format Support**: PDF, DOCX, TXT, Markdown, CSV, JSON, and more
+- **Department Isolation**: Multi-tenant ready with department-level access control
+- **Processing Pipeline**: Load → Chunk → Embed → Store with status tracking
+- **Reprocessing Jobs**: Background job queue for document updates
+
+### 🛠️ Developer Experience
+- **RESTful API**: FastAPI backend with OpenAPI documentation
+- **Modern Frontend**: Vue 3 + Vite + TailwindCSS
+- **Database Flexibility**: SQLite, PostgreSQL, MySQL with Alembic migrations
+- **Demo Mode**: Public showcase mode with restricted features
+
+### 🚀 Production Ready
+- **Health Monitoring**: System diagnostics and health checks
+- **Admin Dashboard**: Centralized controls for LLM, embeddings, and vector store config
 - **Real-time Notifications**: In-app notification system with read/unread tracking
-- **Database Migrations**: Alembic migrations with SQLite/PostgreSQL/MySQL support
-- **Comprehensive Testing**: 93+ test cases covering all configurations
-- **Production Ready**: Health checks, logging, exception handling, job queue system
+- **Exception Handling**: Comprehensive error reporting and logging
+- **Docker Support**: Multi-stage builds with resource limits and secrets management
 
 ## 🚀 Quick Start
 
