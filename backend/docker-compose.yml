@@ -27,10 +27,10 @@
 #
 # OPTIONAL - DOCKER SECRETS (Production):
 #   For enhanced security, use file-based secrets instead of .env.docker:
-#   1. Create secret files: .\create-secrets.ps1 -FromEnv
+#   1. Create secret files (see docs/DOCKER.md)
 #   2. Uncomment 'secrets:' sections in service definitions below
 #   3. Remove sensitive values from .env.docker
-#   See docs/DOCKER_SECRETS.md for details
+#   See docs/DOCKER.md for complete guide
 #
 # Access Points:
 #   - Backend API: http://localhost:8000
@@ -293,13 +293,13 @@ services:
 # Secrets are defined below and referenced in service definitions (commented out).
 #
 # Quick Start:
-#   1. Create secret files: .\create-secrets.ps1 -FromEnv  (or .sh on Linux/Mac)
+#   1. Create secret files (see docs/DOCKER.md for methods)
 #   2. Uncomment the 'secrets:' sections in service definitions (backend, db-setup, etc.)
 #   3. Remove sensitive values from .env.docker
 #   4. Restart services: docker compose up -d --force-recreate
 #
 # Secrets are mounted read-only at /run/secrets/<secret_name> inside containers.
-# See docs/DOCKER_SECRETS.md for detailed usage and security best practices.
+# See docs/DOCKER.md for complete setup guide and security best practices.
 # ==============================================================================
 
 secrets:
