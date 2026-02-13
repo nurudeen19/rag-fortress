@@ -4,8 +4,8 @@
 
 ## Prerequisites
 
-- Python 3.11 or higher
-- `uv` package manager (modern, fast Python package manager)
+- Python 3.13 or higher
+- `uv` package manager (modern, fast Python package manager) - [Learn more](https://docs.astral.sh/uv/)
 
 ## Quick Start
 
@@ -27,14 +27,31 @@ Verify: `uv --version`
 
 ```bash
 cd backend
+# Choose installation based on your embedding/model provider needs:
+
+# Option A: Using HuggingFace models (sentence transformers) - CPU version
+uv sync --extra cpu
+
+# Option B: Using HuggingFace models with GPU support (large download ~2GB+)
+uv sync --extra gpu
+
+# Option C: Not using HuggingFace models (OpenAI, Google, Cohere etc.)
 uv sync
 ```
+
+**Why the extra flag?**
+- HuggingFace sentence transformers require PyTorch and additional ML libraries
+- CPU version (`--extra cpu`): Lightweight, suitable for most users
+- GPU version (`--extra gpu`): Requires CUDA, faster inference but large install
+- Skip the extra if you're only using OpenAI, Google, or Cohere for embeddings
 
 This will:
 - Create a `.venv` virtual environment
 - Install all production and development dependencies with pinned versions
 
-### 3. Activate Virtual Environment
+### 3. Activate Virtual Environment (Optional)
+
+> **Note:** Activating the virtual environment is optional. You can run commands directly with `uv run` (e.g., `uv run setup.py --all`) without activating the environment.
 
 **Windows (PowerShell):**
 ```powershell
@@ -103,13 +120,13 @@ python setup.py --clear-db
 
 ```bash
 # Run all seeders
-python run_seeders.py --all
+python seeders.py --all
 
 # Run specific seeders
-python run_seeders.py --only-seeder admin,roles_permissions
+python seeders.py --only-seeder admin,roles_permissions
 
 # Skip certain seeders
-python run_seeders.py --skip-seeder departments
+python seeders.py --skip-seeder departments
 ```
 
 **Available seeders:**
@@ -135,6 +152,7 @@ The admin seeder reads credentials from environment variables. Set these in `.en
 ```bash
 # Production mode (no auto-reload)
 python startup.py
+# or uv run startup.py
 
 # Development mode (with auto-reload)
 python startup.py --reload

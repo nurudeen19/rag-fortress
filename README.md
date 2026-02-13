@@ -28,7 +28,11 @@ Otherwise, see **[Installation Guide](backend/docs/INSTALLATION.md)** for comple
 **Backend:**
 ```bash
 cd backend
-uv sync                    # Install dependencies
+# Install dependencies (choose one based on your needs)
+uv sync --extra cpu        # For HuggingFace models (sentence transformers)
+# uv sync --extra gpu      # For GPU support (large download)
+# uv sync                  # Skip if not using HuggingFace models
+
 cp .env.example .env       # Configure your API keys and database
 
 # Option 1: Using uv run (recommended - no activation needed)
