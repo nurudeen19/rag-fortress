@@ -3,7 +3,7 @@
 # ==============================================================================
 # Stage 1: Builder - Install dependencies
 # ==============================================================================
-FROM ghcr.io/astral-sh/uv:0.10.2-python3.12-alpine AS builder
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
 ENV UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv
@@ -18,8 +18,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     g++ \
     libpq-dev \
     libffi-dev \
-    libssl-dev \
-    && rm -rf /var/lib/apt/lists/*
+    libssl-dev
 
 # Copy dependency files
 COPY pyproject.toml uv.lock ./

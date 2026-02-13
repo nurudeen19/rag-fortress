@@ -24,7 +24,13 @@
 #
 #   5. Start all services:
 #      docker compose up -d
-
+#
+# OPTIONAL - DOCKER SECRETS (Production):
+#   For enhanced security, use file-based secrets instead of .env.docker:
+#   1. Create secret files: .\create-secrets.ps1 -FromEnv
+#   2. Uncomment 'secrets:' sections in service definitions below
+#   3. Remove sensitive values from .env.docker
+#   See docs/DOCKER_SECRETS.md for details
 #
 # Access Points:
 #   - Backend API: http://localhost:8000
@@ -63,6 +69,10 @@ services:
     image: rag-fortress-backend:latest
     env_file:
       - .env.docker
+    # Uncomment to use Docker secrets (must match backend secrets)
+    # secrets:
+    #   - db_password
+    #   - admin_password
     volumes:
       - backend_data:/app/data
       - backend_logs:/app/logs
@@ -88,6 +98,9 @@ services:
     image: rag-fortress-backend:latest
     env_file:
       - .env.docker
+    # Uncomment to use Docker secrets (must match backend secrets)
+    # secrets:
+    #   - embedding_api_key
     depends_on:
       qdrant:
         condition: service_healthy
@@ -110,6 +123,21 @@ services:
       - "8000:8000"
     env_file:
       - .env.docker
+    # Uncomment to use Docker secrets instead of .env.docker
+    # secrets:
+    #   - secret_key
+    #   - master_encryption_key
+    #   - settings_encryption_key
+    #   - db_password
+    #   - llm_api_key
+    #   - fallback_llm_api_key
+    #   - classifier_llm_api_key
+    #   - internal_llm_api_key
+    #   - embedding_api_key
+    #   - reranker_api_key
+    #   - vector_db_api_key
+    #   - smtp_password
+    #   - admin_password
     volumes:
       # Persistent data
       - backend_data:/app/data
@@ -159,8 +187,8 @@ services:
       timeout: 5s
       retries: 5
     # Uncomment to expose PostgreSQL port for external access
-    ports:
-      - "5432:5432"
+    # ports:
+    #   - "5432:5432"
     deploy:
       resources:
         limits:
@@ -191,8 +219,8 @@ services:
       timeout: 5s
       retries: 5
     # Uncomment to expose Redis port for external access
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     deploy:
       resources:
         limits:
@@ -213,9 +241,9 @@ services:
       - qdrant_data:/qdrant/storage
     networks:
       - rag-fortress-network
-    ports:
-      - "6333:6333"
-      - "6334:6334"
+    # ports:
+    #   - "6333:6333"
+    #   - "6334:6334"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
       interval: 10s
@@ -261,50 +289,57 @@ services:
 # ==============================================================================
 # Docker Secrets (Optional)
 # ==============================================================================
-# Uncomment to use file-based secrets instead of environment variables.
-# Create a 'secrets/' directory and add your sensitive data as files.
-# Each file should contain only the secret value (no newlines).#
+# Use file-based secrets instead of environment variables for production.
+# Secrets are defined below and referenced in service definitions (commented out).
+#
+# Quick Start:
+#   1. Create secret files: .\create-secrets.ps1 -FromEnv  (or .sh on Linux/Mac)
+#   2. Uncomment the 'secrets:' sections in service definitions (backend, db-setup, etc.)
+#   3. Remove sensitive values from .env.docker
+#   4. Restart services: docker compose up -d --force-recreate
+#
+# Secrets are mounted read-only at /run/secrets/<secret_name> inside containers.
+# See docs/DOCKER_SECRETS.md for detailed usage and security best practices.
 # ==============================================================================
 
-
-# secrets:
-#   # Application secrets
-#   secret_key:
-#     file: ./secrets/secret_key.txt
-#   master_encryption_key:
-#     file: ./secrets/master_encryption_key.txt
-#   settings_encryption_key:
-#     file: ./secrets/settings_encryption_key.txt
+secrets:
+  # Application secrets
+  secret_key:
+    file: ./secrets/secret_key.txt
+  master_encryption_key:
+    file: ./secrets/master_encryption_key.txt
+  settings_encryption_key:
+    file: ./secrets/settings_encryption_key.txt
   
-#   # Database
-#   db_password:
-#     file: ./secrets/db_password.txt
+  # Database
+  db_password:
+    file: ./secrets/db_password.txt
   
-#   # LLM API Keys
-#   llm_api_key:
-#     file: ./secrets/llm_api_key.txt
-#   fallback_llm_api_key:
-#     file: ./secrets/fallback_llm_api_key.txt
-#   classifier_llm_api_key:
-#     file: ./secrets/classifier_llm_api_key.txt
-#   internal_llm_api_key:
-#     file: ./secrets/internal_llm_api_key.txt
+  # LLM API Keys
+  llm_api_key:
+    file: ./secrets/llm_api_key.txt
+  fallback_llm_api_key:
+    file: ./secrets/fallback_llm_api_key.txt
+  classifier_llm_api_key:
+    file: ./secrets/classifier_llm_api_key.txt
+  internal_llm_api_key:
+    file: ./secrets/internal_llm_api_key.txt
   
-#   # Other API Keys
-#   embedding_api_key:
-#     file: ./secrets/embedding_api_key.txt
-#   reranker_api_key:
-#     file: ./secrets/reranker_api_key.txt
-#   vector_db_api_key:
-#     file: ./secrets/vector_db_api_key.txt
+  # Other API Keys
+  embedding_api_key:
+    file: ./secrets/embedding_api_key.txt
+  reranker_api_key:
+    file: ./secrets/reranker_api_key.txt
+  vector_db_api_key:
+    file: ./secrets/vector_db_api_key.txt
   
-#   # Email
-#   smtp_password:
-#     file: ./secrets/smtp_password.txt
+  # Email
+  smtp_password:
+    file: ./secrets/smtp_password.txt
   
-#   # Admin
-#   admin_password:
-#     file: ./secrets/admin_password.txt
+  # Admin
+  admin_password:
+    file: ./secrets/admin_password.txt
 
 # ==============================================================================
 # Networks
