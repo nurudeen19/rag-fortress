@@ -87,7 +87,7 @@ dependencies = [
     "langchain-openai==1.1.1",
     "langchain-google-genai==4.0.0",
     "langchain-huggingface==1.1.0",
-    "llama-cpp-python==0.2.90",
+    # Note: llama-cpp-python moved to 'llamacpp' extra (install with: uv sync --extra llamacpp)
 
     # LangChain - Embedding Providers
     "langchain-cohere==0.5.0",
@@ -157,6 +157,9 @@ cpu = [
 gpu = [
     "sentence-transformers==5.1.2",
     "torch==2.9.1",
+]
+llamacpp = [
+    "llama-cpp-python==0.2.90",
 ]
 
 [project.urls]

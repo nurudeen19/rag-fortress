@@ -29,21 +29,30 @@ Verify: `uv --version`
 cd backend
 # Choose installation based on your embedding/model provider needs:
 
-# Option A: Using HuggingFace models (sentence transformers) - CPU version
+# Option A: Using HuggingFace embeddings (sentence transformers) - CPU version
 uv sync --extra cpu
 
-# Option B: Using HuggingFace models with GPU support (large download ~2GB+)
+# Option B: Using HuggingFace embeddings with GPU support (large download ~2GB+)
 uv sync --extra gpu
 
-# Option C: Not using HuggingFace models (OpenAI, Google, Cohere etc.)
+# Option C: Using local LLM via llama.cpp (model path)
+uv sync --extra llamacpp
+
+# Option D: Not using HuggingFace or local models (OpenAI, Google, Cohere only)
 uv sync
+
+# Combine extras if you need multiple features:
+uv sync --extra cpu --extra llamacpp  # HuggingFace embeddings + local LLM
 ```
 
-**Why the extra flag?**
-- HuggingFace sentence transformers require PyTorch and additional ML libraries
-- CPU version (`--extra cpu`): Lightweight, suitable for most users
-- GPU version (`--extra gpu`): Requires CUDA, faster inference but large install
-- Skip the extra if you're only using OpenAI, Google, or Cohere for embeddings
+**Why the extra flags?**
+- **HuggingFace** (`--extra cpu`/`--extra gpu`): Sentence transformers require PyTorch and ML libraries
+  - CPU version: Lightweight, suitable for most users
+  - GPU version: Requires CUDA, faster inference but large install (~2GB+)
+- **llama.cpp** (`--extra llamacpp`): For running local LLMs via model file path
+  - Only needed if using local models (not API-based providers)
+  - Saves build time if you're only using OpenAI/Google/Cohere
+- **Base install** (no extras): Use if only using cloud API providers (OpenAI, Google, Cohere)
 
 This will:
 - Create a `.venv` virtual environment

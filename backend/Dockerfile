@@ -5,6 +5,11 @@
 # ==============================================================================
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
+# Build argument for optional extras (cpu, gpu, llamacpp)
+# Default: cpu (HuggingFace embeddings)
+# Override: docker build --build-arg UV_EXTRAS="cpu llamacpp" .
+ARG UV_EXTRAS="cpu"
+
 ENV UV_LINK_MODE=copy \
     UV_PROJECT_ENVIRONMENT=/opt/venv
 
@@ -24,8 +29,16 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 COPY --link pyproject.toml uv.lock ./
 
 # Install dependencies to /opt/venv (configured via UV_PROJECT_ENVIRONMENT)
+# Use UV_EXTRAS build arg to control optional dependencies
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --no-dev --extra cpu
+    if [ -n "$UV_EXTRAS" ]; then \
+        for extra in $UV_EXTRAS; do \
+            EXTRA_FLAGS="$EXTRA_FLAGS --extra $extra"; \
+        done; \
+        uv sync --frozen --no-install-project --no-dev $EXTRA_FLAGS; \
+    else \
+        uv sync --frozen --no-install-project --no-dev; \
+    fi
 
 # Verify uvicorn was installed
 RUN test -f /opt/venv/bin/uvicorn || (echo "ERROR: uvicorn not installed" && exit 1)

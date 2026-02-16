@@ -256,6 +256,54 @@ Default resource allocation:
 
 Adjust in `docker-compose.yml` under `deploy.resources` sections as needed.
 
+### Customizing Backend Dependencies
+
+The backend Dockerfile installs dependencies with `--extra cpu` by default (for HuggingFace embeddings). To customize:
+
+**Method 1: Using environment variable (recommended):**
+
+```bash
+# Default (HuggingFace CPU)
+docker compose build backend
+
+# For local LLM support only
+UV_EXTRAS="llamacpp" docker compose build backend
+
+# For both HuggingFace + local LLM
+UV_EXTRAS="cpu llamacpp" docker compose build backend
+
+# For GPU support
+UV_EXTRAS="gpu" docker compose build backend
+
+# For cloud APIs only (no extras)
+UV_EXTRAS="" docker compose build backend
+```
+
+**Method 2: Set in `.env.docker`:**
+
+```env
+# Add to backend/.env.docker
+UV_EXTRAS=cpu llamacpp
+```
+
+Then just run:
+```bash
+docker compose build backend
+```
+
+**Dependency extras available:**
+
+| Extra | Use Case | Install Time Impact |
+|-------|----------|-------------------|
+| `cpu` | HuggingFace embeddings (CPU) | Default, ~2-3 min |
+| `gpu` | HuggingFace embeddings (GPU) | Large, ~5+ min |
+| `llamacpp` | Local LLM via model file | Medium, ~1-2 min |
+| (none) | Cloud APIs only (OpenAI, Google, Cohere) | Fast, ~1 min |
+
+**When to use llamacpp:**
+- Running local LLMs via model file path (e.g., `MODEL_PATH=/models/llama-7b.gguf`)
+- Not needed if using API-based providers (OpenAI, Google, Cohere, HuggingFace API)
+
 ## Docker Secrets (Production)
 
 For production deployments, use Docker secrets instead of `.env.docker` for sensitive data.

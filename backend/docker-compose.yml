@@ -119,6 +119,8 @@ services:
       dockerfile: Dockerfile
       args:
         BUILDKIT_INLINE_CACHE: 1
+        # Customize dependencies: UV_EXTRAS="cpu" (default), "llamacpp", "cpu llamacpp", etc.
+        UV_EXTRAS: ${UV_EXTRAS:-cpu}
     image: rag-fortress-backend:latest
     restart: unless-stopped
     ports:

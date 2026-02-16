@@ -53,10 +53,14 @@ Otherwise, see **[Installation Guide](backend/docs/INSTALLATION.md)** for comple
 **Backend:**
 ```bash
 cd backend
-# Install dependencies (choose one based on your needs)
-uv sync --extra cpu        # For HuggingFace models (sentence transformers)
-# uv sync --extra gpu      # For GPU support (large download)
-# uv sync                  # Skip if not using HuggingFace models
+# Install dependencies (choose based on your needs)
+uv sync --extra cpu        # For HuggingFace embeddings (sentence transformers)
+# uv sync --extra gpu      # For GPU support (large download ~2GB+)
+# uv sync --extra llamacpp # For local LLM via llama.cpp (model path)
+# uv sync                  # Base install (OpenAI, Google, Cohere only)
+
+# Combine extras if needed:
+# uv sync --extra cpu --extra llamacpp  # HuggingFace + local models
 
 cp .env.example .env       # Configure your API keys and database
 
