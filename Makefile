@@ -32,9 +32,7 @@ help:
 	@echo "  make app-setup      - Run setup.py with SETUP_ARGS"
 	@echo "                      - Example: make app-setup SETUP_ARGS=\"--all\""
 	@echo ""
-	@echo "$(GREEN)Vector (Qdrant):$(NC)"
-	@echo "  make qdrant-dense   - Create dense collection"
-	@echo "  make qdrant-hybrid  - Create hybrid collection"
+	@echo "$(GREEN)Note: Use docker compose --profile qdrant-setup run --rm qdrant-setup for Qdrant init$(NC)"
 	@echo ""
 	@echo "$(GREEN)Cleanup:$(NC)"
 	@echo "  make clean          - Stop and remove containers"
@@ -97,56 +95,10 @@ app-setup:
 	@docker compose exec backend python setup.py $(SETUP_ARGS)
 
 # ------------------------------------------------------------------------------
-# Qdrant collections
+# Qdrant collections (use init_qdrant.py via profiles instead)
 # ------------------------------------------------------------------------------
-
-qdrant-dense:
-	@echo "$(BLUE)Creating Qdrant dense collection...$(NC)"
-	@COLLECTION=$${VECTOR_STORE_COLLECTION_NAME:-rag_fortress}; \
-	VECTOR_SIZE=$${EMBEDDING_DIMENSIONS:-384}; \
-	DISTANCE=$${QDRANT_DISTANCE:-Cosine}; \
-	docker compose exec -T backend curl -s -X PUT \
-	  -H "Content-Type: application/json" \
-	  -d "{\"vectors\":{\"size\":$${VECTOR_SIZE},\"distance\":\"$${DISTANCE}\"}}" \
-	  http://qdrant:6333/collections/$${COLLECTION} >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"security_level","field_schema":"integer"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"is_department_only","field_schema":"bool"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"department_id","field_schema":"keyword"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"department","field_schema":"keyword"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	printf "$(GREEN)Dense collection '%s' ready (size=%s, distance=%s).$(NC)\n" "$${COLLECTION}" "$${VECTOR_SIZE}" "$${DISTANCE}"
-
-qdrant-hybrid:
-	@echo "$(BLUE)Creating Qdrant hybrid collection...$(NC)"
-	@COLLECTION=$${VECTOR_STORE_COLLECTION_NAME:-rag_fortress}; \
-	VECTOR_SIZE=$${EMBEDDING_DIMENSIONS:-384}; \
-	DISTANCE=$${QDRANT_DISTANCE:-Cosine}; \
-	DENSE_NAME=$${VECTOR_DB_DENSE_VECTOR_NAME:-dense}; \
-	SPARSE_NAME=$${VECTOR_DB_SPARSE_VECTOR_NAME:-sparse}; \
-	docker compose exec -T backend curl -s -X PUT \
-	  -H "Content-Type: application/json" \
-	  -d "{\"vectors\":{\"$${DENSE_NAME}\":{\"size\":$${VECTOR_SIZE},\"distance\":\"$${DISTANCE}\"}},\"sparse_vectors\":{\"$${SPARSE_NAME}\":{}}}" \
-	  http://qdrant:6333/collections/$${COLLECTION} >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"security_level","field_schema":"integer"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"is_department_only","field_schema":"bool"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"department_id","field_schema":"keyword"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	docker compose exec -T backend curl -s -X PUT -H "Content-Type: application/json" \
-	  -d '{"field_name":"department","field_schema":"keyword"}' \
-	  http://qdrant:6333/collections/$${COLLECTION}/index >/dev/null; \
-	printf "$(GREEN)Hybrid collection '%s' ready (size=%s, distance=%s).$(NC)\n" "$${COLLECTION}" "$${VECTOR_SIZE}" "$${DISTANCE}"
+# DEPRECATED: Use docker compose --profile qdrant-setup run --rm qdrant-setup
+# These manual commands are kept for reference only
 
 # ------------------------------------------------------------------------------
 # Cleanup

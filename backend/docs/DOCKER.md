@@ -64,7 +64,7 @@ docker compose --profile setupdb run --rm db-setup
 Or use specific options:
 ```bash
 # Migrations only
-docker compose --profile setupdb run --rm db-setup python migrate.py
+docker compose --profile setupdb run --rm db-setup python migrate.py upgrade
 
 # All seeders (default option)
 docker compose --profile setupdb run --rm db-setup python setup.py --all

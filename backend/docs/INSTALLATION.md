@@ -125,28 +125,20 @@ python setup.py --verify
 python setup.py --clear-db
 ```
 
-**To run seeders separately:**
-
-```bash
-# Run all seeders
-python seeders.py --all
-
-# Run specific seeders
-python seeders.py --only-seeder admin,roles_permissions
-
-# Skip certain seeders
-python seeders.py --skip-seeder departments
-```
-
 **Available seeders:**
-- `admin` - Creates admin user account from environment variables
-- `roles_permissions` - Creates system roles and permissions
-- `departments` - Creates department records
-- `application_settings` - Creates application-level settings
-- `jobs` - Creates sample job records
-- `knowledge_base` - Creates sample knowledge base entries
-- `conversations` - Creates sample conversations
-- `activity_logs` - Creates sample activity logs
+- `admin` - Creates admin user account (critical - runs first)
+- `roles_permissions` - Creates system roles and permissions (critical - dependency for admin)
+- `departments` - Creates department records (optional)
+- `application_settings` - Creates application-level settings (optional)
+- `jobs` - Creates sample job records (optional)
+- `knowledge_base` - Creates sample knowledge base entries (optional)
+- `conversations` - Creates sample conversations (optional)
+- `activity_logs` - Creates sample activity logs (optional)
+
+**Seeder dependencies:**
+- The `admin` seeder requires `roles_permissions` to run first
+- If you run `--only-seeder admin`, it will automatically include `roles_permissions`
+- Other seeders have no dependencies and can run in any order
 
 **Admin seeder configuration:**
 

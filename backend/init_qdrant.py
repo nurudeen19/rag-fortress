@@ -25,7 +25,7 @@ def init_qdrant():
     
     # Get configuration from settings
     vectordb_config = settings.vectordb_settings.get_vector_db_config()
-    embedding_dimensions = settings.embedding_settings.EMBEDDING_DIMENSIONS or 384
+    embedding_dimensions = settings.embedding_settings.EMBEDDING_DIMENSIONS
     
     collection_name = vectordb_config.get("collection_name", "rag_fortress")
     enable_hybrid = vectordb_config.get("hybrid_search", False)
