@@ -71,13 +71,13 @@ WORKDIR /app
 # Copy virtual environment from builder (same path to preserve shebangs)
 COPY --from=builder --link /opt/venv /opt/venv
 
-# Copy application code (--link for parallel copying)
-COPY --from=builder --link --chown=appuser:appuser /build/pyproject.toml /build/uv.lock ./
-COPY --link --chown=appuser:appuser alembic.ini ./
-COPY --link --chown=appuser:appuser migrations/ ./migrations/
-COPY --link --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py init_qdrant.py ./
-COPY --link --chown=appuser:appuser data/ ./data/
-COPY --link --chown=appuser:appuser app/ ./app/
+# Copy application code (files that need chown cannot use --link)
+COPY --from=builder --chown=appuser:appuser /build/pyproject.toml /build/uv.lock ./
+COPY --chown=appuser:appuser alembic.ini ./
+COPY --chown=appuser:appuser migrations/ ./migrations/
+COPY --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py init_qdrant.py ./
+COPY --chown=appuser:appuser data/ ./data/
+COPY --chown=appuser:appuser app/ ./app/
 
 # Create logs and cache directories
 RUN mkdir -p /app/logs /app/.cache/huggingface && \
