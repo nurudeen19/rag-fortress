@@ -117,6 +117,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     image: rag-fortress-backend:latest
     restart: unless-stopped
     ports:
@@ -236,6 +238,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.qdrant
+      args:
+        BUILDKIT_INLINE_CACHE: 1
     restart: unless-stopped
     volumes:
       - qdrant_data:/qdrant/storage

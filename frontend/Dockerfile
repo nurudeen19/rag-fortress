@@ -9,8 +9,8 @@ WORKDIR /build
 
 ARG VITE_API_BASE_URL=http://localhost:8000/api
 
-# Copy package files
-COPY package.json package-lock.json* ./
+# Copy package files (--link for better caching)
+COPY --link package.json package-lock.json* ./
 
 # Verify package-lock.json exists (frozen lockfile sanity check)
 RUN test -f package-lock.json || (echo "ERROR: package-lock.json not found" && exit 1)
@@ -19,17 +19,14 @@ RUN test -f package-lock.json || (echo "ERROR: package-lock.json not found" && e
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --ignore-scripts
 
-# Copy configuration files
-COPY vite.config.js tailwind.config.js postcss.config.js index.html ./
+# Copy configuration files (--link for parallel copying)
+COPY --link vite.config.js tailwind.config.js postcss.config.js index.html ./
 
 # Copy source and public directories
-COPY src ./src
-COPY public ./public
+COPY --link src ./src
+COPY --link public ./public
 
-# Copy environment file if it exists (for build-time configuration)
-COPY .env* ./
-
-# Build the application with environment variables
+# Build the application with environment variables (no .env copy needed - use ARG)
 RUN VITE_API_BASE_URL=$VITE_API_BASE_URL npm run build
 
 # ==============================================================================
@@ -41,10 +38,10 @@ FROM nginx:1.28-alpine AS production
 RUN apk add --no-cache curl
 
 # Copy custom nginx configuration from source
-COPY nginx.conf /etc/nginx/nginx.conf
+COPY --link nginx.conf /etc/nginx/nginx.conf
 
-# Copy built application from builder
-COPY --from=builder /build/dist /usr/share/nginx/html
+# Copy built application from builder (--link for faster copy)
+COPY --from=builder --link /build/dist /usr/share/nginx/html
 
 # Create non-root user
 RUN addgroup -g 1000 appuser && \

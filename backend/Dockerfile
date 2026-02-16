@@ -20,8 +20,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libffi-dev \
     libssl-dev
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Copy dependency files (--link for better caching)
+COPY --link pyproject.toml uv.lock ./
 
 # Install dependencies to /opt/venv (configured via UV_PROJECT_ENVIRONMENT)
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -56,18 +56,15 @@ RUN groupadd -r appuser && \
 WORKDIR /app
 
 # Copy virtual environment from builder (same path to preserve shebangs)
-COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder --link /opt/venv /opt/venv
 
-# Copy application code
-COPY --chown=appuser:appuser app/ ./app/
-COPY --chown=appuser:appuser alembic.ini ./
-COPY --chown=appuser:appuser migrations/ ./migrations/
-
-# Copy setup scripts
-COPY --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py init_qdrant.py ./
-
-# Copy data directory structure (volumes will override)
-COPY --chown=appuser:appuser data/ ./data/
+# Copy application code (--link for parallel copying)
+COPY --from=builder --link --chown=appuser:appuser /build/pyproject.toml /build/uv.lock ./
+COPY --link --chown=appuser:appuser alembic.ini ./
+COPY --link --chown=appuser:appuser migrations/ ./migrations/
+COPY --link --chown=appuser:appuser generate_fernet_key.py migrate.py startup.py setup.py init_qdrant.py ./
+COPY --link --chown=appuser:appuser data/ ./data/
+COPY --link --chown=appuser:appuser app/ ./app/
 
 # Create logs and cache directories
 RUN mkdir -p /app/logs /app/.cache/huggingface && \
