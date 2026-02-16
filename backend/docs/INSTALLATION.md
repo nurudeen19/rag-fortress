@@ -1,9 +1,11 @@
 # Installation Guide
 
+> **Prefer Docker?** See **[Docker Guide](DOCKER.md)** for containerized deployment with Docker Compose.
+
 ## Prerequisites
 
-- Python 3.11 or higher
-- `uv` package manager (modern, fast Python package manager)
+- Python 3.13 or higher
+- `uv` package manager (modern, fast Python package manager) - [Learn more](https://docs.astral.sh/uv/)
 
 ## Quick Start
 
@@ -25,14 +27,40 @@ Verify: `uv --version`
 
 ```bash
 cd backend
+# Choose installation based on your embedding/model provider needs:
+
+# Option A: Using HuggingFace embeddings (sentence transformers) - CPU version
+uv sync --extra cpu
+
+# Option B: Using HuggingFace embeddings with GPU support (large download ~2GB+)
+uv sync --extra gpu
+
+# Option C: Using local LLM via llama.cpp (model path)
+uv sync --extra llamacpp
+
+# Option D: Not using HuggingFace or local models (OpenAI, Google, Cohere only)
 uv sync
+
+# Combine extras if you need multiple features:
+uv sync --extra cpu --extra llamacpp  # HuggingFace embeddings + local LLM
 ```
+
+**Why the extra flags?**
+- **HuggingFace** (`--extra cpu`/`--extra gpu`): Sentence transformers require PyTorch and ML libraries
+  - CPU version: Lightweight, suitable for most users
+  - GPU version: Requires CUDA, faster inference but large install (~2GB+)
+- **llama.cpp** (`--extra llamacpp`): For running local LLMs via model file path
+  - Only needed if using local models (not API-based providers)
+  - Saves build time if you're only using OpenAI/Google/Cohere
+- **Base install** (no extras): Use if only using cloud API providers (OpenAI, Google, Cohere)
 
 This will:
 - Create a `.venv` virtual environment
 - Install all production and development dependencies with pinned versions
 
-### 3. Activate Virtual Environment
+### 3. Activate Virtual Environment (Optional)
+
+> **Note:** Activating the virtual environment is optional. You can run commands directly with `uv run` (e.g., `uv run setup.py --all`) without activating the environment.
 
 **Windows (PowerShell):**
 ```powershell
@@ -97,28 +125,20 @@ python setup.py --verify
 python setup.py --clear-db
 ```
 
-**To run seeders separately:**
-
-```bash
-# Run all seeders
-python run_seeders.py --all
-
-# Run specific seeders
-python run_seeders.py --only-seeder admin,roles_permissions
-
-# Skip certain seeders
-python run_seeders.py --skip-seeder departments
-```
-
 **Available seeders:**
-- `admin` - Creates admin user account from environment variables
-- `roles_permissions` - Creates system roles and permissions
-- `departments` - Creates department records
-- `application_settings` - Creates application-level settings
-- `jobs` - Creates sample job records
-- `knowledge_base` - Creates sample knowledge base entries
-- `conversations` - Creates sample conversations
-- `activity_logs` - Creates sample activity logs
+- `admin` - Creates admin user account (critical - runs first)
+- `roles_permissions` - Creates system roles and permissions (critical - dependency for admin)
+- `departments` - Creates department records (optional)
+- `application_settings` - Creates application-level settings (optional)
+- `jobs` - Creates sample job records (optional)
+- `knowledge_base` - Creates sample knowledge base entries (optional)
+- `conversations` - Creates sample conversations (optional)
+- `activity_logs` - Creates sample activity logs (optional)
+
+**Seeder dependencies:**
+- The `admin` seeder requires `roles_permissions` to run first
+- If you run `--only-seeder admin`, it will automatically include `roles_permissions`
+- Other seeders have no dependencies and can run in any order
 
 **Admin seeder configuration:**
 
@@ -133,6 +153,7 @@ The admin seeder reads credentials from environment variables. Set these in `.en
 ```bash
 # Production mode (no auto-reload)
 python startup.py
+# or uv run startup.py
 
 # Development mode (with auto-reload)
 python startup.py --reload

@@ -87,10 +87,9 @@ dependencies = [
     "langchain-openai==1.1.1",
     "langchain-google-genai==4.0.0",
     "langchain-huggingface==1.1.0",
-    "llama-cpp-python==0.2.90",
+    # Note: llama-cpp-python moved to 'llamacpp' extra (install with: uv sync --extra llamacpp)
 
     # LangChain - Embedding Providers
-    "sentence-transformers==5.1.2",
     "langchain-cohere==0.5.0",
     
     # LangChain - Rerankers
@@ -151,6 +150,17 @@ dev = [
     "mypy==1.8.0",
     "ipython==8.21.0",
 ]
+cpu = [
+    "sentence-transformers==5.1.2",
+    "torch==2.9.1",
+]
+gpu = [
+    "sentence-transformers==5.1.2",
+    "torch==2.9.1",
+]
+llamacpp = [
+    "llama-cpp-python==0.2.90",
+]
 
 [project.urls]
 Homepage = "https://github.com/nurudeen19/rag-fortress"
@@ -162,6 +172,31 @@ LinkedIn = "https://www.linkedin.com/in/nurudeen-habibu/"
 
 [tool.setuptools]
 packages = ["app"]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "gpu" },
+    ],
+]
+compile-bytecode = true
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "cpu" },
+    { index = "pytorch-cu128", extra = "gpu" },
+]
 
 [tool.setuptools.package-dir]
 "" = "."
@@ -240,7 +275,7 @@ ignore = [
 ]
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true

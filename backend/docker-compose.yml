@@ -1,0 +1,366 @@
+
+# ==============================================================================
+# RAG Fortress - Backend Services
+# ==============================================================================
+# Production-ready backend stack with sane defaults:
+#   - PostgreSQL for database
+#   - Redis Stack for caching and semantic cache
+#   - Qdrant for vector search
+#   - Mailpit for email testing (SMTP + Web UI)
+#
+# FIRST-TIME SETUP:
+#   1. Build images:
+#      docker compose build
+#
+#   2. Generate encryption keys (REQUIRED):
+#      docker compose --profile keygen run --rm keygen
+#      Copy output keys to .env.docker (SECRET_KEY, MASTER_ENCRYPTION_KEY, SETTINGS_ENCRYPTION_KEY)
+#
+#   3. Run database setup with seeders:
+#      docker compose --profile setupdb run --rm db-setup
+#
+#   4. Initialize Qdrant collection:
+#      docker compose --profile qdrant-setup run --rm qdrant-setup
+#
+#   5. Start all services:
+#      docker compose up -d
+#
+# OPTIONAL - DOCKER SECRETS (Production):
+#   For enhanced security, use file-based secrets instead of .env.docker:
+#   1. Create secret files (see docs/DOCKER.md)
+#   2. Uncomment 'secrets:' sections in service definitions below
+#   3. Remove sensitive values from .env.docker
+#   See docs/DOCKER.md for complete guide
+#
+# Access Points:
+#   - Backend API: http://localhost:8000
+#   - Mailpit UI: http://localhost:8025
+#   - Qdrant Dashboard: http://localhost:6333/dashboard
+#
+# This compose can run independently from the frontend
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Encryption Key Generator (Run this FIRST!)
+  # docker compose --profile keygen run --rm keygen
+  # IMPORTANT: run docker compose build first to build the backend image
+  # ============================================================================
+  keygen:
+    profiles: [keygen]
+    image: rag-fortress-backend:latest
+    command: ["python", "generate_fernet_key.py"]
+
+  # ============================================================================
+  # Database Setup Service (Profile: setupdb)
+  # ============================================================================
+  # One-time database initialization (migrations + seeders)
+  #
+  # PREREQUISITE: Run 'docker compose run --rm keygen' and update .env.docker first!
+  #
+  # Usage:
+  #   docker compose --profile setupdb run --rm db-setup                   # Run migrations + seeders
+  #
+  #   Custom options:
+  #     docker compose --profile setupdb run --rm db-setup python setup.py --only-seeder admin,roles_permissions
+  #     docker compose --profile setupdb run --rm db-setup python setup.py --verify
+  db-setup:
+    profiles: [setupdb]
+    image: rag-fortress-backend:latest
+    env_file:
+      - .env.docker
+    # Uncomment to use Docker secrets (must match backend secrets)
+    # secrets:
+    #   - db_password
+    #   - admin_password
+    volumes:
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    command: ["python", "setup.py", "--all"]
+
+  # ============================================================================
+  # Qdrant Collection Setup (Profile: qdrant-setup)
+  # ============================================================================
+  # One-time Qdrant collection initialization
+  #
+  # Usage:
+  #   docker compose --profile qdrant-setup run --rm qdrant-setup           # Create collection
+  #
+  # This creates the vector store collection in Qdrant with proper configuration
+  # (hybrid search support if enabled in .env.docker)
+  qdrant-setup:
+    profiles: [qdrant-setup]
+    image: rag-fortress-backend:latest
+    env_file:
+      - .env.docker
+    # Uncomment to use Docker secrets (must match backend secrets)
+    # secrets:
+    #   - embedding_api_key
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    command: ["python", "init_qdrant.py"]
+
+  # ============================================================================
+  # Backend Application
+  # ============================================================================
+  # NOTE: Requires encryption keys to be set in .env.docker
+  # Run 'docker compose run --rm keygen' first if you haven't generated keys
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+        # Customize dependencies: UV_EXTRAS="cpu" (default), "llamacpp", "cpu llamacpp", etc.
+        UV_EXTRAS: ${UV_EXTRAS:-cpu}
+    image: rag-fortress-backend:latest
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env.docker
+    # Uncomment to use Docker secrets instead of .env.docker
+    # secrets:
+    #   - secret_key
+    #   - master_encryption_key
+    #   - settings_encryption_key
+    #   - db_password
+    #   - llm_api_key
+    #   - fallback_llm_api_key
+    #   - classifier_llm_api_key
+    #   - internal_llm_api_key
+    #   - embedding_api_key
+    #   - reranker_api_key
+    #   - vector_db_api_key
+    #   - smtp_password
+    #   - admin_password
+    volumes:
+      # Persistent data
+      - backend_data:/app/data
+      - backend_logs:/app/logs
+      - huggingface_cache:/app/.cache/huggingface
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2'
+        reservations:
+          memory: 1G
+
+  # ============================================================================
+  # PostgreSQL Database (Default - Always Available)
+  # ============================================================================
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER:-rag_fortress}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-rag_fortress_secure_pwd}
+      - POSTGRES_DB=${DB_NAME:-rag_fortress}
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-rag_fortress}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to expose PostgreSQL port for external access
+    # ports:
+    #   - "5432:5432"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
+        reservations:
+          memory: 512M
+
+  # ============================================================================
+  # Redis Stack (Cache + Semantic Cache with Vector Support)
+  # ============================================================================
+  redis:
+    image: redis/redis-stack-server:7.4.0-v8
+    restart: unless-stopped
+    command: >
+      redis-stack-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --protected-mode no
+    volumes:
+      - redis_data:/data
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Uncomment to expose Redis port for external access
+    # ports:
+    #   - "6379:6379"
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+
+  # ============================================================================
+  # Qdrant Vector Database
+  # ============================================================================
+  qdrant:
+    build:
+      context: .
+      dockerfile: Dockerfile.qdrant
+      args:
+        BUILDKIT_INLINE_CACHE: 1
+    restart: unless-stopped
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - rag-fortress-network
+    # ports:
+    #   - "6333:6333"
+    #   - "6334:6334"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+          cpus: '1'
+        reservations:
+          memory: 512M
+
+  # ============================================================================
+  # Mailpit (Email Testing - SMTP Server + Web UI)
+  # ============================================================================
+  mailpit:
+    image: axllent/mailpit:v1.29
+    restart: unless-stopped
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    environment:
+      - MP_MAX_MESSAGES=5000
+      - MP_SMTP_AUTH_ACCEPT_ANY=1
+      - MP_SMTP_AUTH_ALLOW_INSECURE=1
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8025/api/v1/info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+
+# ==============================================================================
+# Docker Secrets (Optional)
+# ==============================================================================
+# Use file-based secrets instead of environment variables for production.
+# Secrets are defined below and referenced in service definitions (commented out).
+#
+# Quick Start:
+#   1. Create secret files (see docs/DOCKER.md for methods)
+#   2. Uncomment the 'secrets:' sections in service definitions (backend, db-setup, etc.)
+#   3. Remove sensitive values from .env.docker
+#   4. Restart services: docker compose up -d --force-recreate
+#
+# Secrets are mounted read-only at /run/secrets/<secret_name> inside containers.
+# See docs/DOCKER.md for complete setup guide and security best practices.
+# ==============================================================================
+
+secrets:
+  # Application secrets
+  secret_key:
+    file: ./secrets/secret_key.txt
+  master_encryption_key:
+    file: ./secrets/master_encryption_key.txt
+  settings_encryption_key:
+    file: ./secrets/settings_encryption_key.txt
+  
+  # Database
+  db_password:
+    file: ./secrets/db_password.txt
+  
+  # LLM API Keys
+  llm_api_key:
+    file: ./secrets/llm_api_key.txt
+  fallback_llm_api_key:
+    file: ./secrets/fallback_llm_api_key.txt
+  classifier_llm_api_key:
+    file: ./secrets/classifier_llm_api_key.txt
+  internal_llm_api_key:
+    file: ./secrets/internal_llm_api_key.txt
+  
+  # Other API Keys
+  embedding_api_key:
+    file: ./secrets/embedding_api_key.txt
+  reranker_api_key:
+    file: ./secrets/reranker_api_key.txt
+  vector_db_api_key:
+    file: ./secrets/vector_db_api_key.txt
+  
+  # Email
+  smtp_password:
+    file: ./secrets/smtp_password.txt
+  
+  # Admin
+  admin_password:
+    file: ./secrets/admin_password.txt
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  rag-fortress-network:
+    driver: bridge
+
+# ==============================================================================
+# Volumes
+# ==============================================================================
+volumes:
+  backend_data:
+  backend_logs:
+  huggingface_cache:
+  postgres_data:
+  redis_data:
+  qdrant_data:

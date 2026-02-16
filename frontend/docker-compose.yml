@@ -1,0 +1,51 @@
+# ==============================================================================
+# RAG Fortress - Frontend Service
+# ==============================================================================
+# This compose file can run independently or be included in the root compose.
+#
+# Usage:
+#   docker compose up
+#
+# Note: Ensure VITE_API_URL environment variable points to the backend API
+# ==============================================================================
+
+services:
+  # ============================================================================
+  # Frontend Application (Vue.js + Nginx)
+  # ============================================================================
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:8000/api}
+        - BUILDKIT_INLINE_CACHE=1
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+    networks:
+      - rag-fortress-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+
+# ==============================================================================
+# Networks
+# ==============================================================================
+networks:
+  rag-fortress-network:
+    driver: bridge

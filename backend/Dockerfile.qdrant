@@ -1,0 +1,11 @@
+FROM qdrant/qdrant:v1.16
+
+# Install curl for healthchecks
+# Note: Running as root to install packages; base image entrypoint handles user switching
+USER root
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Don't switch user here - let the base image's ENTRYPOINT handle it

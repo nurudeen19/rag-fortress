@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.whl
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.hypothesis/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Docker secrets (excluded from build context)
+secrets/
+
+# Data files (but not directory structure)
+data/**/*.db
+data/**/*.sqlite
+data/**/*.sqlite3
+data/**/dump.rdb
+
+# Log files
+logs/**/*.log
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Other
+*.log
+*.pid
+.cache/
+seeders.py
+tests/
+pytest.ini
+check_schema.py
+drop_tables.py
+Action items
