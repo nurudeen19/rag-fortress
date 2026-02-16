@@ -87,7 +87,7 @@ health:
 
 db-migrate:
 	@echo "$(BLUE)Running database migrations...$(NC)"
-	docker compose exec backend python migrate.py upgrade head
+	docker compose exec backend python migrate.py upgrade
 	@echo "$(GREEN)Migrations complete!$(NC)"
 
 app-setup:
