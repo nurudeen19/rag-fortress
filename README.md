@@ -92,6 +92,7 @@ npm run dev                # Start on http://localhost:5173
 
 ## 📚 Documentation
 
+- **[CHANGELOG](CHANGELOG.md)** - Release notes and version history
 - **[Installation Guide](backend/docs/INSTALLATION.md)** - Complete setup with uv, prerequisites, and troubleshooting
 - **[Docker Guide](backend/docs/DOCKER.md)** - Containerized deployment with Docker Compose
 - **[Document Management](backend/docs/DOCUMENT_MANAGEMENT_GUIDE.md)** - Document upload workflow

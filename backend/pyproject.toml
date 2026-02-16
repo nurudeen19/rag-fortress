@@ -1,6 +1,6 @@
 [project]
 name = "rag-fortress"
-version = "1.0.0"
+version = "1.1.5"
 description = "A flexible, secure, vendor-agnostic knowledge platform with support for multiple LLMs, vector stores, and custom security layers."
 readme = "README.md"
 requires-python = "==3.13.*"
