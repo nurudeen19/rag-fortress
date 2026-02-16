@@ -17,7 +17,7 @@ RUN test -f package-lock.json || (echo "ERROR: package-lock.json not found" && e
 
 # Install all dependencies (including dev) needed for build
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --ignore-scripts
+    npm ci
 
 # Copy configuration files (--link for parallel copying)
 COPY --link vite.config.js tailwind.config.js postcss.config.js index.html ./
