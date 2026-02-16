@@ -5,7 +5,13 @@
 # the backend and frontend services from their respective compose files.
 #
 # Usage:
+#   Note: Ensure environment variables are set
+#   .env.docker for backend and .env for frontend services before starting the services.
+#
+#   docker compose build
 #   docker compose up -d
+#
+#   Refer to backend/docs/Docker.md for detailed instructions on environment variable configuration.
 #
 # Access Points:
 #   - Frontend: http://localhost:3000
@@ -13,7 +19,7 @@
 #   - Mailpit UI: http://localhost:8025
 #   - Qdrant Dashboard: http://localhost:6333/dashboard
 #
-# Environment variables can be set in .env file
+# Environment variables can be set in .env.docker file for backend and .env file for frontend
 # ==============================================================================
 
 include:
