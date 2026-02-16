@@ -3,8 +3,42 @@ name: Docker Build and Test
 on:
   push:
     branches: [ main ]
+    paths:
+      - 'docker-compose.yml'
+      - 'backend/Dockerfile'
+      - 'backend/Dockerfile.qdrant'
+      - 'backend/docker-compose.yml'
+      - 'backend/.dockerignore'
+      - 'backend/.env.docker.example'
+      - 'backend/pyproject.toml'
+      - 'backend/uv.lock'
+      - 'frontend/Dockerfile'
+      - 'frontend/docker-compose.yml'
+      - 'frontend/.dockerignore'
+      - 'frontend/.env.example'
+      - 'frontend/nginx.conf'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - '.github/workflows/docker-build.yml'
   pull_request:
     branches: [ main ]
+    paths:
+      - 'docker-compose.yml'
+      - 'backend/Dockerfile'
+      - 'backend/Dockerfile.qdrant'
+      - 'backend/docker-compose.yml'
+      - 'backend/.dockerignore'
+      - 'backend/.env.docker.example'
+      - 'backend/pyproject.toml'
+      - 'backend/uv.lock'
+      - 'frontend/Dockerfile'
+      - 'frontend/docker-compose.yml'
+      - 'frontend/.dockerignore'
+      - 'frontend/.env.example'
+      - 'frontend/nginx.conf'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - '.github/workflows/docker-build.yml'
   workflow_dispatch:
 
 jobs:
